@@ -461,7 +461,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   void _testNotification() async {
+    // Send the notification
     await _notificationService.sendTestNotification();
+    
+    // Play the selected sound
+    final soundId = await _audioService.getCandleLightingSound();
+    if (soundId != 'default' && soundId != 'silent') {
+      await _audioService.playSound(soundId);
+    }
+    
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(

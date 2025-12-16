@@ -28,25 +28,21 @@ class SoundOption {
       id: 'gentle_chime',
       nameEn: 'Gentle Chime',
       nameHe: 'צלצול עדין',
-      assetPath: 'assets/sounds/gentle_chime.aiff',
+      assetPath: 'sounds/gentle_chime.aiff',
     ),
     SoundOption(
       id: 'peaceful_bell',
       nameEn: 'Peaceful Bell',
       nameHe: 'פעמון שלו',
-      assetPath: 'assets/sounds/peaceful_bell.aiff',
+      assetPath: 'sounds/peaceful_bell.aiff',
     ),
     SoundOption(
       id: 'soft_tone',
       nameEn: 'Soft Tone',
       nameHe: 'צליל רך',
-      assetPath: 'assets/sounds/soft_tone.aiff',
+      assetPath: 'sounds/soft_tone.aiff',
     ),
-    SoundOption(
-      id: 'silent',
-      nameEn: 'Silent',
-      nameHe: 'שקט',
-    ),
+    SoundOption(id: 'silent', nameEn: 'Silent', nameHe: 'שקט'),
   ];
 }
 
@@ -55,45 +51,67 @@ class AudioService {
   factory AudioService() => _instance;
   AudioService._internal();
 
-  final AudioPlayer _player = AudioPlayer();
-  
+  AudioPlayer? _player;
+
   static const String _preNotificationSoundKey = 'pre_notification_sound';
   static const String _candleLightingSoundKey = 'candle_lighting_sound';
 
+  AudioPlayer get player {
+    _player ??= AudioPlayer();
+    return _player!;
+  }
+
   /// Play a sound by ID
   Future<void> playSound(String soundId) async {
+    debugPrint('AudioService: Attempting to play sound: $soundId');
+
     try {
       final sound = SoundOption.availableSounds.firstWhere(
         (s) => s.id == soundId,
         orElse: () => SoundOption.availableSounds.first,
       );
 
-      if (sound.isSystemDefault || sound.assetPath == null) {
-        debugPrint('AudioService: Using system default sound');
+      if (sound.isSystemDefault) {
+        debugPrint(
+          'AudioService: System default sound - skipping custom playback',
+        );
         return;
       }
 
-      if (sound.id == 'silent') {
-        debugPrint('AudioService: Silent mode');
+      if (sound.id == 'silent' || sound.assetPath == null) {
+        debugPrint('AudioService: Silent mode or no asset path');
         return;
       }
 
-      await _player.stop();
-      await _player.play(AssetSource(sound.assetPath!.replaceFirst('assets/', '')));
-      debugPrint('AudioService: Playing ${sound.id}');
-    } catch (e) {
+      debugPrint('AudioService: Playing asset: ${sound.assetPath}');
+
+      // Stop any currently playing sound
+      await player.stop();
+
+      // Set the source and play
+      await player.setSource(AssetSource(sound.assetPath!));
+      await player.resume();
+
+      debugPrint('AudioService: Successfully started playing ${sound.id}');
+    } catch (e, stackTrace) {
       debugPrint('AudioService: Error playing sound: $e');
+      debugPrint('AudioService: Stack trace: $stackTrace');
     }
   }
 
-  /// Preview a sound
+  /// Preview a sound (same as play)
   Future<void> previewSound(String soundId) async {
     await playSound(soundId);
   }
 
   /// Stop playing
   Future<void> stop() async {
-    await _player.stop();
+    try {
+      await player.stop();
+      debugPrint('AudioService: Stopped playback');
+    } catch (e) {
+      debugPrint('AudioService: Error stopping: $e');
+    }
   }
 
   // Pre-notification sound settings
@@ -105,6 +123,7 @@ class AudioService {
   Future<void> setPreNotificationSound(String soundId) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_preNotificationSoundKey, soundId);
+    debugPrint('AudioService: Pre-notification sound set to: $soundId');
   }
 
   // Candle lighting sound settings
@@ -116,10 +135,11 @@ class AudioService {
   Future<void> setCandleLightingSound(String soundId) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_candleLightingSoundKey, soundId);
+    debugPrint('AudioService: Candle lighting sound set to: $soundId');
   }
 
   void dispose() {
-    _player.dispose();
+    _player?.dispose();
+    _player = null;
   }
 }
-
