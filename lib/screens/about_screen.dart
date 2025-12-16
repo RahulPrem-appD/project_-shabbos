@@ -2,8 +2,13 @@ import 'package:flutter/material.dart';
 
 class AboutScreen extends StatelessWidget {
   final String locale;
+  final bool showAppBar;
 
-  const AboutScreen({super.key, required this.locale});
+  const AboutScreen({
+    super.key, 
+    required this.locale,
+    this.showAppBar = true,
+  });
 
   bool get isHebrew => locale == 'he';
 
@@ -32,7 +37,7 @@ and for all of Klal Yisrael.''';
       textDirection: isHebrew ? TextDirection.rtl : TextDirection.ltr,
       child: Scaffold(
         backgroundColor: Colors.white,
-        appBar: AppBar(
+        appBar: showAppBar ? AppBar(
           backgroundColor: Colors.white,
           elevation: 0,
           leading: IconButton(
@@ -55,12 +60,33 @@ and for all of Klal Yisrael.''';
               ),
             ),
           ],
-        ),
-        body: SingleChildScrollView(
+        ) : null,
+        body: SafeArea(
+          child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
           child: Column(
             children: [
-              const SizedBox(height: 20),
+              if (!showAppBar) ...[
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      isHebrew ? 'אודות' : 'About',
+                      style: const TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF1A1A1A),
+                      ),
+                    ),
+                    Text(
+                      'בס״ד',
+                      style: TextStyle(fontSize: 14, color: Colors.grey[400]),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 24),
+              ] else
+                const SizedBox(height: 20),
               
               // Logo
               Container(
@@ -186,6 +212,7 @@ and for all of Klal Yisrael.''';
               const SizedBox(height: 40),
             ],
           ),
+        ),
         ),
       ),
     );

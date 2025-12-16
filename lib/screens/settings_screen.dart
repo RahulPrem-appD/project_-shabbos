@@ -10,12 +10,14 @@ class SettingsScreen extends StatefulWidget {
   final String locale;
   final Function(String) onLocaleChanged;
   final VoidCallback onLocationChanged;
+  final bool showAppBar;
 
   const SettingsScreen({
     super.key,
     required this.locale,
     required this.onLocaleChanged,
     required this.onLocationChanged,
+    this.showAppBar = true,
   });
 
   @override
@@ -69,7 +71,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       textDirection: isHebrew ? TextDirection.rtl : TextDirection.ltr,
       child: Scaffold(
         backgroundColor: Colors.white,
-        appBar: AppBar(
+        appBar: widget.showAppBar ? AppBar(
           backgroundColor: Colors.white,
           elevation: 0,
           leading: IconButton(
@@ -92,10 +94,33 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             ),
           ],
-        ),
-        body: ListView(
+        ) : null,
+        body: SafeArea(
+          child: ListView(
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
           children: [
+            if (!widget.showAppBar) ...[
+              Padding(
+                padding: const EdgeInsets.fromLTRB(4, 16, 4, 8),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      isHebrew ? 'הגדרות' : 'Settings',
+                      style: const TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF1A1A1A),
+                      ),
+                    ),
+                    Text(
+                      'בס״ד',
+                      style: TextStyle(fontSize: 14, color: Colors.grey[400]),
+                    ),
+                  ],
+                ),
+              ),
+            ],
             _buildSection(
               title: isHebrew ? 'שפה' : 'Language',
               children: [
@@ -169,6 +194,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             
             const SizedBox(height: 40),
           ],
+        ),
         ),
       ),
     );
