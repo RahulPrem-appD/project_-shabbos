@@ -92,7 +92,7 @@ and for all of Klal Yisrael.''';
               const SizedBox(height: 4),
               
               Text(
-                isHebrew ? 'הדלקת נרות שבת ויום טוב' : 'Shabbat & Yom Tov Candle Lighting',
+                isHebrew ? 'התראת הדלקת נרות לשבת וליום טוב' : 'Candle Lighting Alert for Shabbat and Yom Tov',
                 style: TextStyle(fontSize: 14, color: Colors.grey[500]),
               ),
               

@@ -107,7 +107,7 @@ abstract class AppLocalizations {
   /// No description provided for @appSubtitle.
   ///
   /// In en, this message translates to:
-  /// **'Shabbat & Yom Tov Candle Lighting'**
+  /// **'Candle Lighting Alert for Shabbat and Yom Tov'**
   String get appSubtitle;
 
   /// No description provided for @bsd.

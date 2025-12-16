@@ -12,7 +12,7 @@ class AppLocalizationsHe extends AppLocalizations {
   String get appTitle => 'שבת!!';
 
   @override
-  String get appSubtitle => 'הדלקת נרות שבת ויום טוב';
+  String get appSubtitle => 'התראת הדלקת נרות לשבת וליום טוב';
 
   @override
   String get bsd => 'בס\"ד';

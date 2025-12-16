@@ -12,7 +12,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get appTitle => 'Shabbos!!';
 
   @override
-  String get appSubtitle => 'Shabbat & Yom Tov Candle Lighting';
+  String get appSubtitle => 'Candle Lighting Alert for Shabbat and Yom Tov';
 
   @override
   String get bsd => 'בס\"ד';

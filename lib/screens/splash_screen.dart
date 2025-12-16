@@ -821,22 +821,24 @@ class _SplashScreenState extends State<SplashScreen>
     return Column(
       children: [
         Text(
-          'CANDLE LIGHTING TIMES',
+          'CANDLE LIGHTING ALERT FOR SHABBAT AND YOM TOV',
           style: TextStyle(
-            fontSize: 12,
+            fontSize: 10,
             color: Colors.white.withValues(alpha: 0.6),
-            letterSpacing: 5,
+            letterSpacing: 3,
             fontWeight: FontWeight.w400,
           ),
+          textAlign: TextAlign.center,
         ),
         const SizedBox(height: 8),
         Text(
-          'הדלקת נרות שבת ויום טוב',
+          'התראת הדלקת נרות לשבת וליום טוב',
           style: TextStyle(
-            fontSize: 15,
+            fontSize: 14,
             color: Colors.white.withValues(alpha: 0.45),
-            letterSpacing: 1.5,
+            letterSpacing: 1,
           ),
+          textAlign: TextAlign.center,
         ),
       ],
     );
