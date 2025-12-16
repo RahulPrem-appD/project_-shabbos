@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:timezone/timezone.dart' as tz;
 import 'package:timezone/data/latest_all.dart' as tz;
 import '../models/candle_lighting.dart';
+import 'audio_service.dart';
 
 class NotificationService {
   static final NotificationService _instance = NotificationService._internal();
@@ -285,6 +286,13 @@ class NotificationService {
     debugPrint('NotificationService: Sending test notification...');
     
     await requestPermissions();
+
+    // Get the audio service to play the selected sound
+    final audioService = AudioService();
+    final candleSoundId = await audioService.getCandleLightingSound();
+    
+    // Play the custom sound
+    await audioService.playSound(candleSoundId);
 
     const androidDetails = AndroidNotificationDetails(
       'shabbos_notifications',

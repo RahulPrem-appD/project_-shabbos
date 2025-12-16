@@ -481,11 +481,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   String _getSoundName(String soundId) {
-    final sound = SoundOption.availableSounds.firstWhere(
-      (s) => s.id == soundId,
-      orElse: () => SoundOption.availableSounds.first,
-    );
-    return isHebrew ? sound.nameHe : sound.nameEn;
+    // First check built-in sounds
+    final builtInSound = SoundOption.builtInSounds.where((s) => s.id == soundId);
+    if (builtInSound.isNotEmpty) {
+      return isHebrew ? builtInSound.first.nameHe : builtInSound.first.nameEn;
+    }
+    // If it's a custom sound, show "Custom Sound"
+    if (soundId.startsWith('custom_')) {
+      return isHebrew ? 'צליל מותאם' : 'Custom Sound';
+    }
+    // Default fallback
+    return isHebrew ? 'ברירת מחדל' : 'System Default';
   }
 
   void _openSoundScreen() async {
