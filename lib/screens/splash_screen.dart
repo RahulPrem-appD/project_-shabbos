@@ -298,26 +298,26 @@ class _SplashScreenState extends State<SplashScreen>
                 ),
               ),
 
-              SizedBox(height: size.height * 0.045),
+              SizedBox(height: size.height * 0.04),
 
-              // Title
+              // Hebrew title (primary - bigger and first)
               Transform.translate(
                 offset: Offset(0, _titleSlide.value),
                 child: Opacity(
                   opacity: _titleOpacity.value,
-                  child: _buildShimmerTitle(),
+                  child: _buildHebrewTitle(),
                 ),
               ),
 
-              const SizedBox(height: 10),
+              const SizedBox(height: 6),
 
-              // Hebrew title
+              // English title (secondary - smaller)
               Opacity(
                 opacity: _hebrewOpacity.value,
-                child: _buildHebrewTitle(),
+                child: _buildEnglishTitle(),
               ),
 
-              SizedBox(height: size.height * 0.025),
+              SizedBox(height: size.height * 0.022),
 
               // Divider
               Opacity(
@@ -728,7 +728,8 @@ class _SplashScreenState extends State<SplashScreen>
     );
   }
 
-  Widget _buildShimmerTitle() {
+  Widget _buildHebrewTitle() {
+    final glow = _glowPulseController.value;
     return ShaderMask(
       shaderCallback: (bounds) {
         final shimmer = _shimmerController.value;
@@ -736,23 +737,30 @@ class _SplashScreenState extends State<SplashScreen>
           begin: Alignment(-1.5 + shimmer * 3, 0),
           end: Alignment(-0.5 + shimmer * 3, 0),
           colors: const [
-            Color(0xFFFFFFFF),
-            Color(0xFFFFD54F),
-            Color(0xFFFFFFFF),
+            Color(0xFFD4A84B),
+            Color(0xFFFFE082),
+            Color(0xFFD4A84B),
           ],
         ).createShader(bounds);
       },
       blendMode: BlendMode.srcIn,
       child: Text(
-        'Shabbos!!',
+        'שבת!!',
         style: TextStyle(
-          fontSize: 52,
+          fontSize: 62,
           fontWeight: FontWeight.w800,
-          letterSpacing: 3,
+          letterSpacing: 10,
+          height: 1.1,
           shadows: [
             Shadow(
-              color: const Color(0xFFD4A84B).withValues(alpha: 0.4),
-              blurRadius: 25,
+              color: const Color(
+                0xFFD4A84B,
+              ).withValues(alpha: 0.6 + glow * 0.25),
+              blurRadius: 30 + glow * 15,
+            ),
+            Shadow(
+              color: const Color(0xFFFFAA33).withValues(alpha: 0.3),
+              blurRadius: 50,
             ),
           ],
         ),
@@ -760,19 +768,18 @@ class _SplashScreenState extends State<SplashScreen>
     );
   }
 
-  Widget _buildHebrewTitle() {
-    final glow = _glowPulseController.value;
+  Widget _buildEnglishTitle() {
     return Text(
-      'שבת!!',
+      'Shabbos!!',
       style: TextStyle(
-        fontSize: 40,
-        fontWeight: FontWeight.w700,
-        color: const Color(0xFFD4A84B),
-        letterSpacing: 6,
+        fontSize: 28,
+        fontWeight: FontWeight.w600,
+        color: Colors.white.withValues(alpha: 0.85),
+        letterSpacing: 4,
         shadows: [
           Shadow(
-            color: const Color(0xFFD4A84B).withValues(alpha: 0.5 + glow * 0.2),
-            blurRadius: 20 + glow * 10,
+            color: const Color(0xFFD4A84B).withValues(alpha: 0.3),
+            blurRadius: 15,
           ),
         ],
       ),
