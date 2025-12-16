@@ -3,7 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:timezone/timezone.dart' as tz;
-import 'package:timezone/data/latest_all.dart' as tz;
+import 'package:timezone/data/latest_all.dart' as tzdata;
 import '../models/candle_lighting.dart';
 import 'audio_service.dart';
 
@@ -13,10 +13,16 @@ class NotificationService {
   NotificationService._internal();
 
   final FlutterLocalNotificationsPlugin _notifications = FlutterLocalNotificationsPlugin();
+  final AudioService _audioService = AudioService();
   
   static const String _notificationsEnabledKey = 'notifications_enabled';
   static const String _preNotificationMinutesKey = 'pre_notification_minutes';
   static const String _candleNotificationEnabledKey = 'candle_notification_enabled';
+  
+  // Single channel for all notifications - simpler and more reliable
+  static const String _channelId = 'shabbos_alerts';
+  static const String _channelName = 'Shabbos Alerts';
+  static const String _channelDesc = 'Candle lighting time reminders';
 
   bool _isInitialized = false;
 
@@ -26,13 +32,13 @@ class NotificationService {
     debugPrint('NotificationService: Initializing...');
 
     // Initialize timezone database
-    tz.initializeTimeZones();
-    
-    // Set local timezone based on device offset
+    tzdata.initializeTimeZones();
     _setLocalTimezone();
 
-    // Initialize notifications
+    // Android initialization settings
     const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
+    
+    // iOS initialization settings
     const iosSettings = DarwinInitializationSettings(
       requestAlertPermission: true,
       requestBadgePermission: true,
@@ -42,107 +48,116 @@ class NotificationService {
       defaultPresentSound: true,
     );
 
-    const initSettings = InitializationSettings(
+    final initSettings = InitializationSettings(
       android: androidSettings,
       iOS: iosSettings,
     );
 
-    await _notifications.initialize(
+    final initialized = await _notifications.initialize(
       initSettings,
       onDidReceiveNotificationResponse: _onNotificationResponse,
       onDidReceiveBackgroundNotificationResponse: _backgroundHandler,
     );
+    
+    debugPrint('NotificationService: Plugin initialized: $initialized');
 
-    // Create Android channel
+    // Create Android notification channel
     if (Platform.isAndroid) {
-      final android = _notifications.resolvePlatformSpecificImplementation<
-          AndroidFlutterLocalNotificationsPlugin>();
-      if (android != null) {
-        await android.createNotificationChannel(
-          const AndroidNotificationChannel(
-            'shabbos_notifications',
-            'Shabbos Notifications',
-            description: 'Candle lighting reminders',
-            importance: Importance.high,
-            playSound: true,
-            enableVibration: true,
-          ),
-        );
-      }
+      await _createAndroidChannel();
     }
 
-    // Request permissions
-    await requestPermissions();
-
     _isInitialized = true;
-    debugPrint('NotificationService: Initialized successfully');
+    debugPrint('NotificationService: Initialization complete');
+  }
+
+  Future<void> _createAndroidChannel() async {
+    final android = _notifications.resolvePlatformSpecificImplementation<
+        AndroidFlutterLocalNotificationsPlugin>();
+    
+    if (android == null) {
+      debugPrint('NotificationService: Could not get Android implementation');
+      return;
+    }
+
+    // Create a single high-importance channel
+    await android.createNotificationChannel(
+      const AndroidNotificationChannel(
+        _channelId,
+        _channelName,
+        description: _channelDesc,
+        importance: Importance.max,
+        playSound: true,
+        enableVibration: true,
+        enableLights: true,
+        showBadge: true,
+      ),
+    );
+    
+    debugPrint('NotificationService: Android channel created');
   }
 
   void _setLocalTimezone() {
     try {
-      // Get the device's timezone offset
       final now = DateTime.now();
       final offset = now.timeZoneOffset;
       final offsetHours = offset.inHours;
+      final offsetMinutes = offset.inMinutes % 60;
       
-      debugPrint('NotificationService: Device timezone offset: $offsetHours hours');
+      debugPrint('NotificationService: Device offset: ${offsetHours}h ${offsetMinutes}m');
       
-      // Map common offsets to timezone names
-      String tzName;
+      // Try common timezones first
+      final tzMappings = {
+        -5: 'America/New_York',
+        -6: 'America/Chicago',
+        -7: 'America/Denver',
+        -8: 'America/Los_Angeles',
+        2: 'Asia/Jerusalem',
+        3: 'Asia/Jerusalem',
+        0: 'Europe/London',
+        1: 'Europe/Paris',
+      };
       
-      // Try to find a matching timezone
-      if (offsetHours >= -5 && offsetHours <= -4) {
-        tzName = 'America/New_York'; // EST/EDT
-      } else if (offsetHours >= -6 && offsetHours <= -5) {
-        tzName = 'America/Chicago'; // CST/CDT
-      } else if (offsetHours >= -7 && offsetHours <= -6) {
-        tzName = 'America/Denver'; // MST/MDT
-      } else if (offsetHours >= -8 && offsetHours <= -7) {
-        tzName = 'America/Los_Angeles'; // PST/PDT
-      } else if (offsetHours >= 2 && offsetHours <= 3) {
-        tzName = 'Asia/Jerusalem'; // IST/IDT
-      } else if (offsetHours >= 0 && offsetHours <= 1) {
-        tzName = 'Europe/London'; // GMT/BST
-      } else if (offsetHours >= 1 && offsetHours <= 2) {
-        tzName = 'Europe/Paris'; // CET/CEST
-      } else {
-        // Create a fixed offset timezone
-        tzName = 'Etc/GMT${offsetHours >= 0 ? '-' : '+'}${offsetHours.abs()}';
-      }
+      String? tzName = tzMappings[offsetHours];
       
-      try {
-        tz.setLocalLocation(tz.getLocation(tzName));
-        debugPrint('NotificationService: Timezone set to $tzName');
-      } catch (e) {
-        // If the specific timezone fails, use a generic approach
-        // Find any timezone with matching offset
-        final locations = tz.timeZoneDatabase.locations;
-        for (final entry in locations.entries) {
-          final location = entry.value;
-          final tzOffset = location.currentTimeZone.offset ~/ 1000 ~/ 3600;
-          if (tzOffset == offsetHours) {
-            tz.setLocalLocation(location);
-            debugPrint('NotificationService: Timezone set to ${entry.key} (fallback)');
-            return;
-          }
+      if (tzName != null) {
+        try {
+          tz.setLocalLocation(tz.getLocation(tzName));
+          debugPrint('NotificationService: Timezone set to $tzName');
+          return;
+        } catch (e) {
+          debugPrint('NotificationService: Failed to set $tzName: $e');
         }
-        // Last resort - use UTC
-        tz.setLocalLocation(tz.getLocation('UTC'));
-        debugPrint('NotificationService: Timezone set to UTC (last resort)');
       }
+      
+      // Fallback: search all locations
+      for (final entry in tz.timeZoneDatabase.locations.entries) {
+        final loc = entry.value;
+        final locOffset = loc.currentTimeZone.offset ~/ (1000 * 60 * 60);
+        if (locOffset == offsetHours) {
+          tz.setLocalLocation(loc);
+          debugPrint('NotificationService: Timezone set to ${entry.key} (fallback)');
+          return;
+        }
+      }
+      
+      // Last resort: UTC
+      tz.setLocalLocation(tz.getLocation('UTC'));
+      debugPrint('NotificationService: Using UTC');
     } catch (e) {
       debugPrint('NotificationService: Timezone error: $e');
-      tz.setLocalLocation(tz.getLocation('UTC'));
+      try {
+        tz.setLocalLocation(tz.getLocation('UTC'));
+      } catch (_) {}
     }
   }
 
   void _onNotificationResponse(NotificationResponse response) {
-    debugPrint('NotificationService: Notification tapped');
+    debugPrint('NotificationService: Notification tapped - ID: ${response.id}');
   }
 
   @pragma('vm:entry-point')
   static void _backgroundHandler(NotificationResponse response) {
-    debugPrint('NotificationService: Background notification');
+    debugPrint('NotificationService: Background notification - ID: ${response.id}');
   }
 
   Future<bool> requestPermissions() async {
@@ -151,15 +166,29 @@ class NotificationService {
     if (Platform.isAndroid) {
       final android = _notifications.resolvePlatformSpecificImplementation<
           AndroidFlutterLocalNotificationsPlugin>();
+      
       if (android != null) {
-        final granted = await android.requestNotificationsPermission();
-        await android.requestExactAlarmsPermission();
-        debugPrint('NotificationService: Android permission: $granted');
-        return granted ?? false;
+        // Request notification permission (Android 13+)
+        final notifPermission = await android.requestNotificationsPermission();
+        debugPrint('NotificationService: Notification permission: $notifPermission');
+        
+        // Check exact alarm capability
+        final canScheduleExact = await android.canScheduleExactNotifications();
+        debugPrint('NotificationService: Can schedule exact: $canScheduleExact');
+        
+        if (canScheduleExact != true) {
+          // Request exact alarm permission
+          await android.requestExactAlarmsPermission();
+          final canScheduleAfter = await android.canScheduleExactNotifications();
+          debugPrint('NotificationService: Can schedule exact (after): $canScheduleAfter');
+        }
+        
+        return notifPermission ?? false;
       }
     } else if (Platform.isIOS) {
       final ios = _notifications.resolvePlatformSpecificImplementation<
           IOSFlutterLocalNotificationsPlugin>();
+      
       if (ios != null) {
         final granted = await ios.requestPermissions(
           alert: true,
@@ -170,19 +199,54 @@ class NotificationService {
         return granted ?? false;
       }
     }
+    
     return false;
+  }
+
+  /// Get notification details for Android and iOS
+  NotificationDetails _getNotificationDetails({bool playSound = true}) {
+    final androidDetails = AndroidNotificationDetails(
+      _channelId,
+      _channelName,
+      channelDescription: _channelDesc,
+      importance: Importance.max,
+      priority: Priority.max,
+      playSound: playSound,
+      enableVibration: true,
+      enableLights: true,
+      icon: '@mipmap/ic_launcher',
+      styleInformation: const BigTextStyleInformation(''),
+      category: AndroidNotificationCategory.alarm,
+      visibility: NotificationVisibility.public,
+      fullScreenIntent: true,
+    );
+
+    final iosDetails = DarwinNotificationDetails(
+      presentAlert: true,
+      presentBadge: true,
+      presentSound: playSound,
+      badgeNumber: 1,
+      interruptionLevel: InterruptionLevel.timeSensitive,
+    );
+
+    return NotificationDetails(
+      android: androidDetails,
+      iOS: iosDetails,
+    );
   }
 
   /// Schedule notifications for candle lighting times
   Future<void> scheduleNotifications(List<CandleLighting> candleLightings) async {
     debugPrint('NotificationService: Scheduling ${candleLightings.length} events...');
     
+    await initialize();
     await _notifications.cancelAll();
 
     final prefs = await SharedPreferences.getInstance();
     final enabled = prefs.getBool(_notificationsEnabledKey) ?? true;
+    
     if (!enabled) {
-      debugPrint('NotificationService: Notifications disabled');
+      debugPrint('NotificationService: Notifications disabled by user');
       return;
     }
 
@@ -192,142 +256,186 @@ class NotificationService {
     int id = 0;
     int scheduled = 0;
     final now = DateTime.now();
+    final details = _getNotificationDetails();
 
     for (final lighting in candleLightings) {
-      // Pre-notification
+      // Pre-notification (X minutes before)
       final preTime = lighting.candleLightingTime.subtract(Duration(minutes: preMinutes));
       if (preTime.isAfter(now)) {
-        await _scheduleOne(
+        final success = await _scheduleNotification(
           id: id++,
           title: lighting.isYomTov ? 'יום טוב מגיע!' : 'שבת מגיעה!',
           body: lighting.isYomTov 
               ? 'Yom Tov in $preMinutes minutes • $preMinutes דקות ליום טוב'
               : 'Shabbos in $preMinutes minutes • $preMinutes דקות לשבת',
-          time: preTime,
+          scheduledTime: preTime,
+          details: details,
         );
-        scheduled++;
+        if (success) scheduled++;
       }
 
       // Candle lighting notification
       if (candleEnabled && lighting.candleLightingTime.isAfter(now)) {
-        await _scheduleOne(
+        final success = await _scheduleNotification(
           id: id++,
           title: lighting.isYomTov ? 'יום טוב שמח!' : 'שבת שלום!',
           body: lighting.isYomTov 
               ? 'Good Yom Tov! Time to light candles 🕯️🕯️'
               : 'Good Shabbos! Time to light candles 🕯️🕯️',
-          time: lighting.candleLightingTime,
+          scheduledTime: lighting.candleLightingTime,
+          details: details,
         );
-        scheduled++;
+        if (success) scheduled++;
       }
     }
 
-    debugPrint('NotificationService: Scheduled $scheduled notifications');
+    debugPrint('NotificationService: Successfully scheduled $scheduled notifications');
+    
+    // Verify pending notifications
+    await _logPendingNotifications();
   }
 
-  Future<void> _scheduleOne({
+  Future<bool> _scheduleNotification({
     required int id,
     required String title,
     required String body,
-    required DateTime time,
+    required DateTime scheduledTime,
+    required NotificationDetails details,
   }) async {
     try {
-      // Convert local DateTime to TZDateTime
       final tzTime = tz.TZDateTime(
         tz.local,
-        time.year,
-        time.month,
-        time.day,
-        time.hour,
-        time.minute,
-        time.second,
+        scheduledTime.year,
+        scheduledTime.month,
+        scheduledTime.day,
+        scheduledTime.hour,
+        scheduledTime.minute,
+        scheduledTime.second,
       );
       
-      const androidDetails = AndroidNotificationDetails(
-        'shabbos_notifications',
-        'Shabbos Notifications',
-        channelDescription: 'Candle lighting reminders',
-        importance: Importance.high,
-        priority: Priority.high,
-        playSound: true,
-        enableVibration: true,
-        icon: '@mipmap/ic_launcher',
-      );
-
-      const iosDetails = DarwinNotificationDetails(
-        presentAlert: true,
-        presentBadge: true,
-        presentSound: true,
-        badgeNumber: 1,
-      );
-
-      const details = NotificationDetails(
-        android: androidDetails,
-        iOS: iosDetails,
-      );
-
+      // Use inexactAllowWhileIdle for better compatibility with older Android versions
+      // and devices with aggressive battery optimization
       await _notifications.zonedSchedule(
         id,
         title,
         body,
         tzTime,
         details,
-        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+        androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+        payload: 'shabbos_notification_$id',
       );
       
-      debugPrint('NotificationService: Scheduled #$id for $time (local)');
-    } catch (e) {
-      debugPrint('NotificationService: Schedule error: $e');
+      debugPrint('NotificationService: Scheduled #$id for $scheduledTime');
+      return true;
+    } catch (e, stack) {
+      debugPrint('NotificationService: Failed to schedule #$id: $e');
+      debugPrint('Stack: $stack');
+      return false;
     }
   }
 
-  /// Send test notification immediately
-  Future<void> sendTestNotification() async {
-    debugPrint('NotificationService: Sending test notification...');
-    
-    await requestPermissions();
-
-    // Get the audio service to play the selected sound
-    final audioService = AudioService();
-    final candleSoundId = await audioService.getCandleLightingSound();
-    
-    // Play the custom sound
-    await audioService.playSound(candleSoundId);
-
-    const androidDetails = AndroidNotificationDetails(
-      'shabbos_notifications',
-      'Shabbos Notifications',
-      channelDescription: 'Candle lighting reminders',
-      importance: Importance.max,
-      priority: Priority.max,
-      playSound: true,
-      enableVibration: true,
-      icon: '@mipmap/ic_launcher',
-    );
-
-    const iosDetails = DarwinNotificationDetails(
-      presentAlert: true,
-      presentBadge: true,
-      presentSound: true,
-      badgeNumber: 1,
-    );
-
-    const details = NotificationDetails(
-      android: androidDetails,
-      iOS: iosDetails,
-    );
-
-    await _notifications.show(
-      999,
-      'שבת שלום! Good Shabbos!',
-      'Test notification 🕯️🕯️',
-      details,
-    );
-    
-    debugPrint('NotificationService: Test notification sent');
+  Future<void> _logPendingNotifications() async {
+    try {
+      final pending = await _notifications.pendingNotificationRequests();
+      debugPrint('NotificationService: ${pending.length} pending notifications:');
+      for (final n in pending.take(10)) {
+        debugPrint('  - ID ${n.id}: ${n.title}');
+      }
+    } catch (e) {
+      debugPrint('NotificationService: Could not get pending: $e');
+    }
   }
 
-  // Settings
+  /// Send an immediate test notification
+  Future<void> sendTestNotification() async {
+    debugPrint('NotificationService: Sending immediate test notification...');
+    
+    await initialize();
+    await requestPermissions();
+
+    // Play sound via audio service for immediate feedback
+    final soundId = await _audioService.getCandleLightingSound();
+    if (soundId != 'default' && soundId != 'silent') {
+      await _audioService.playSound(soundId);
+    }
+
+    final details = _getNotificationDetails();
+
+    try {
+      await _notifications.show(
+        999,
+        'שבת שלום! Good Shabbos!',
+        'Test notification 🕯️🕯️',
+        details,
+        payload: 'test_immediate',
+      );
+      debugPrint('NotificationService: Immediate test notification sent');
+    } catch (e) {
+      debugPrint('NotificationService: Failed to send immediate: $e');
+    }
+  }
+
+  /// Send a delayed test notification (for testing scheduled notifications)
+  Future<void> sendDelayedTestNotification({int seconds = 10}) async {
+    debugPrint('NotificationService: Scheduling test notification for $seconds seconds...');
+    
+    await initialize();
+    await requestPermissions();
+
+    final scheduledTime = DateTime.now().add(Duration(seconds: seconds));
+    final details = _getNotificationDetails();
+
+    // Cancel any existing test notification
+    await _notifications.cancel(998);
+
+    final success = await _scheduleNotification(
+      id: 998,
+      title: 'שבת שלום! Good Shabbos!',
+      body: 'Scheduled test notification 🕯️🕯️',
+      scheduledTime: scheduledTime,
+      details: details,
+    );
+
+    if (success) {
+      debugPrint('NotificationService: Test notification scheduled for $scheduledTime');
+      await _logPendingNotifications();
+    }
+  }
+
+  /// Alternative delayed notification using Future.delayed (backup method)
+  Future<void> sendDelayedTestNotificationAlt({int seconds = 10}) async {
+    debugPrint('NotificationService: Starting backup timer for $seconds seconds...');
+    
+    await initialize();
+    
+    Future.delayed(Duration(seconds: seconds), () async {
+      debugPrint('NotificationService: Backup timer fired!');
+      
+      final details = _getNotificationDetails();
+      
+      try {
+        await _notifications.show(
+          997,
+          'שבת שלום! Good Shabbos!',
+          'Backup test notification 🕯️🕯️',
+          details,
+          payload: 'test_backup',
+        );
+        
+        // Also play sound
+        final soundId = await _audioService.getCandleLightingSound();
+        if (soundId != 'default' && soundId != 'silent') {
+          await _audioService.playSound(soundId);
+        }
+        
+        debugPrint('NotificationService: Backup notification sent');
+      } catch (e) {
+        debugPrint('NotificationService: Backup notification failed: $e');
+      }
+    });
+  }
+
+  // Settings getters/setters
   Future<bool> getNotificationsEnabled() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getBool(_notificationsEnabledKey) ?? true;
@@ -336,7 +444,9 @@ class NotificationService {
   Future<void> setNotificationsEnabled(bool enabled) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_notificationsEnabledKey, enabled);
-    if (!enabled) await _notifications.cancelAll();
+    if (!enabled) {
+      await _notifications.cancelAll();
+    }
   }
 
   Future<int> getPreNotificationMinutes() async {

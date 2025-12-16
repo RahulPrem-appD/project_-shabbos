@@ -168,7 +168,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   _buildActionTile(
                     icon: Icons.play_circle_outline,
                     title: isHebrew ? 'בדוק התראה' : 'Test Notification',
+                    subtitle: isHebrew ? 'התראה מיידית' : 'Immediate notification',
                     onTap: _testNotification,
+                  ),
+                  _buildActionTile(
+                    icon: Icons.schedule_send,
+                    title: isHebrew ? 'בדוק התראה מתוזמנת' : 'Test Scheduled Notification',
+                    subtitle: isHebrew ? 'התראה בעוד 10 שניות (סגור את האפליקציה)' : 'Notification in 10 seconds (close app)',
+                    onTap: _testDelayedNotification,
                   ),
                 ],
               ],
@@ -501,6 +508,34 @@ class _SettingsScreenState extends State<SettingsScreen> {
         SnackBar(
           content: Text(isHebrew ? 'התראה נשלחה!' : 'Notification sent!'),
           behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
+  void _testDelayedNotification() async {
+    // Schedule a notification for 10 seconds from now using both methods
+    await _notificationService.sendDelayedTestNotification(seconds: 10);
+    
+    // Also use alternative method as backup
+    await _notificationService.sendDelayedTestNotificationAlt(seconds: 10);
+    
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            isHebrew 
+                ? 'התראה תגיע בעוד 10 שניות - סגור את האפליקציה!' 
+                : 'Notification scheduled for 10 seconds - close the app!',
+          ),
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 5),
+          backgroundColor: const Color(0xFF1A1A1A),
+          action: SnackBarAction(
+            label: isHebrew ? 'הבנתי' : 'OK',
+            textColor: const Color(0xFFE8B923),
+            onPressed: () {},
+          ),
         ),
       );
     }
