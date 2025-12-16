@@ -183,6 +183,13 @@ class CandleLightingDetailScreen extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Calendar section
+          _buildSectionTitle(isHebrew ? 'לוח שנה' : 'Calendar'),
+          const SizedBox(height: 16),
+          _buildCalendarCard(),
+
+          const SizedBox(height: 32),
+
           // Times section
           _buildSectionTitle(isHebrew ? 'זמנים' : 'Times'),
           const SizedBox(height: 16),
@@ -206,6 +213,210 @@ class CandleLightingDetailScreen extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  Widget _buildCalendarCard() {
+    final eventDate = lighting.candleLightingTime;
+    final havdalahDate = lighting.havdalahTime;
+    
+    // Get the first day of the month
+    final firstDayOfMonth = DateTime(eventDate.year, eventDate.month, 1);
+    final lastDayOfMonth = DateTime(eventDate.year, eventDate.month + 1, 0);
+    
+    // Get the weekday of the first day (0 = Sunday in our calendar)
+    int startWeekday = firstDayOfMonth.weekday % 7; // Convert Monday=1 to Sunday=0
+    
+    // Calculate total cells needed
+    final daysInMonth = lastDayOfMonth.day;
+    
+    // Day labels
+    final dayLabels = isHebrew 
+        ? ['א׳', 'ב׳', 'ג׳', 'ד׳', 'ה׳', 'ו׳', 'ש׳']
+        : ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8F8F8),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Column(
+        children: [
+          // Month and Year header
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(
+                DateFormat('MMMM yyyy').format(eventDate),
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF1A1A1A),
+                ),
+              ),
+            ],
+          ),
+          
+          const SizedBox(height: 20),
+          
+          // Day labels row
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: dayLabels.map((day) {
+              final isFriday = day == 'Fri' || day == 'ו׳';
+              final isSaturday = day == 'Sat' || day == 'ש׳';
+              return SizedBox(
+                width: 36,
+                child: Text(
+                  day,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: isFriday 
+                        ? const Color(0xFFE8B923) 
+                        : isSaturday 
+                            ? const Color(0xFF5C6BC0)
+                            : Colors.grey[500],
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+          
+          const SizedBox(height: 12),
+          
+          // Calendar grid
+          GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 7,
+              childAspectRatio: 1,
+              mainAxisSpacing: 4,
+              crossAxisSpacing: 4,
+            ),
+            itemCount: ((startWeekday + daysInMonth) / 7).ceil() * 7,
+            itemBuilder: (context, index) {
+              final dayNumber = index - startWeekday + 1;
+              
+              if (dayNumber < 1 || dayNumber > daysInMonth) {
+                return const SizedBox();
+              }
+              
+              final currentDate = DateTime(eventDate.year, eventDate.month, dayNumber);
+              final isToday = _isSameDay(currentDate, DateTime.now());
+              final isCandleLighting = _isSameDay(currentDate, eventDate);
+              final isHavdalah = havdalahDate != null && _isSameDay(currentDate, havdalahDate);
+              final isShabbatDay = isCandleLighting || isHavdalah || 
+                  (havdalahDate != null && 
+                   currentDate.isAfter(DateTime(eventDate.year, eventDate.month, eventDate.day)) &&
+                   currentDate.isBefore(DateTime(havdalahDate.year, havdalahDate.month, havdalahDate.day)));
+              
+              return _buildCalendarDay(
+                day: dayNumber,
+                isToday: isToday,
+                isCandleLighting: isCandleLighting,
+                isHavdalah: isHavdalah,
+                isShabbatDay: isShabbatDay,
+              );
+            },
+          ),
+          
+          const SizedBox(height: 16),
+          
+          // Legend
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              _buildLegendItem(
+                color: const Color(0xFFE8B923),
+                label: isHebrew ? 'הדלקת נרות' : 'Candle Lighting',
+              ),
+              const SizedBox(width: 20),
+              _buildLegendItem(
+                color: const Color(0xFF5C6BC0),
+                label: isHebrew ? 'הבדלה' : 'Havdalah',
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCalendarDay({
+    required int day,
+    required bool isToday,
+    required bool isCandleLighting,
+    required bool isHavdalah,
+    required bool isShabbatDay,
+  }) {
+    Color? bgColor;
+    Color textColor = const Color(0xFF1A1A1A);
+    BoxBorder? border;
+    
+    if (isCandleLighting) {
+      bgColor = const Color(0xFFE8B923);
+      textColor = const Color(0xFF1A1A1A);
+    } else if (isHavdalah) {
+      bgColor = const Color(0xFF5C6BC0);
+      textColor = Colors.white;
+    } else if (isShabbatDay) {
+      bgColor = const Color(0xFFE8B923).withValues(alpha: 0.15);
+    }
+    
+    if (isToday && !isCandleLighting && !isHavdalah) {
+      border = Border.all(color: const Color(0xFF1A1A1A), width: 2);
+    }
+
+    return Container(
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(8),
+        border: border,
+      ),
+      child: Center(
+        child: Text(
+          day.toString(),
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: (isCandleLighting || isHavdalah || isToday) 
+                ? FontWeight.w700 
+                : FontWeight.w500,
+            color: textColor,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLegendItem({required Color color, required String label}) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 12,
+          height: 12,
+          decoration: BoxDecoration(
+            color: color,
+            borderRadius: BorderRadius.circular(3),
+          ),
+        ),
+        const SizedBox(width: 6),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 11,
+            color: Colors.grey[600],
+          ),
+        ),
+      ],
+    );
+  }
+
+  bool _isSameDay(DateTime a, DateTime b) {
+    return a.year == b.year && a.month == b.month && a.day == b.day;
   }
 
   Widget _buildSectionTitle(String title) {
