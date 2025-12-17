@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'home_tab.dart';
 import 'calendar_tab.dart';
 import 'about_screen.dart';
@@ -55,35 +56,53 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
   }
 
   Future<void> _checkAndRequestPermissions() async {
-    // Check notification permission
-    final notificationStatus = await Permission.notification.status;
+    final prefs = await SharedPreferences.getInstance();
 
-    // Check location permission
-    final locationStatus = await Permission.locationWhenInUse.status;
+    // Check if we've already completed initial permission setup
+    final hasCompletedSetup =
+        prefs.getBool('permissions_setup_complete') ?? false;
 
-    // Check exact alarm permission on Android
-    bool exactAlarmGranted = true;
-    if (Platform.isAndroid) {
-      exactAlarmGranted = await NativeAlarmService.canScheduleExactAlarms();
+    if (Platform.isIOS) {
+      // On iOS, permission_handler doesn't always report correctly
+      // Only show dialog on first launch, then let users manage in Settings
+      if (!hasCompletedSetup) {
+        // First launch - request permissions
+        await NotificationService().requestPermissions();
+        await Permission.locationWhenInUse.request();
+
+        // Mark setup as complete
+        await prefs.setBool('permissions_setup_complete', true);
+        debugPrint('MainShell: iOS first launch - permissions requested');
+      }
+      // Don't show dialog on iOS after first launch
+      return;
     }
 
-    debugPrint('MainShell: Notification permission: $notificationStatus');
+    // Android: Check permissions properly
+    final notificationStatus = await Permission.notification.status;
+    final notificationGranted = notificationStatus.isGranted;
+    debugPrint(
+      'MainShell: Android notification permission: $notificationStatus',
+    );
+
+    final locationStatus = await Permission.locationWhenInUse.status;
+    final locationGranted =
+        locationStatus.isGranted || locationStatus.isLimited;
     debugPrint('MainShell: Location permission: $locationStatus');
+
+    final exactAlarmGranted = await NativeAlarmService.canScheduleExactAlarms();
     debugPrint('MainShell: Exact alarm permission: $exactAlarmGranted');
 
-    // If any critical permission is denied, show dialog
-    if (notificationStatus.isDenied ||
-        notificationStatus.isPermanentlyDenied ||
-        locationStatus.isDenied ||
-        locationStatus.isPermanentlyDenied ||
-        !exactAlarmGranted) {
-      if (mounted) {
-        _showPermissionDialog(
-          notificationGranted: notificationStatus.isGranted,
-          locationGranted: locationStatus.isGranted,
-          exactAlarmGranted: exactAlarmGranted,
-        );
-      }
+    // Show dialog if any permission is missing
+    final shouldShowDialog =
+        !notificationGranted || !locationGranted || !exactAlarmGranted;
+
+    if (shouldShowDialog && mounted) {
+      _showPermissionDialog(
+        notificationGranted: notificationGranted,
+        locationGranted: locationGranted,
+        exactAlarmGranted: exactAlarmGranted,
+      );
     }
   }
 
@@ -200,15 +219,18 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
   }) async {
     // Request notification permission
     if (!notificationGranted) {
-      final status = await Permission.notification.request();
-      debugPrint('MainShell: Notification permission result: $status');
+      if (Platform.isAndroid) {
+        final status = await Permission.notification.request();
+        debugPrint(
+          'MainShell: Android notification permission result: $status',
+        );
 
-      if (status.isPermanentlyDenied) {
-        _showOpenSettingsDialog(isHebrew ? 'התראות' : 'Notifications');
-        return;
+        if (status.isPermanentlyDenied) {
+          _showOpenSettingsDialog(isHebrew ? 'התראות' : 'Notifications');
+          return;
+        }
       }
-
-      // Also request via NotificationService for iOS
+      // Request via NotificationService (works for both iOS and Android)
       await NotificationService().requestPermissions();
     }
 

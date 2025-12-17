@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart' hide TextDirection;
+import 'package:permission_handler/permission_handler.dart';
 import '../models/candle_lighting.dart';
 import '../services/hebcal_service.dart';
 import '../services/location_service.dart';
@@ -28,6 +29,7 @@ class _HomeTabState extends State<HomeTab> {
   List<CandleLighting> _candleLightings = [];
   LocationInfo? _location;
   bool _isLoading = true;
+  bool _isDetectingLocation = false;
   String? _error;
 
   bool get isHebrew => widget.locale == 'he';
@@ -41,6 +43,109 @@ class _HomeTabState extends State<HomeTab> {
   Future<void> _init() async {
     await _notificationService.initialize();
     await _loadData();
+  }
+
+  Future<void> _detectLocation() async {
+    setState(() {
+      _isDetectingLocation = true;
+      _error = null;
+    });
+
+    try {
+      // Request location permission first
+      final status = await Permission.locationWhenInUse.request();
+      
+      if (status.isGranted || status.isLimited) {
+        // Get current location
+        final location = await _locationService.getCurrentLocation();
+        
+        if (location != null) {
+          // Save and enable GPS
+          await _locationService.saveLocation(location);
+          await _locationService.setUseGps(true);
+          
+          // Reload data with new location
+          await _loadData();
+          
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  isHebrew 
+                      ? '✓ מיקום זוהה: ${location.displayName}'
+                      : '✓ Location detected: ${location.displayName}',
+                ),
+                backgroundColor: Colors.green,
+                behavior: SnackBarBehavior.floating,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+            );
+          }
+        } else {
+          setState(() {
+            _error = isHebrew 
+                ? 'לא ניתן לזהות מיקום. נסה שוב.'
+                : 'Could not detect location. Please try again.';
+          });
+        }
+      } else if (status.isPermanentlyDenied) {
+        // Open app settings
+        if (mounted) {
+          _showLocationSettingsDialog();
+        }
+      } else {
+        setState(() {
+          _error = isHebrew
+              ? 'נדרשת הרשאת מיקום'
+              : 'Location permission is required';
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _error = isHebrew 
+            ? 'שגיאה בזיהוי מיקום: $e'
+            : 'Error detecting location: $e';
+      });
+    } finally {
+      setState(() {
+        _isDetectingLocation = false;
+      });
+    }
+  }
+
+  void _showLocationSettingsDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text(
+          isHebrew ? 'נדרשת הרשאת מיקום' : 'Location Permission Required',
+          style: const TextStyle(fontWeight: FontWeight.bold),
+        ),
+        content: Text(
+          isHebrew
+              ? 'הרשאת המיקום נדחתה. אנא אפשר גישה למיקום בהגדרות המכשיר.'
+              : 'Location permission was denied. Please enable location access in device settings.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(isHebrew ? 'ביטול' : 'Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              openAppSettings();
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF1A1A1A),
+              foregroundColor: Colors.white,
+            ),
+            child: Text(isHebrew ? 'פתח הגדרות' : 'Open Settings'),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _loadData() async {
@@ -117,33 +222,58 @@ class _HomeTabState extends State<HomeTab> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                isHebrew ? 'שבת!!' : 'Shabbos!!',
-                style: const TextStyle(
-                  fontSize: 28,
-                  fontWeight: FontWeight.w700,
-                  color: Color(0xFF1A1A1A),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  isHebrew ? 'שבת!!' : 'Shabbos!!',
+                  style: const TextStyle(
+                    fontSize: 28,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF1A1A1A),
+                  ),
                 ),
-              ),
-              if (_location != null)
-                Row(
-                  children: [
-                    Icon(
-                      Icons.location_on_outlined,
-                      size: 14,
-                      color: Colors.grey[500],
+                if (_location != null)
+                  GestureDetector(
+                    onTap: _isDetectingLocation ? null : _detectLocation,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.location_on_outlined,
+                          size: 14,
+                          color: Colors.grey[500],
+                        ),
+                        const SizedBox(width: 4),
+                        Flexible(
+                          child: Text(
+                            _location!.displayName,
+                            style: TextStyle(fontSize: 13, color: Colors.grey[500]),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        if (_isDetectingLocation)
+                          SizedBox(
+                            width: 12,
+                            height: 12,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 1.5,
+                              color: Colors.grey[500],
+                            ),
+                          )
+                        else
+                          Icon(
+                            Icons.my_location,
+                            size: 14,
+                            color: Colors.grey[400],
+                          ),
+                      ],
                     ),
-                    const SizedBox(width: 4),
-                    Text(
-                      _location!.displayName,
-                      style: TextStyle(fontSize: 13, color: Colors.grey[500]),
-                    ),
-                  ],
-                ),
-            ],
+                  ),
+              ],
+            ),
           ),
           Text('בס״ד', style: TextStyle(fontSize: 14, color: Colors.grey[400])),
         ],
@@ -472,13 +602,45 @@ class _HomeTabState extends State<HomeTab> {
               textAlign: TextAlign.center,
               style: TextStyle(fontSize: 16, color: Colors.grey[600]),
             ),
+            const SizedBox(height: 32),
+            
+            // Detect Location Button
+            ElevatedButton.icon(
+              onPressed: _isDetectingLocation ? null : _detectLocation,
+              icon: _isDetectingLocation
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : const Icon(Icons.my_location),
+              label: Text(
+                _isDetectingLocation
+                    ? (isHebrew ? 'מזהה...' : 'Detecting...')
+                    : (isHebrew ? 'זהה מיקום אוטומטית' : 'Detect My Location'),
+                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF1A1A1A),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+            ),
+            
             const SizedBox(height: 16),
+            
             Text(
               isHebrew
-                  ? 'עבור להגדרות לבחירת מיקום'
-                  : 'Go to Settings to select a location',
+                  ? 'או עבור להגדרות לבחירת מיקום ידנית'
+                  : 'Or go to Settings to select location manually',
               textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 14, color: Colors.grey[500]),
+              style: TextStyle(fontSize: 13, color: Colors.grey[500]),
             ),
           ],
         ),
