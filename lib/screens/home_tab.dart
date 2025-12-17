@@ -51,7 +51,7 @@ class _HomeTabState extends State<HomeTab> {
 
     try {
       var location = await _locationService.getSavedLocation();
-      
+
       if (location == null) {
         final useGps = await _locationService.getUseGps();
         if (useGps) {
@@ -61,27 +61,34 @@ class _HomeTabState extends State<HomeTab> {
 
       if (location != null) {
         _location = location;
-        
+
         final now = DateTime.now();
         final times = await _hebcalService.getExtendedCandleLightingTimes(
           latitude: location.latitude,
           longitude: location.longitude,
           startDate: now,
           endDate: now.add(const Duration(days: 60)),
+          timezone: location.timezone,
         );
 
-        final futureTimes = times.where((t) => t.candleLightingTime.isAfter(now)).toList();
-        
+        final futureTimes = times
+            .where((t) => t.candleLightingTime.isAfter(now))
+            .toList();
+
         setState(() {
           _candleLightings = futureTimes;
           _isLoading = false;
         });
 
-        await _notificationService.scheduleNotifications(futureTimes.take(10).toList());
+        await _notificationService.scheduleNotifications(
+          futureTimes.take(10).toList(),
+        );
       } else {
         setState(() {
           _isLoading = false;
-          _error = isHebrew ? 'נא לבחור מיקום בהגדרות' : 'Please select a location in Settings';
+          _error = isHebrew
+              ? 'נא לבחור מיקום בהגדרות'
+              : 'Please select a location in Settings';
         });
       }
     } catch (e) {
@@ -124,7 +131,11 @@ class _HomeTabState extends State<HomeTab> {
               if (_location != null)
                 Row(
                   children: [
-                    Icon(Icons.location_on_outlined, size: 14, color: Colors.grey[500]),
+                    Icon(
+                      Icons.location_on_outlined,
+                      size: 14,
+                      color: Colors.grey[500],
+                    ),
                     const SizedBox(width: 4),
                     Text(
                       _location!.displayName,
@@ -134,10 +145,7 @@ class _HomeTabState extends State<HomeTab> {
                 ),
             ],
           ),
-          Text(
-            'בס״ד',
-            style: TextStyle(fontSize: 14, color: Colors.grey[400]),
-          ),
+          Text('בס״ד', style: TextStyle(fontSize: 14, color: Colors.grey[400])),
         ],
       ),
     );
@@ -193,12 +201,15 @@ class _HomeTabState extends State<HomeTab> {
               ),
             ),
             const SizedBox(height: 16),
-            ..._candleLightings.skip(1).take(5).map((lighting) => 
-              GestureDetector(
-                onTap: () => _openDetailScreen(lighting),
-                child: _buildUpcomingCard(lighting),
-              ),
-            ),
+            ..._candleLightings
+                .skip(1)
+                .take(5)
+                .map(
+                  (lighting) => GestureDetector(
+                    onTap: () => _openDetailScreen(lighting),
+                    child: _buildUpcomingCard(lighting),
+                  ),
+                ),
           ],
           const SizedBox(height: 100),
         ],
@@ -210,7 +221,7 @@ class _HomeTabState extends State<HomeTab> {
     final timeFormat = DateFormat('h:mm');
     final amPm = DateFormat('a').format(lighting.candleLightingTime);
     final dateFormat = DateFormat('EEEE, MMM d');
-    
+
     final now = DateTime.now();
     final diff = lighting.candleLightingTime.difference(now);
     final days = diff.inDays;
@@ -221,7 +232,9 @@ class _HomeTabState extends State<HomeTab> {
     if (days > 0) {
       countdown = isHebrew ? '$days ימים' : '$days days';
     } else if (hours > 0) {
-      countdown = isHebrew ? '$hours שעות $minutes דק\'' : '${hours}h ${minutes}m';
+      countdown = isHebrew
+          ? '$hours שעות $minutes דק\''
+          : '${hours}h ${minutes}m';
     } else {
       countdown = isHebrew ? '$minutes דקות' : '${minutes}m';
     }
@@ -239,7 +252,10 @@ class _HomeTabState extends State<HomeTab> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 6,
+                ),
                 decoration: BoxDecoration(
                   color: const Color(0xFFE8B923),
                   borderRadius: BorderRadius.circular(20),
@@ -256,7 +272,11 @@ class _HomeTabState extends State<HomeTab> {
               ),
               Row(
                 children: [
-                  Icon(Icons.schedule, size: 14, color: Colors.white.withValues(alpha: 0.5)),
+                  Icon(
+                    Icons.schedule,
+                    size: 14,
+                    color: Colors.white.withValues(alpha: 0.5),
+                  ),
                   const SizedBox(width: 6),
                   Text(
                     countdown,
@@ -269,9 +289,9 @@ class _HomeTabState extends State<HomeTab> {
               ),
             ],
           ),
-          
+
           const SizedBox(height: 24),
-          
+
           Text(
             isHebrew ? lighting.hebrewDisplayName : lighting.displayName,
             style: const TextStyle(
@@ -280,9 +300,9 @@ class _HomeTabState extends State<HomeTab> {
               color: Colors.white,
             ),
           ),
-          
+
           const SizedBox(height: 4),
-          
+
           Text(
             dateFormat.format(lighting.date),
             style: TextStyle(
@@ -290,9 +310,9 @@ class _HomeTabState extends State<HomeTab> {
               color: Colors.white.withValues(alpha: 0.5),
             ),
           ),
-          
+
           const SizedBox(height: 28),
-          
+
           Row(
             children: [
               _buildTimeDisplay(
@@ -393,7 +413,9 @@ class _HomeTabState extends State<HomeTab> {
               borderRadius: BorderRadius.circular(12),
             ),
             child: Icon(
-              lighting.isYomTov ? Icons.celebration : Icons.local_fire_department,
+              lighting.isYomTov
+                  ? Icons.celebration
+                  : Icons.local_fire_department,
               color: const Color(0xFFE8B923),
               size: 24,
             ),
@@ -439,7 +461,11 @@ class _HomeTabState extends State<HomeTab> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.location_off_outlined, size: 64, color: Colors.grey[300]),
+            Icon(
+              Icons.location_off_outlined,
+              size: 64,
+              color: Colors.grey[300],
+            ),
             const SizedBox(height: 24),
             Text(
               _error!,
@@ -448,7 +474,9 @@ class _HomeTabState extends State<HomeTab> {
             ),
             const SizedBox(height: 16),
             Text(
-              isHebrew ? 'עבור להגדרות לבחירת מיקום' : 'Go to Settings to select a location',
+              isHebrew
+                  ? 'עבור להגדרות לבחירת מיקום'
+                  : 'Go to Settings to select a location',
               textAlign: TextAlign.center,
               style: TextStyle(fontSize: 14, color: Colors.grey[500]),
             ),
@@ -474,4 +502,3 @@ class _HomeTabState extends State<HomeTab> {
     );
   }
 }
-

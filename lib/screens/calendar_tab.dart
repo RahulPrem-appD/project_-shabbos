@@ -83,6 +83,7 @@ class _CalendarTabState extends State<CalendarTab> {
         longitude: _location!.longitude,
         startDate: startDate,
         endDate: endDate,
+        timezone: _location!.timezone,
       );
 
       setState(() {

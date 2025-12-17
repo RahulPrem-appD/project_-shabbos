@@ -744,25 +744,28 @@ class _SplashScreenState extends State<SplashScreen>
         ).createShader(bounds);
       },
       blendMode: BlendMode.srcIn,
-      child: Text(
-        'שבת!!',
-        style: TextStyle(
-          fontSize: 62,
-          fontWeight: FontWeight.w800,
-          letterSpacing: 10,
-          height: 1.1,
-          shadows: [
-            Shadow(
-              color: const Color(
-                0xFFD4A84B,
-              ).withValues(alpha: 0.6 + glow * 0.25),
-              blurRadius: 30 + glow * 15,
-            ),
-            Shadow(
-              color: const Color(0xFFFFAA33).withValues(alpha: 0.3),
-              blurRadius: 50,
-            ),
-          ],
+      child: Directionality(
+        textDirection: TextDirection.rtl,
+        child: Text(
+          'שבת!!',
+          style: TextStyle(
+            fontSize: 62,
+            fontWeight: FontWeight.w800,
+            letterSpacing: 10,
+            height: 1.1,
+            shadows: [
+              Shadow(
+                color: const Color(
+                  0xFFD4A84B,
+                ).withValues(alpha: 0.6 + glow * 0.25),
+                blurRadius: 30 + glow * 15,
+              ),
+              Shadow(
+                color: const Color(0xFFFFAA33).withValues(alpha: 0.3),
+                blurRadius: 50,
+              ),
+            ],
+          ),
         ),
       ),
     );
