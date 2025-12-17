@@ -9,7 +9,7 @@ class AppLocalizationsHe extends AppLocalizations {
   AppLocalizationsHe([String locale = 'he']) : super(locale);
 
   @override
-  String get appTitle => 'שבת!!';
+  String get appTitle => '!!שבת';
 
   @override
   String get appSubtitle => 'התראת הדלקת נרות לשבת וליום טוב';
@@ -111,7 +111,7 @@ class AppLocalizationsHe extends AppLocalizations {
 
   @override
   String get aboutDescription =>
-      'שבת!! היא אפליקציה פשוטה שנועדה לעזור לך להתכונן לשבת ויום טוב עם תזכורות שמע שקטות לפני הדלקת נרות.';
+      '!!שבת היא אפליקציה פשוטה שנועדה לעזור לך להתכונן לשבת ויום טוב עם תזכורות שמע שקטות לפני הדלקת נרות.';
 
   @override
   String get dedication => 'הקדשה';
@@ -179,13 +179,13 @@ class AppLocalizationsHe extends AppLocalizations {
   String get candleNotificationDesc => 'התראה בזמן הדלקת נרות';
 
   @override
-  String get goodShabbos => 'שבת שלום!';
+  String get goodShabbos => '!שבת שלום';
 
   @override
-  String get shabbosComing => 'שבת מגיעה!';
+  String get shabbosComing => '!שבת מגיעה';
 
   @override
-  String get yomTovComing => 'יום טוב מגיע!';
+  String get yomTovComing => '!יום טוב מגיע';
 
   @override
   String get timeToLight => 'זמן להדליק נרות';

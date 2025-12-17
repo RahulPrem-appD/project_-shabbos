@@ -287,7 +287,7 @@ class NotificationService {
         Duration(minutes: preMinutes),
       );
       if (preTime.isAfter(now)) {
-        final title = lighting.isYomTov ? 'יום טוב מגיע!' : 'שבת מגיעה!';
+        final title = lighting.isYomTov ? '!יום טוב מגיע' : '!שבת מגיעה';
         final body = lighting.isYomTov
             ? 'Yom Tov in $preMinutes minutes • $preMinutes דקות ליום טוב'
             : 'Shabbos in $preMinutes minutes • $preMinutes דקות לשבת';
@@ -303,7 +303,7 @@ class NotificationService {
 
       // Candle lighting notification
       if (candleEnabled && lighting.candleLightingTime.isAfter(now)) {
-        final title = lighting.isYomTov ? 'יום טוב שמח!' : 'שבת שלום!';
+        final title = lighting.isYomTov ? '!יום טוב שמח' : '!שבת שלום';
         final body = lighting.isYomTov
             ? 'Good Yom Tov! Time to light candles 🕯️🕯️'
             : 'Good Shabbos! Time to light candles 🕯️🕯️';
@@ -413,7 +413,7 @@ class NotificationService {
     try {
       await _notifications.show(
         999,
-        'שבת שלום! Good Shabbos!',
+        '!שבת שלום Good Shabbos!',
         'Test notification 🕯️🕯️',
         _getNotificationDetails(),
       );
@@ -485,7 +485,7 @@ class NotificationService {
         // Schedule the test notification
         await _notifications.zonedSchedule(
           998,
-          'שבת שלום! Good Shabbos!',
+          '!שבת שלום Good Shabbos!',
           'Scheduled test notification 🕯️🕯️ (Background test)',
           tzTime,
           _getNotificationDetails(),

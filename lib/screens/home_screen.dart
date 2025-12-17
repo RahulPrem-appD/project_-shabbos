@@ -123,7 +123,7 @@ class _HomeScreenState extends State<HomeScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                isHebrew ? 'שבת!!' : 'Shabbos!!',
+                isHebrew ? '!!שבת' : 'Shabbos!!',
                 style: const TextStyle(
                   fontSize: 28,
                   fontWeight: FontWeight.w700,
