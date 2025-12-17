@@ -8,7 +8,7 @@ class HebcalService {
 
   /// Fetches candle lighting times for a given location
   /// Returns a list of upcoming candle lighting events
-  /// 
+  ///
   /// [timezone] is REQUIRED for correct local times (e.g., 'America/New_York', 'Asia/Jerusalem')
   Future<List<CandleLighting>> getCandleLightingTimes({
     required double latitude,
@@ -19,7 +19,7 @@ class HebcalService {
     try {
       // Determine timezone - use provided or detect from coordinates
       final tz = timezone ?? await _detectTimezone(latitude, longitude);
-      
+
       final queryParams = {
         'cfg': 'json',
         'geo': 'pos',
@@ -28,28 +28,32 @@ class HebcalService {
         'M': 'on', // Include Havdalah
         'b': '18', // Candle lighting minutes before sunset (standard 18)
       };
-      
+
       // Add timezone if available
       if (tz != null && tz.isNotEmpty) {
         queryParams['tzid'] = tz;
       }
-      
+
       final uri = Uri.parse(_baseUrl).replace(queryParameters: queryParams);
-      
+
       debugPrint('HebcalService: Fetching from $uri');
 
       final response = await http.get(uri);
 
       if (response.statusCode != 200) {
-        throw Exception('Failed to fetch candle lighting times: ${response.statusCode}');
+        throw Exception(
+          'Failed to fetch candle lighting times: ${response.statusCode}',
+        );
       }
 
       final data = json.decode(response.body);
-      
+
       // Log the response for debugging
       debugPrint('HebcalService: Response location: ${data['location']}');
-      debugPrint('HebcalService: Response timezone: ${data['location']?['tzid']}');
-      
+      debugPrint(
+        'HebcalService: Response timezone: ${data['location']?['tzid']}',
+      );
+
       return _parseHebcalResponse(data);
     } catch (e) {
       debugPrint('HebcalService: Error: $e');
@@ -68,7 +72,7 @@ class HebcalService {
     try {
       // Determine timezone - use provided or detect from coordinates
       final tz = timezone ?? await _detectTimezone(latitude, longitude);
-      
+
       final queryParams = {
         'cfg': 'json',
         'v': '1',
@@ -86,20 +90,24 @@ class HebcalService {
         'nx': 'off', // Rosh Chodesh
         's': 'off', // Parasha
       };
-      
+
       // Add timezone if available
       if (tz != null && tz.isNotEmpty) {
         queryParams['tzid'] = tz;
       }
 
-      final uri = Uri.parse('https://www.hebcal.com/hebcal').replace(queryParameters: queryParams);
-      
+      final uri = Uri.parse(
+        'https://www.hebcal.com/hebcal',
+      ).replace(queryParameters: queryParams);
+
       debugPrint('HebcalService: Fetching extended from $uri');
 
       final response = await http.get(uri);
 
       if (response.statusCode != 200) {
-        throw Exception('Failed to fetch extended times: ${response.statusCode}');
+        throw Exception(
+          'Failed to fetch extended times: ${response.statusCode}',
+        );
       }
 
       final data = json.decode(response.body);
@@ -115,16 +123,18 @@ class HebcalService {
   Future<String?> _detectTimezone(double latitude, double longitude) async {
     // Use a simple heuristic based on longitude for rough timezone detection
     // This is a fallback - ideally the timezone should be provided from City data
-    
+
     // Try to use a timezone API as fallback
     try {
-      final uri = Uri.parse('https://www.hebcal.com/shabbat').replace(queryParameters: {
-        'cfg': 'json',
-        'geo': 'pos',
-        'latitude': latitude.toStringAsFixed(4),
-        'longitude': longitude.toStringAsFixed(4),
-      });
-      
+      final uri = Uri.parse('https://www.hebcal.com/shabbat').replace(
+        queryParameters: {
+          'cfg': 'json',
+          'geo': 'pos',
+          'latitude': latitude.toStringAsFixed(4),
+          'longitude': longitude.toStringAsFixed(4),
+        },
+      );
+
       final response = await http.get(uri);
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
@@ -137,11 +147,11 @@ class HebcalService {
     } catch (e) {
       debugPrint('HebcalService: Timezone detection failed: $e');
     }
-    
+
     // Fallback: rough estimate based on longitude
     // Each timezone is approximately 15 degrees of longitude
     final offset = (longitude / 15).round();
-    
+
     // Map common offsets to IANA timezone names
     final timezoneMap = {
       -12: 'Etc/GMT+12',
@@ -170,7 +180,7 @@ class HebcalService {
       11: 'Pacific/Noumea',
       12: 'Pacific/Auckland',
     };
-    
+
     return timezoneMap[offset];
   }
 
@@ -180,28 +190,47 @@ class HebcalService {
 
   /// Parse the date string from HebCal API
   /// HebCal returns dates in ISO 8601 format with timezone offset
-  /// e.g., "2024-12-20T16:23:00-05:00"
+  /// e.g., "2024-12-20T16:23:00-05:00" or "2024-12-20T16:23:00+02:00"
+  ///
+  /// IMPORTANT: The time returned by HebCal is the LOCAL time at that location.
+  /// We should display it as-is without any timezone conversion.
   DateTime _parseHebcalDate(String dateStr) {
     try {
-      // HebCal returns ISO 8601 with timezone offset
-      // DateTime.parse handles this correctly and converts to local time
-      final parsed = DateTime.parse(dateStr);
-      
-      // Convert to local time if it's in UTC
-      if (parsed.isUtc) {
-        return parsed.toLocal();
+      // HebCal returns times that are already in the correct local time for that location
+      // e.g., "2025-12-19T16:15:00+02:00" means 4:15pm LOCAL time in Israel
+      // We need to extract just the date/time portion and treat it as local time
+
+      // Extract the datetime portion without timezone offset
+      // Match pattern: YYYY-MM-DDTHH:MM:SS (ignore everything after)
+      final match = RegExp(
+        r'^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})',
+      ).firstMatch(dateStr);
+
+      if (match != null) {
+        final dateTimePart = match.group(1)!;
+        // Parse as local time (no timezone conversion)
+        final parsed = DateTime.parse(dateTimePart);
+        debugPrint('HebcalService: Parsed "$dateStr" -> $parsed (local time)');
+        return parsed;
       }
-      
+
+      // Fallback: try DateTime.parse but strip timezone
+      final cleanDate = dateStr
+          .replaceAll(RegExp(r'[+-]\d{2}:\d{2}$'), '')
+          .replaceAll('Z', '');
+      final parsed = DateTime.parse(cleanDate);
+      debugPrint('HebcalService: Fallback parsed "$dateStr" -> $parsed');
       return parsed;
     } catch (e) {
       debugPrint('HebcalService: Date parse error for "$dateStr": $e');
-      // Fallback: try to parse without timezone
+      // Last resort fallback
       try {
-        // Remove timezone info and parse as local
-        final cleanDate = dateStr.replaceAll(RegExp(r'[+-]\d{2}:\d{2}$'), '');
+        final cleanDate = dateStr
+            .replaceAll(RegExp(r'[+-]\d{2}:\d{2}$'), '')
+            .replaceAll('Z', '');
         return DateTime.parse(cleanDate);
       } catch (e2) {
-        debugPrint('HebcalService: Fallback date parse also failed: $e2');
+        debugPrint('HebcalService: All date parsing failed: $e2');
         return DateTime.now();
       }
     }
@@ -221,27 +250,31 @@ class HebcalService {
     for (final item in items) {
       final category = item['category'] as String?;
       final dateStr = item['date'] as String?;
-      
+
       if (dateStr == null) continue;
 
       final date = _parseHebcalDate(dateStr);
-      
-      debugPrint('HebcalService: Parsing item - category: $category, date: $dateStr -> $date');
+
+      debugPrint(
+        'HebcalService: Parsing item - category: $category, date: $dateStr -> $date',
+      );
 
       if (category == 'candles') {
         // If we have a previous candle lighting, save it
         if (currentCandleLighting != null) {
-          results.add(CandleLighting(
-            date: eventDate ?? currentCandleLighting,
-            candleLightingTime: currentCandleLighting,
-            havdalahTime: currentHavdalah,
-            holidayName: currentHoliday,
-            hebrewHolidayName: currentHebrewHoliday,
-            isShabbat: currentHoliday == null || currentHoliday.isEmpty,
-            isYomTov: isYomTov,
-          ));
+          results.add(
+            CandleLighting(
+              date: eventDate ?? currentCandleLighting,
+              candleLightingTime: currentCandleLighting,
+              havdalahTime: currentHavdalah,
+              holidayName: currentHoliday,
+              hebrewHolidayName: currentHebrewHoliday,
+              isShabbat: currentHoliday == null || currentHoliday.isEmpty,
+              isYomTov: isYomTov,
+            ),
+          );
         }
-        
+
         currentCandleLighting = date;
         eventDate = date;
         currentHavdalah = null;
@@ -262,18 +295,22 @@ class HebcalService {
 
     // Don't forget the last one
     if (currentCandleLighting != null) {
-      results.add(CandleLighting(
-        date: eventDate ?? currentCandleLighting,
-        candleLightingTime: currentCandleLighting,
-        havdalahTime: currentHavdalah,
-        holidayName: currentHoliday,
-        hebrewHolidayName: currentHebrewHoliday,
-        isShabbat: currentHoliday == null || currentHoliday.isEmpty,
-        isYomTov: isYomTov,
-      ));
+      results.add(
+        CandleLighting(
+          date: eventDate ?? currentCandleLighting,
+          candleLightingTime: currentCandleLighting,
+          havdalahTime: currentHavdalah,
+          holidayName: currentHoliday,
+          hebrewHolidayName: currentHebrewHoliday,
+          isShabbat: currentHoliday == null || currentHoliday.isEmpty,
+          isYomTov: isYomTov,
+        ),
+      );
     }
 
-    debugPrint('HebcalService: Parsed ${results.length} candle lighting events');
+    debugPrint(
+      'HebcalService: Parsed ${results.length} candle lighting events',
+    );
     for (final r in results) {
       debugPrint('  - ${r.displayName}: ${r.candleLightingTime}');
     }
@@ -307,17 +344,17 @@ class HebcalService {
       if (candleDateStr == null) continue;
 
       final candleDate = _parseHebcalDate(candleDateStr);
-      
+
       // Find the corresponding Havdalah
       // Havdalah is typically 1-2 days after candle lighting (1 for regular Shabbat, 2+ for holidays)
       DateTime? havdalahDate;
       for (final havdalahItem in havdalahEvents) {
         final havdalahDateStr = havdalahItem['date'] as String?;
         if (havdalahDateStr == null) continue;
-        
+
         final hDate = _parseHebcalDate(havdalahDateStr);
         final daysDiff = hDate.difference(candleDate).inDays;
-        
+
         // Havdalah should be 1-3 days after candle lighting
         if (daysDiff >= 1 && daysDiff <= 3) {
           // Check if there's no candle lighting between them
@@ -332,7 +369,7 @@ class HebcalService {
               break;
             }
           }
-          
+
           if (!hasIntermediateCandles) {
             havdalahDate = hDate;
             break;
@@ -350,12 +387,12 @@ class HebcalService {
       for (final holidayItem in holidayEvents) {
         final holidayDateStr = holidayItem['date'] as String?;
         if (holidayDateStr == null) continue;
-        
+
         final holidayDate = _parseHebcalDate(holidayDateStr);
         final holidayDateKey = _formatDate(holidayDate);
-        
+
         // Holiday can be on the same day or the next day (since Shabbat starts Friday evening)
-        if (holidayDateKey == candleDateKey || 
+        if (holidayDateKey == candleDateKey ||
             holidayDate.difference(candleDate).inDays == 1) {
           if (holidayItem['yomtov'] == true) {
             holidayName = holidayItem['title'] as String?;
@@ -366,21 +403,27 @@ class HebcalService {
         }
       }
 
-      results.add(CandleLighting(
-        date: candleDate,
-        candleLightingTime: candleDate,
-        havdalahTime: havdalahDate,
-        holidayName: holidayName,
-        hebrewHolidayName: hebrewHolidayName,
-        isShabbat: !isYomTov,
-        isYomTov: isYomTov,
-      ));
+      results.add(
+        CandleLighting(
+          date: candleDate,
+          candleLightingTime: candleDate,
+          havdalahTime: havdalahDate,
+          holidayName: holidayName,
+          hebrewHolidayName: hebrewHolidayName,
+          isShabbat: !isYomTov,
+          isYomTov: isYomTov,
+        ),
+      );
     }
 
     // Sort by date
-    results.sort((a, b) => a.candleLightingTime.compareTo(b.candleLightingTime));
+    results.sort(
+      (a, b) => a.candleLightingTime.compareTo(b.candleLightingTime),
+    );
 
-    debugPrint('HebcalService: Parsed ${results.length} extended candle lighting events');
+    debugPrint(
+      'HebcalService: Parsed ${results.length} extended candle lighting events',
+    );
 
     return results;
   }
