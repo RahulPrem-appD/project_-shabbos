@@ -54,11 +54,8 @@
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
 	<string>This app needs your location to calculate accurate candle lighting times for Shabbat and holidays in your area.</string>
 	
-	<!-- Background modes for notifications -->
-	<key>UIBackgroundModes</key>
-	<array>
-		<string>fetch</string>
-		<string>remote-notification</string>
-	</array>
+	<!-- Notification descriptions -->
+	<key>NSUserNotificationsUsageDescription</key>
+	<string>This app needs to send you notifications to remind you about Shabbat and Yom Tov candle lighting times.</string>
 </dict>
 </plist>

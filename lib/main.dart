@@ -1,17 +1,19 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:android_alarm_manager_plus/android_alarm_manager_plus.dart';
 import 'screens/splash_screen.dart';
+import 'services/notification_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Initialize Android Alarm Manager for background notifications
-  if (Platform.isAndroid) {
-    await AndroidAlarmManager.initialize();
+  // Initialize notification service early
+  try {
+    await NotificationService().initialize();
+    debugPrint('main: NotificationService initialized');
+  } catch (e) {
+    debugPrint('main: Failed to initialize NotificationService: $e');
   }
 
   SystemChrome.setSystemUIOverlayStyle(

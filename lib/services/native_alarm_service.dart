@@ -37,6 +37,36 @@ class NativeAlarmService {
     }
   }
 
+  /// Check if battery optimization is disabled for this app
+  static Future<bool> isIgnoringBatteryOptimizations() async {
+    if (!Platform.isAndroid) {
+      return true;
+    }
+
+    try {
+      final result = await _channel.invokeMethod('isIgnoringBatteryOptimizations');
+      debugPrint('NativeAlarmService: Ignoring battery optimizations: $result');
+      return result as bool? ?? false;
+    } catch (e) {
+      debugPrint('NativeAlarmService: Error checking battery optimization: $e');
+      return false;
+    }
+  }
+
+  /// Request to disable battery optimization for this app
+  static Future<void> requestDisableBatteryOptimization() async {
+    if (!Platform.isAndroid) {
+      return;
+    }
+
+    try {
+      await _channel.invokeMethod('requestDisableBatteryOptimization');
+      debugPrint('NativeAlarmService: Requested battery optimization exemption');
+    } catch (e) {
+      debugPrint('NativeAlarmService: Error requesting battery exemption: $e');
+    }
+  }
+
   /// Schedule a native alarm that will trigger even if the app is killed
   static Future<bool> scheduleAlarm({
     required int id,
@@ -53,6 +83,7 @@ class NativeAlarmService {
       final timestampMillis = scheduledTime.millisecondsSinceEpoch;
       final now = DateTime.now().millisecondsSinceEpoch;
 
+      debugPrint('NativeAlarmService: ========================================');
       debugPrint('NativeAlarmService: Scheduling alarm #$id');
       debugPrint('NativeAlarmService: Current time: ${DateTime.now()}');
       debugPrint('NativeAlarmService: Scheduled time: $scheduledTime');
@@ -71,6 +102,7 @@ class NativeAlarmService {
       debugPrint(
         'NativeAlarmService: Alarm #$id scheduled successfully: $result',
       );
+      debugPrint('NativeAlarmService: ========================================');
       return result as bool? ?? false;
     } catch (e, stack) {
       debugPrint('NativeAlarmService: Error scheduling alarm #$id: $e');

@@ -4,71 +4,24 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:timezone/timezone.dart' as tz;
 import 'package:timezone/data/latest_all.dart' as tzdata;
-import 'package:android_alarm_manager_plus/android_alarm_manager_plus.dart';
 import '../models/candle_lighting.dart';
 import 'audio_service.dart';
 import 'native_alarm_service.dart';
-
-// Top-level function for alarm callback - MUST be top-level or static
-@pragma('vm:entry-point')
-Future<void> alarmCallback(int id) async {
-  debugPrint('AlarmCallback: Triggered for ID $id');
-  
-  // Initialize notifications in the isolate
-  final notifications = FlutterLocalNotificationsPlugin();
-  
-  const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
-  const iosSettings = DarwinInitializationSettings();
-  const initSettings = InitializationSettings(android: androidSettings, iOS: iosSettings);
-  
-  await notifications.initialize(initSettings);
-  
-  // Get notification data from SharedPreferences
-  final prefs = await SharedPreferences.getInstance();
-  final title = prefs.getString('notification_${id}_title') ?? 'שבת שלום!';
-  final body = prefs.getString('notification_${id}_body') ?? 'Time to light candles 🕯️🕯️';
-  
-  const androidDetails = AndroidNotificationDetails(
-    'shabbos_alerts',
-    'Shabbos Alerts',
-    channelDescription: 'Candle lighting time reminders',
-    importance: Importance.max,
-    priority: Priority.max,
-    playSound: true,
-    enableVibration: true,
-    enableLights: true,
-    icon: '@mipmap/ic_launcher',
-    category: AndroidNotificationCategory.alarm,
-    visibility: NotificationVisibility.public,
-    fullScreenIntent: true,
-  );
-
-  const iosDetails = DarwinNotificationDetails(
-    presentAlert: true,
-    presentBadge: true,
-    presentSound: true,
-    badgeNumber: 1,
-  );
-
-  const details = NotificationDetails(android: androidDetails, iOS: iosDetails);
-
-  await notifications.show(id, title, body, details);
-  
-  debugPrint('AlarmCallback: Notification shown for ID $id');
-}
 
 class NotificationService {
   static final NotificationService _instance = NotificationService._internal();
   factory NotificationService() => _instance;
   NotificationService._internal();
 
-  final FlutterLocalNotificationsPlugin _notifications = FlutterLocalNotificationsPlugin();
+  final FlutterLocalNotificationsPlugin _notifications =
+      FlutterLocalNotificationsPlugin();
   final AudioService _audioService = AudioService();
-  
+
   static const String _notificationsEnabledKey = 'notifications_enabled';
   static const String _preNotificationMinutesKey = 'pre_notification_minutes';
-  static const String _candleNotificationEnabledKey = 'candle_notification_enabled';
-  
+  static const String _candleNotificationEnabledKey =
+      'candle_notification_enabled';
+
   static const String _channelId = 'shabbos_alerts';
   static const String _channelName = 'Shabbos Alerts';
   static const String _channelDesc = 'Candle lighting time reminders';
@@ -84,14 +37,10 @@ class NotificationService {
     tzdata.initializeTimeZones();
     _setLocalTimezone();
 
-    // Initialize Android Alarm Manager
-    if (Platform.isAndroid) {
-      await AndroidAlarmManager.initialize();
-      debugPrint('NotificationService: AndroidAlarmManager initialized');
-    }
-
     // Initialize Flutter Local Notifications
-    const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
+    const androidSettings = AndroidInitializationSettings(
+      '@mipmap/ic_launcher',
+    );
     const iosSettings = DarwinInitializationSettings(
       requestAlertPermission: true,
       requestBadgePermission: true,
@@ -122,9 +71,11 @@ class NotificationService {
   }
 
   Future<void> _createAndroidChannel() async {
-    final android = _notifications.resolvePlatformSpecificImplementation<
-        AndroidFlutterLocalNotificationsPlugin>();
-    
+    final android = _notifications
+        .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin
+        >();
+
     if (android == null) return;
 
     await android.createNotificationChannel(
@@ -139,7 +90,7 @@ class NotificationService {
         showBadge: true,
       ),
     );
-    
+
     debugPrint('NotificationService: Android channel created');
   }
 
@@ -147,37 +98,63 @@ class NotificationService {
     try {
       final now = DateTime.now();
       final offset = now.timeZoneOffset;
-      final offsetHours = offset.inHours;
-      
-      debugPrint('NotificationService: Device offset: ${offsetHours}h');
-      
+      final offsetMinutes = offset.inMinutes;
+
+      debugPrint(
+        'NotificationService: Device offset: ${offset.inHours}h ${offset.inMinutes % 60}m (${offsetMinutes} minutes)',
+      );
+
+      // Use minutes for accurate timezone detection (handles half-hour offsets like India +5:30)
       final tzMappings = {
-        -5: 'America/New_York',
-        -4: 'America/New_York',
-        -6: 'America/Chicago',
-        -7: 'America/Denver',
-        -8: 'America/Los_Angeles',
-        2: 'Asia/Jerusalem',
-        3: 'Asia/Jerusalem',
-        0: 'Europe/London',
-        1: 'Europe/Paris',
+        // Americas
+        -300: 'America/New_York', // -5:00
+        -240: 'America/New_York', // -4:00 (DST)
+        -360: 'America/Chicago', // -6:00
+        -420: 'America/Denver', // -7:00
+        -480: 'America/Los_Angeles', // -8:00
+        -180: 'America/Sao_Paulo', // -3:00
+        // Europe
+        0: 'Europe/London', // +0:00
+        60: 'Europe/Paris', // +1:00
+        // Middle East (Israel uses +2:00 standard, +3:00 DST)
+        120: 'Asia/Jerusalem', // +2:00 (Israel standard)
+        180: 'Asia/Jerusalem', // +3:00 (Israel DST)
+        210: 'Asia/Tehran', // +3:30 (Iran)
+        // Asia
+        270: 'Asia/Kabul', // +4:30 (Afghanistan)
+        300: 'Asia/Karachi', // +5:00 (Pakistan)
+        330: 'Asia/Kolkata', // +5:30 (India) ← THIS IS THE FIX!
+        345: 'Asia/Kathmandu', // +5:45 (Nepal)
+        360: 'Asia/Dhaka', // +6:00 (Bangladesh)
+        390: 'Asia/Yangon', // +6:30 (Myanmar)
+        420: 'Asia/Bangkok', // +7:00
+        480: 'Asia/Shanghai', // +8:00
+        540: 'Asia/Tokyo', // +9:00
+        570: 'Australia/Adelaide', // +9:30 (Adelaide)
+        600: 'Australia/Sydney', // +10:00
+        660: 'Australia/Sydney', // +11:00 (DST)
       };
-      
-      String? tzName = tzMappings[offsetHours];
-      
+
+      String? tzName = tzMappings[offsetMinutes];
+
       if (tzName != null) {
         try {
           tz.setLocalLocation(tz.getLocation(tzName));
           debugPrint('NotificationService: Timezone set to $tzName');
           return;
         } catch (e) {
-          debugPrint('NotificationService: Failed to set $tzName');
+          debugPrint('NotificationService: Failed to set $tzName: $e');
         }
       }
-      
-      // Fallback to UTC
+
+      // Fallback: try to find any timezone with matching offset
+      debugPrint(
+        'NotificationService: No exact match for offset $offsetMinutes, trying fallback...',
+      );
+
+      // Fallback to UTC with offset adjustment
       tz.setLocalLocation(tz.getLocation('UTC'));
-      debugPrint('NotificationService: Using UTC');
+      debugPrint('NotificationService: Using UTC as fallback');
     } catch (e) {
       debugPrint('NotificationService: Timezone error: $e');
     }
@@ -189,45 +166,60 @@ class NotificationService {
 
   @pragma('vm:entry-point')
   static void _backgroundHandler(NotificationResponse response) {
-    debugPrint('NotificationService: Background notification - ID: ${response.id}');
+    debugPrint(
+      'NotificationService: Background notification - ID: ${response.id}',
+    );
   }
 
   Future<bool> requestPermissions() async {
     debugPrint('NotificationService: Requesting permissions...');
-    
+
     if (Platform.isAndroid) {
-      final android = _notifications.resolvePlatformSpecificImplementation<
-          AndroidFlutterLocalNotificationsPlugin>();
-      
+      final android = _notifications
+          .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin
+          >();
+
       if (android != null) {
         final notifPermission = await android.requestNotificationsPermission();
-        debugPrint('NotificationService: Notification permission: $notifPermission');
-        
+        debugPrint(
+          'NotificationService: Notification permission: $notifPermission',
+        );
+
         // Check exact alarm permission using native method
-        final canScheduleExact = await NativeAlarmService.canScheduleExactAlarms();
-        debugPrint('NotificationService: Can schedule exact alarms (native): $canScheduleExact');
-        
+        final canScheduleExact =
+            await NativeAlarmService.canScheduleExactAlarms();
+        debugPrint(
+          'NotificationService: Can schedule exact alarms (native): $canScheduleExact',
+        );
+
         if (!canScheduleExact) {
-          debugPrint('NotificationService: Requesting exact alarm permission...');
+          debugPrint(
+            'NotificationService: Requesting exact alarm permission...',
+          );
           await NativeAlarmService.requestExactAlarmPermission();
         }
-        
+
         return notifPermission ?? false;
       }
     } else if (Platform.isIOS) {
-      final ios = _notifications.resolvePlatformSpecificImplementation<
-          IOSFlutterLocalNotificationsPlugin>();
-      
+      final ios = _notifications
+          .resolvePlatformSpecificImplementation<
+            IOSFlutterLocalNotificationsPlugin
+          >();
+
       if (ios != null) {
         final granted = await ios.requestPermissions(
           alert: true,
           badge: true,
           sound: true,
+          critical: true, // Request critical alerts for important notifications
         );
+        debugPrint('NotificationService: iOS permission granted: $granted');
         return granted ?? false;
       }
     }
-    
+
     return false;
   }
 
@@ -259,11 +251,15 @@ class NotificationService {
   }
 
   /// Schedule notifications for candle lighting times
-  Future<void> scheduleNotifications(List<CandleLighting> candleLightings) async {
-    debugPrint('NotificationService: Scheduling ${candleLightings.length} events...');
-    
+  Future<void> scheduleNotifications(
+    List<CandleLighting> candleLightings,
+  ) async {
+    debugPrint(
+      'NotificationService: Scheduling ${candleLightings.length} events...',
+    );
+
     await initialize();
-    
+
     // Cancel all existing notifications and alarms
     await _notifications.cancelAll();
     if (Platform.isAndroid) {
@@ -272,7 +268,7 @@ class NotificationService {
 
     final prefs = await SharedPreferences.getInstance();
     final enabled = prefs.getBool(_notificationsEnabledKey) ?? true;
-    
+
     if (!enabled) {
       debugPrint('NotificationService: Notifications disabled');
       return;
@@ -287,13 +283,15 @@ class NotificationService {
 
     for (final lighting in candleLightings) {
       // Pre-notification
-      final preTime = lighting.candleLightingTime.subtract(Duration(minutes: preMinutes));
+      final preTime = lighting.candleLightingTime.subtract(
+        Duration(minutes: preMinutes),
+      );
       if (preTime.isAfter(now)) {
         final title = lighting.isYomTov ? 'יום טוב מגיע!' : 'שבת מגיעה!';
-        final body = lighting.isYomTov 
+        final body = lighting.isYomTov
             ? 'Yom Tov in $preMinutes minutes • $preMinutes דקות ליום טוב'
             : 'Shabbos in $preMinutes minutes • $preMinutes דקות לשבת';
-        
+
         final success = await _scheduleNotification(
           id: id++,
           title: title,
@@ -306,10 +304,10 @@ class NotificationService {
       // Candle lighting notification
       if (candleEnabled && lighting.candleLightingTime.isAfter(now)) {
         final title = lighting.isYomTov ? 'יום טוב שמח!' : 'שבת שלום!';
-        final body = lighting.isYomTov 
+        final body = lighting.isYomTov
             ? 'Good Yom Tov! Time to light candles 🕯️🕯️'
             : 'Good Shabbos! Time to light candles 🕯️🕯️';
-        
+
         final success = await _scheduleNotification(
           id: id++,
           title: title,
@@ -321,6 +319,23 @@ class NotificationService {
     }
 
     debugPrint('NotificationService: Scheduled $scheduled notifications');
+
+    // Verify scheduled notifications
+    await _verifyPendingNotifications();
+  }
+
+  Future<void> _verifyPendingNotifications() async {
+    try {
+      final pending = await _notifications.pendingNotificationRequests();
+      debugPrint(
+        'NotificationService: Pending notifications count: ${pending.length}',
+      );
+      for (final n in pending.take(5)) {
+        debugPrint('  - ID ${n.id}: ${n.title}');
+      }
+    } catch (e) {
+      debugPrint('NotificationService: Error verifying pending: $e');
+    }
   }
 
   Future<bool> _scheduleNotification({
@@ -338,11 +353,13 @@ class NotificationService {
           title: title,
           body: body,
         );
-        
-        debugPrint('NotificationService: Scheduled native alarm #$id for $scheduledTime: $success');
+
+        debugPrint(
+          'NotificationService: Scheduled native alarm #$id for $scheduledTime: $success',
+        );
         return success;
       } else {
-        // iOS: Use zonedSchedule
+        // iOS: Use zonedSchedule with REQUIRED uiLocalNotificationDateInterpretation
         final tzTime = tz.TZDateTime(
           tz.local,
           scheduledTime.year,
@@ -352,12 +369,13 @@ class NotificationService {
           scheduledTime.minute,
           scheduledTime.second,
         );
-        
+
         debugPrint('NotificationService: Scheduling iOS notification #$id');
         debugPrint('NotificationService: Local timezone: ${tz.local.name}');
         debugPrint('NotificationService: Scheduled time: $scheduledTime');
         debugPrint('NotificationService: TZ time: $tzTime');
-        
+
+        // Schedule the notification using zonedSchedule
         await _notifications.zonedSchedule(
           id,
           title,
@@ -366,8 +384,10 @@ class NotificationService {
           _getNotificationDetails(),
           androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
         );
-        
-        debugPrint('NotificationService: iOS notification #$id scheduled successfully');
+
+        debugPrint(
+          'NotificationService: iOS notification #$id scheduled successfully',
+        );
         return true;
       }
     } catch (e, stack) {
@@ -380,7 +400,7 @@ class NotificationService {
   /// Send an immediate test notification
   Future<void> sendTestNotification() async {
     debugPrint('NotificationService: Sending immediate test notification...');
-    
+
     await initialize();
     await requestPermissions();
 
@@ -405,12 +425,20 @@ class NotificationService {
 
   /// Send a delayed test notification
   Future<void> sendDelayedTestNotification({int seconds = 10}) async {
-    debugPrint('NotificationService: Scheduling test for $seconds seconds...');
-    
+    debugPrint('==========================================');
+    debugPrint('NotificationService: SCHEDULING TEST NOTIFICATION');
+    debugPrint('==========================================');
+    debugPrint('NotificationService: Delay: $seconds seconds');
+
     await initialize();
     await requestPermissions();
 
-    final scheduledTime = DateTime.now().add(Duration(seconds: seconds));
+    final now = DateTime.now();
+    final scheduledTime = now.add(Duration(seconds: seconds));
+
+    debugPrint('NotificationService: Current time: $now');
+    debugPrint('NotificationService: Scheduled for: $scheduledTime');
+    debugPrint('NotificationService: Time difference: $seconds seconds');
 
     if (Platform.isAndroid) {
       // Use native alarm for Android
@@ -420,11 +448,14 @@ class NotificationService {
         title: 'שבת שלום! Good Shabbos!',
         body: 'Scheduled test notification 🕯️🕯️ (Background test)',
       );
-      
-      debugPrint('NotificationService: Test alarm scheduled: $success');
+
+      debugPrint('NotificationService: Android alarm scheduled: $success');
       debugPrint('NotificationService: Will fire at: $scheduledTime');
     } else {
-      // iOS
+      // iOS: Use zonedSchedule
+      debugPrint('NotificationService: Setting up iOS notification...');
+      debugPrint('NotificationService: Local timezone: ${tz.local.name}');
+
       final tzTime = tz.TZDateTime(
         tz.local,
         scheduledTime.year,
@@ -434,54 +465,59 @@ class NotificationService {
         scheduledTime.minute,
         scheduledTime.second,
       );
-      
-      debugPrint('NotificationService: Scheduling iOS test notification');
-      debugPrint('NotificationService: Scheduled time: $scheduledTime');
-      debugPrint('NotificationService: TZ time: $tzTime');
-      
-      await _notifications.zonedSchedule(
-        998,
-        'שבת שלום! Good Shabbos!',
-        'Scheduled test notification 🕯️🕯️ (Background test)',
-        tzTime,
-        _getNotificationDetails(),
-        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+
+      final nowTz = tz.TZDateTime.now(tz.local);
+      final difference = tzTime.difference(nowTz);
+
+      debugPrint('NotificationService: Current TZ time: $nowTz');
+      debugPrint('NotificationService: Scheduled TZ time: $tzTime');
+      debugPrint(
+        'NotificationService: Difference: ${difference.inSeconds} seconds',
       );
-      
-      // Verify notification was scheduled
-      final pending = await _notifications.pendingNotificationRequests();
-      debugPrint('NotificationService: Pending iOS notifications: ${pending.length}');
-      for (final n in pending) {
-        debugPrint('  - ID ${n.id}: ${n.title}');
+
+      try {
+        // Cancel any existing test notifications first
+        await _notifications.cancel(998);
+        debugPrint(
+          'NotificationService: Cancelled previous test notifications',
+        );
+
+        // Schedule the test notification
+        await _notifications.zonedSchedule(
+          998,
+          'שבת שלום! Good Shabbos!',
+          'Scheduled test notification 🕯️🕯️ (Background test)',
+          tzTime,
+          _getNotificationDetails(),
+          androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+        );
+
+        debugPrint(
+          'NotificationService: ✓ iOS notification scheduled successfully!',
+        );
+
+        // Verify notification was scheduled
+        final pending = await _notifications.pendingNotificationRequests();
+        debugPrint(
+          'NotificationService: Pending notifications: ${pending.length}',
+        );
+
+        if (pending.isEmpty) {
+          debugPrint(
+            'NotificationService: ⚠️ WARNING: No pending notifications found!',
+          );
+        } else {
+          for (final n in pending) {
+            debugPrint('  ✓ ID ${n.id}: ${n.title}');
+          }
+        }
+      } catch (e, stack) {
+        debugPrint('NotificationService: ✗ ERROR scheduling notification: $e');
+        debugPrint('Stack trace: $stack');
       }
     }
-  }
 
-  /// Backup method using Future.delayed
-  Future<void> sendDelayedTestNotificationAlt({int seconds = 10}) async {
-    debugPrint('NotificationService: Starting backup timer...');
-    
-    await initialize();
-    
-    Future.delayed(Duration(seconds: seconds), () async {
-      debugPrint('NotificationService: Backup timer fired!');
-      
-      try {
-        await _notifications.show(
-          997,
-          'שבת שלום! Good Shabbos!',
-          'Backup notification 🕯️🕯️',
-          _getNotificationDetails(),
-        );
-        
-        final soundId = await _audioService.getCandleLightingSound();
-        if (soundId != 'default' && soundId != 'silent') {
-          await _audioService.playSound(soundId);
-        }
-      } catch (e) {
-        debugPrint('NotificationService: Backup failed: $e');
-      }
-    });
+    debugPrint('==========================================');
   }
 
   // Settings

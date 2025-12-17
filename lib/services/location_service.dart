@@ -171,8 +171,12 @@ class LocationService {
   // Simple math implementations to avoid dart:math import issues
   double _sin(double x) {
     // Normalize to [-pi, pi]
-    while (x > 3.14159265359) x -= 2 * 3.14159265359;
-    while (x < -3.14159265359) x += 2 * 3.14159265359;
+    while (x > 3.14159265359) {
+      x -= 2 * 3.14159265359;
+    }
+    while (x < -3.14159265359) {
+      x += 2 * 3.14159265359;
+    }
     
     // Taylor series approximation
     double result = x;

@@ -48,9 +48,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _loadSettings() async {
     final useGps = await _locationService.getUseGps();
     final savedLocation = await _locationService.getSavedLocation();
-    final notificationsEnabled = await _notificationService.getNotificationsEnabled();
+    final notificationsEnabled = await _notificationService
+        .getNotificationsEnabled();
     final preMinutes = await _notificationService.getPreNotificationMinutes();
-    final candleEnabled = await _notificationService.getCandleNotificationEnabled();
+    final candleEnabled = await _notificationService
+        .getCandleNotificationEnabled();
     final preSound = await _audioService.getPreNotificationSound();
     final candleSound = await _audioService.getCandleLightingSound();
 
@@ -71,143 +73,161 @@ class _SettingsScreenState extends State<SettingsScreen> {
       textDirection: isHebrew ? TextDirection.rtl : TextDirection.ltr,
       child: Scaffold(
         backgroundColor: Colors.white,
-        appBar: widget.showAppBar ? AppBar(
-          backgroundColor: Colors.white,
-          elevation: 0,
-          leading: IconButton(
-            icon: const Icon(Icons.arrow_back, color: Color(0xFF1A1A1A)),
-            onPressed: () => Navigator.pop(context),
-          ),
-          title: Text(
-            isHebrew ? 'הגדרות' : 'Settings',
-            style: const TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.w600,
-              color: Color(0xFF1A1A1A),
-            ),
-          ),
-          actions: [
-            Padding(
-              padding: const EdgeInsets.only(right: 16),
-              child: Center(
-                child: Text('בס״ד', style: TextStyle(fontSize: 14, color: Colors.grey[400])),
-              ),
-            ),
-          ],
-        ) : null,
-        body: SafeArea(
-          child: ListView(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-          children: [
-            if (!widget.showAppBar) ...[
-              Padding(
-                padding: const EdgeInsets.fromLTRB(4, 16, 4, 8),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      isHebrew ? 'הגדרות' : 'Settings',
-                      style: const TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.w700,
-                        color: Color(0xFF1A1A1A),
+        appBar: widget.showAppBar
+            ? AppBar(
+                backgroundColor: Colors.white,
+                elevation: 0,
+                leading: IconButton(
+                  icon: const Icon(Icons.arrow_back, color: Color(0xFF1A1A1A)),
+                  onPressed: () => Navigator.pop(context),
+                ),
+                title: Text(
+                  isHebrew ? 'הגדרות' : 'Settings',
+                  style: const TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF1A1A1A),
+                  ),
+                ),
+                actions: [
+                  Padding(
+                    padding: const EdgeInsets.only(right: 16),
+                    child: Center(
+                      child: Text(
+                        'בס״ד',
+                        style: TextStyle(fontSize: 14, color: Colors.grey[400]),
                       ),
                     ),
-                    Text(
-                      'בס״ד',
-                      style: TextStyle(fontSize: 14, color: Colors.grey[400]),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-            _buildSection(
-              title: isHebrew ? 'שפה' : 'Language',
-              children: [
-                _buildLanguageSelector(),
-              ],
-            ),
-            
-            _buildSection(
-              title: isHebrew ? 'מיקום' : 'Location',
-              children: [
-                _buildSwitchTile(
-                  icon: Icons.gps_fixed,
-                  title: isHebrew ? 'מיקום אוטומטי' : 'Auto Location',
-                  subtitle: isHebrew ? 'השתמש ב-GPS' : 'Use GPS',
-                  value: _useGps,
-                  onChanged: _onGpsChanged,
-                ),
-                _buildActionTile(
-                  icon: Icons.location_city,
-                  title: isHebrew ? 'בחר עיר' : 'Select City',
-                  subtitle: _savedLocation?.displayName,
-                  onTap: _showCityPicker,
-                ),
-              ],
-            ),
-            
-            _buildSection(
-              title: isHebrew ? 'התראות' : 'Notifications',
-              children: [
-                _buildSwitchTile(
-                  icon: Icons.notifications_outlined,
-                  title: isHebrew ? 'הפעל התראות' : 'Enable Notifications',
-                  value: _notificationsEnabled,
-                  onChanged: _onNotificationsChanged,
-                ),
-                if (_notificationsEnabled) ...[
-                  _buildTimePicker(),
-                  _buildSwitchTile(
-                    icon: Icons.local_fire_department,
-                    title: isHebrew ? 'בזמן הדלקה' : 'At Candle Lighting',
-                    subtitle: isHebrew ? 'התראה בזמן ההדלקה' : 'Notification at lighting time',
-                    value: _candleNotificationEnabled,
-                    onChanged: _onCandleNotificationChanged,
-                  ),
-                  _buildActionTile(
-                    icon: Icons.play_circle_outline,
-                    title: isHebrew ? 'בדוק התראה' : 'Test Notification',
-                    subtitle: isHebrew ? 'התראה מיידית' : 'Immediate notification',
-                    onTap: _testNotification,
-                  ),
-                  _buildActionTile(
-                    icon: Icons.schedule_send,
-                    title: isHebrew ? 'בדוק התראה מתוזמנת' : 'Test Scheduled Notification',
-                    subtitle: isHebrew ? 'התראה בעוד 10 שניות (סגור את האפליקציה)' : 'Notification in 10 seconds (close app)',
-                    onTap: _testDelayedNotification,
                   ),
                 ],
-              ],
-            ),
-            
-            _buildSection(
-              title: isHebrew ? 'צלילים' : 'Sounds',
-              children: [
-                _buildActionTile(
-                  icon: Icons.music_note,
-                  title: isHebrew ? 'צליל תזכורת מוקדמת' : 'Early Reminder Sound',
-                  subtitle: _getSoundName(_preSound),
-                  onTap: () => _openSoundScreen(),
+              )
+            : null,
+        body: SafeArea(
+          child: ListView(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+            children: [
+              if (!widget.showAppBar) ...[
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(4, 16, 4, 8),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        isHebrew ? 'הגדרות' : 'Settings',
+                        style: const TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF1A1A1A),
+                        ),
+                      ),
+                      Text(
+                        'בס״ד',
+                        style: TextStyle(fontSize: 14, color: Colors.grey[400]),
+                      ),
+                    ],
+                  ),
                 ),
-                _buildActionTile(
-                  icon: Icons.notifications_active,
-                  title: isHebrew ? 'צליל הדלקת נרות' : 'Candle Lighting Sound',
-                  subtitle: _getSoundName(_candleSound),
-                  onTap: () => _openSoundScreen(),
-                ),
               ],
-            ),
-            
-            const SizedBox(height: 40),
-          ],
-        ),
+              _buildSection(
+                title: isHebrew ? 'שפה' : 'Language',
+                children: [_buildLanguageSelector()],
+              ),
+
+              _buildSection(
+                title: isHebrew ? 'מיקום' : 'Location',
+                children: [
+                  _buildSwitchTile(
+                    icon: Icons.gps_fixed,
+                    title: isHebrew ? 'מיקום אוטומטי' : 'Auto Location',
+                    subtitle: isHebrew ? 'השתמש ב-GPS' : 'Use GPS',
+                    value: _useGps,
+                    onChanged: _onGpsChanged,
+                  ),
+                  _buildActionTile(
+                    icon: Icons.location_city,
+                    title: isHebrew ? 'בחר עיר' : 'Select City',
+                    subtitle: _savedLocation?.displayName,
+                    onTap: _showCityPicker,
+                  ),
+                ],
+              ),
+
+              _buildSection(
+                title: isHebrew ? 'התראות' : 'Notifications',
+                children: [
+                  _buildSwitchTile(
+                    icon: Icons.notifications_outlined,
+                    title: isHebrew ? 'הפעל התראות' : 'Enable Notifications',
+                    value: _notificationsEnabled,
+                    onChanged: _onNotificationsChanged,
+                  ),
+                  if (_notificationsEnabled) ...[
+                    _buildTimePicker(),
+                    _buildSwitchTile(
+                      icon: Icons.local_fire_department,
+                      title: isHebrew ? 'בזמן הדלקה' : 'At Candle Lighting',
+                      subtitle: isHebrew
+                          ? 'התראה בזמן ההדלקה'
+                          : 'Notification at lighting time',
+                      value: _candleNotificationEnabled,
+                      onChanged: _onCandleNotificationChanged,
+                    ),
+                    _buildActionTile(
+                      icon: Icons.play_circle_outline,
+                      title: isHebrew ? 'בדוק התראה' : 'Test Notification',
+                      subtitle: isHebrew
+                          ? 'התראה מיידית'
+                          : 'Immediate notification',
+                      onTap: _testNotification,
+                    ),
+                    _buildActionTile(
+                      icon: Icons.schedule_send,
+                      title: isHebrew
+                          ? 'בדוק התראה מתוזמנת'
+                          : 'Test Scheduled Notification',
+                      subtitle: isHebrew
+                          ? 'התראה בעוד 10 שניות (סגור את האפליקציה)'
+                          : 'Notification in 10 seconds (close app)',
+                      onTap: _testDelayedNotification,
+                    ),
+                  ],
+                ],
+              ),
+
+              _buildSection(
+                title: isHebrew ? 'צלילים' : 'Sounds',
+                children: [
+                  _buildActionTile(
+                    icon: Icons.music_note,
+                    title: isHebrew
+                        ? 'צליל תזכורת מוקדמת'
+                        : 'Early Reminder Sound',
+                    subtitle: _getSoundName(_preSound),
+                    onTap: () => _openSoundScreen(),
+                  ),
+                  _buildActionTile(
+                    icon: Icons.notifications_active,
+                    title: isHebrew
+                        ? 'צליל הדלקת נרות'
+                        : 'Candle Lighting Sound',
+                    subtitle: _getSoundName(_candleSound),
+                    onTap: () => _openSoundScreen(),
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: 40),
+            ],
+          ),
         ),
       ),
     );
   }
 
-  Widget _buildSection({required String title, required List<Widget> children}) {
+  Widget _buildSection({
+    required String title,
+    required List<Widget> children,
+  }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -355,7 +375,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
               color: Colors.white,
               borderRadius: BorderRadius.circular(10),
             ),
-            child: const Icon(Icons.language, size: 20, color: Color(0xFF1A1A1A)),
+            child: const Icon(
+              Icons.language,
+              size: 20,
+              color: Color(0xFF1A1A1A),
+            ),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -404,7 +428,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
               color: Colors.white,
               borderRadius: BorderRadius.circular(10),
             ),
-            child: const Icon(Icons.timer_outlined, size: 20, color: Color(0xFF1A1A1A)),
+            child: const Icon(
+              Icons.timer_outlined,
+              size: 20,
+              color: Color(0xFF1A1A1A),
+            ),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -420,7 +448,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                 ),
                 Text(
-                  isHebrew ? '$_preMinutes דקות לפני' : '$_preMinutes min before',
+                  isHebrew
+                      ? '$_preMinutes דקות לפני'
+                      : '$_preMinutes min before',
                   style: TextStyle(fontSize: 13, color: Colors.grey[500]),
                 ),
               ],
@@ -476,7 +506,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
       if (!granted && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(isHebrew ? 'נא לאפשר התראות בהגדרות' : 'Please enable notifications in settings'),
+            content: Text(
+              isHebrew
+                  ? 'נא לאפשר התראות בהגדרות'
+                  : 'Please enable notifications in settings',
+            ),
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -496,13 +530,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
   void _testNotification() async {
     // Send the notification
     await _notificationService.sendTestNotification();
-    
+
     // Play the selected sound
     final soundId = await _audioService.getCandleLightingSound();
     if (soundId != 'default' && soundId != 'silent') {
       await _audioService.playSound(soundId);
     }
-    
+
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -514,18 +548,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   void _testDelayedNotification() async {
-    // Schedule a notification for 10 seconds from now using both methods
+    // Schedule a notification for 10 seconds from now
     await _notificationService.sendDelayedTestNotification(seconds: 10);
-    
-    // Also use alternative method as backup
-    await _notificationService.sendDelayedTestNotificationAlt(seconds: 10);
-    
+
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            isHebrew 
-                ? 'התראה תגיע בעוד 10 שניות - סגור את האפליקציה!' 
+            isHebrew
+                ? 'התראה תגיע בעוד 10 שניות - סגור את האפליקציה!'
                 : 'Notification scheduled for 10 seconds - close the app!',
           ),
           behavior: SnackBarBehavior.floating,
@@ -543,7 +574,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   String _getSoundName(String soundId) {
     // First check built-in sounds
-    final builtInSound = SoundOption.builtInSounds.where((s) => s.id == soundId);
+    final builtInSound = SoundOption.builtInSounds.where(
+      (s) => s.id == soundId,
+    );
     if (builtInSound.isNotEmpty) {
       return isHebrew ? builtInSound.first.nameHe : builtInSound.first.nameEn;
     }
@@ -603,11 +636,14 @@ class _CityPickerState extends State<_CityPicker> {
   List<City> get _filtered {
     if (_query.isEmpty) return City.majorCities;
     final q = _query.toLowerCase();
-    return City.majorCities.where((c) =>
-      c.name.toLowerCase().contains(q) ||
-      c.hebrewName.contains(_query) ||
-      c.country.toLowerCase().contains(q)
-    ).toList();
+    return City.majorCities
+        .where(
+          (c) =>
+              c.name.toLowerCase().contains(q) ||
+              c.hebrewName.contains(_query) ||
+              c.country.toLowerCase().contains(q),
+        )
+        .toList();
   }
 
   @override

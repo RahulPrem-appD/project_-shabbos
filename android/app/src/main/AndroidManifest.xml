@@ -10,15 +10,21 @@
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     
-    <!-- Exact alarm permissions -->
-    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" android:maxSdkVersion="32" />
+    <!-- Exact alarm permissions - both needed for different Android versions -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
     
-    <!-- Full screen intent -->
+    <!-- Full screen intent for alarm-style notifications -->
     <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+    
+    <!-- Foreground service for reliability -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     
     <!-- Internet for HebCal API -->
     <uses-permission android:name="android.permission.INTERNET" />
+    
+    <!-- Disable battery optimization requests -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     
     <application
         android:label="Shabbos!!"
@@ -76,7 +82,25 @@
         <receiver 
             android:name=".AlarmReceiver"
             android:exported="false"
-            android:enabled="true" />
+            android:enabled="true">
+            <!-- Explicit intent filter for our alarm actions -->
+            <intent-filter>
+                <action android:name="com.shabbos.shabbos_app.ALARM_ACTION"/>
+            </intent-filter>
+        </receiver>
+        
+        <!-- Boot receiver to reschedule alarms after device restart -->
+        <receiver
+            android:name=".BootReceiver"
+            android:exported="true"
+            android:enabled="true"
+            android:permission="android.permission.RECEIVE_BOOT_COMPLETED">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED"/>
+                <action android:name="android.intent.action.QUICKBOOT_POWERON"/>
+                <action android:name="com.htc.intent.action.QUICKBOOT_POWERON"/>
+            </intent-filter>
+        </receiver>
             
         <!-- Android Alarm Manager Plus service and receiver -->
         <service
