@@ -831,12 +831,13 @@ class _SplashScreenState extends State<SplashScreen>
     return Column(
       children: [
         Text(
-          'CANDLE LIGHTING ALERT FOR SHABBAT AND YOM TOV',
+          'CANDLE LIGHTING ALERT\nFOR SHABBAT AND YOM TOV',
           style: TextStyle(
             fontSize: 10,
             color: Colors.white.withValues(alpha: 0.6),
             letterSpacing: 3,
             fontWeight: FontWeight.w400,
+            height: 1.6,
           ),
           textAlign: TextAlign.center,
         ),
