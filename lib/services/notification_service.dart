@@ -172,7 +172,7 @@ class NotificationService {
   }
 
   Future<bool> requestPermissions() async {
-    debugPrint('NotificationService: Requesting permissions...');
+    debugPrint('NotificationService: Checking permissions...');
 
     if (Platform.isAndroid) {
       final android = _notifications
@@ -181,16 +181,27 @@ class NotificationService {
           >();
 
       if (android != null) {
-        final notifPermission = await android.requestNotificationsPermission();
+        // Check if notifications are already enabled
+        final areEnabled = await android.areNotificationsEnabled() ?? false;
         debugPrint(
-          'NotificationService: Notification permission: $notifPermission',
+          'NotificationService: Notifications already enabled: $areEnabled',
         );
+
+        bool notifPermission = areEnabled;
+        if (!areEnabled) {
+          // Only request if not already enabled
+          notifPermission =
+              await android.requestNotificationsPermission() ?? false;
+          debugPrint(
+            'NotificationService: Notification permission result: $notifPermission',
+          );
+        }
 
         // Check exact alarm permission using native method
         final canScheduleExact =
             await NativeAlarmService.canScheduleExactAlarms();
         debugPrint(
-          'NotificationService: Can schedule exact alarms (native): $canScheduleExact',
+          'NotificationService: Can schedule exact alarms: $canScheduleExact',
         );
 
         if (!canScheduleExact) {
@@ -200,7 +211,7 @@ class NotificationService {
           await NativeAlarmService.requestExactAlarmPermission();
         }
 
-        return notifPermission ?? false;
+        return notifPermission;
       }
     } else if (Platform.isIOS) {
       final ios = _notifications
@@ -209,11 +220,23 @@ class NotificationService {
           >();
 
       if (ios != null) {
+        // Check current permission status first
+        final currentStatus = await ios.checkPermissions();
+        final isAlreadyGranted = currentStatus?.isEnabled ?? false;
+        debugPrint(
+          'NotificationService: iOS notifications already enabled: $isAlreadyGranted',
+        );
+
+        if (isAlreadyGranted) {
+          return true;
+        }
+
+        // Only request if not already granted
         final granted = await ios.requestPermissions(
           alert: true,
           badge: true,
           sound: true,
-          critical: true, // Request critical alerts for important notifications
+          critical: true,
         );
         debugPrint('NotificationService: iOS permission granted: $granted');
         return granted ?? false;
