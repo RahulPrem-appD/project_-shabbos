@@ -21,18 +21,11 @@ class LocationService {
         return null;
       }
 
-      // Check permissions
+      // Only check permissions, don't request (caller should handle permission requests)
       LocationPermission permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
-        if (permission == LocationPermission.denied) {
-          debugPrint('LocationService: Permission denied');
-          return null;
-        }
-      }
-
-      if (permission == LocationPermission.deniedForever) {
-        debugPrint('LocationService: Permission denied forever');
+      if (permission == LocationPermission.denied || 
+          permission == LocationPermission.deniedForever) {
+        debugPrint('LocationService: Permission not granted: $permission');
         return null;
       }
 

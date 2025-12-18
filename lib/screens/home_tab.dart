@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:intl/intl.dart' hide TextDirection;
-import 'package:permission_handler/permission_handler.dart';
 import '../models/candle_lighting.dart';
 import '../services/hebcal_service.dart';
 import '../services/location_service.dart';
@@ -52,11 +52,32 @@ class _HomeTabState extends State<HomeTab> {
     });
 
     try {
-      // Request location permission first
-      final status = await Permission.locationWhenInUse.request();
+      // Check if location services are enabled
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        setState(() {
+          _error = isHebrew
+              ? 'שירותי המיקום כבויים. אנא הפעל אותם בהגדרות.'
+              : 'Location services are disabled. Please enable them in settings.';
+        });
+        return;
+      }
+
+      // Check permission status first
+      LocationPermission permission = await Geolocator.checkPermission();
+      debugPrint('HomeTab: Current location permission: $permission');
       
-      if (status.isGranted || status.isLimited) {
+      // Only request if not already granted
+      if (permission == LocationPermission.denied) {
+        debugPrint('HomeTab: Requesting location permission...');
+        permission = await Geolocator.requestPermission();
+        debugPrint('HomeTab: Permission result: $permission');
+      }
+      
+      if (permission == LocationPermission.whileInUse || 
+          permission == LocationPermission.always) {
         // Get current location
+        debugPrint('HomeTab: Getting current location...');
         final location = await _locationService.getCurrentLocation();
         
         if (location != null) {
@@ -88,7 +109,7 @@ class _HomeTabState extends State<HomeTab> {
                 : 'Could not detect location. Please try again.';
           });
         }
-      } else if (status.isPermanentlyDenied) {
+      } else if (permission == LocationPermission.deniedForever) {
         // Open app settings
         if (mounted) {
           _showLocationSettingsDialog();
@@ -101,6 +122,7 @@ class _HomeTabState extends State<HomeTab> {
         });
       }
     } catch (e) {
+      debugPrint('HomeTab: Error detecting location: $e');
       setState(() {
         _error = isHebrew 
             ? 'שגיאה בזיהוי מיקום: $e'
@@ -135,7 +157,7 @@ class _HomeTabState extends State<HomeTab> {
           ElevatedButton(
             onPressed: () {
               Navigator.pop(context);
-              openAppSettings();
+              Geolocator.openAppSettings();
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFF1A1A1A),

@@ -1,59 +1,47 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <!-- Background -->
-  <rect width="512" height="512" fill="#1A1A1A"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
   
-  <!-- Glow effect -->
   <defs>
-    <radialGradient id="glow" cx="50%" cy="35%" r="50%">
-      <stop offset="0%" stop-color="#FFE082" stop-opacity="0.4"/>
-      <stop offset="50%" stop-color="#FFE082" stop-opacity="0.1"/>
-      <stop offset="100%" stop-color="#FFE082" stop-opacity="0"/>
-    </radialGradient>
-  </defs>
-  <circle cx="256" cy="180" r="200" fill="url(#glow)"/>
-  
-  <!-- Left candle -->
-  <rect x="160" y="240" width="40" height="150" rx="4" fill="#FFF8E1"/>
-  <rect x="188" y="240" width="12" height="150" rx="2" fill="#E8E0D0" opacity="0.5"/>
-  
-  <!-- Left wick -->
-  <line x1="180" y1="240" x2="180" y2="225" stroke="#424242" stroke-width="4" stroke-linecap="round"/>
-  
-  <!-- Left flame outer -->
-  <path d="M180 225 Q160 185, 180 130 Q200 185, 180 225" fill="url(#flameOuter)"/>
-  
-  <!-- Left flame inner -->
-  <path d="M180 225 Q168 195, 180 160 Q192 195, 180 225" fill="url(#flameInner)"/>
-  
-  <!-- Right candle -->
-  <rect x="312" y="240" width="40" height="150" rx="4" fill="#FFF8E1"/>
-  <rect x="340" y="240" width="12" height="150" rx="2" fill="#E8E0D0" opacity="0.5"/>
-  
-  <!-- Right wick -->
-  <line x1="332" y1="240" x2="332" y2="225" stroke="#424242" stroke-width="4" stroke-linecap="round"/>
-  
-  <!-- Right flame outer -->
-  <path d="M332 225 Q312 185, 332 130 Q352 185, 332 225" fill="url(#flameOuter)"/>
-  
-  <!-- Right flame inner -->
-  <path d="M332 225 Q320 195, 332 160 Q344 195, 332 225" fill="url(#flameInner)"/>
-  
-  <!-- Flame gradients -->
-  <defs>
-    <linearGradient id="flameOuter" x1="0%" y1="100%" x2="0%" y2="0%">
-      <stop offset="0%" stop-color="#FF6D00"/>
-      <stop offset="50%" stop-color="#FFAB00"/>
-      <stop offset="100%" stop-color="#FFD54F"/>
-    </linearGradient>
-    <linearGradient id="flameInner" x1="0%" y1="100%" x2="0%" y2="0%">
-      <stop offset="0%" stop-color="#FFEB3B"/>
-      <stop offset="50%" stop-color="#FFF9C4"/>
-      <stop offset="100%" stop-color="#FFFFFF"/>
-    </linearGradient>
-  </defs>
-  
-  <!-- Candle holder base -->
-  <rect x="130" y="390" width="100" height="15" rx="3" fill="#8D6E63"/>
-  <rect x="282" y="390" width="100" height="15" rx="3" fill="#8D6E63"/>
-</svg>
+    <linearGradient id="flameGradient" x1="0%" y1="100%" x2="0%" y2="0%">
+      <stop offset="0%" stop-color="#D4A84B" /> <stop offset="100%" stop-color="#FFE082" /> </linearGradient>
 
+    <linearGradient id="waxGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#E0E0E0" />
+      <stop offset="50%" stop-color="#FFFFFF" />
+      <stop offset="100%" stop-color="#E0E0E0" />
+    </linearGradient>
+
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="15" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <rect width="512" height="512" rx="110" ry="110" fill="#1A1A1A" />
+
+  <g transform="translate(256, 280)">
+    
+    <g transform="rotate(6) translate(-65, -50)">
+      <rect x="-30" y="0" width="60" height="220" rx="8" fill="url(#waxGradient)" />
+      <line x1="0" y1="0" x2="0" y2="-15" stroke="#8D6E63" stroke-width="4" stroke-linecap="round"/>
+      <path d="M0,-15 
+               C-25,-45 -25,-85 0,-110 
+               C25,-85 25,-45 0,-15 Z" 
+            fill="url(#flameGradient)" 
+            filter="url(#glow)" />
+    </g>
+
+    <g transform="rotate(-6) translate(65, -50)">
+      <rect x="-30" y="0" width="60" height="220" rx="8" fill="url(#waxGradient)" />
+      <line x1="0" y1="0" x2="0" y2="-15" stroke="#8D6E63" stroke-width="4" stroke-linecap="round"/>
+      <path d="M0,-15 
+               C-25,-45 -25,-85 0,-110 
+               C25,-85 25,-45 0,-15 Z" 
+            fill="url(#flameGradient)" 
+            filter="url(#glow)" />
+    </g>
+
+  </g>
+</svg>
