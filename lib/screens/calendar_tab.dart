@@ -8,10 +8,7 @@ import 'candle_lighting_detail_screen.dart';
 class CalendarTab extends StatefulWidget {
   final String locale;
 
-  const CalendarTab({
-    super.key,
-    required this.locale,
-  });
+  const CalendarTab({super.key, required this.locale});
 
   @override
   State<CalendarTab> createState() => _CalendarTabState();
@@ -43,7 +40,7 @@ class _CalendarTabState extends State<CalendarTab> {
 
     try {
       var location = await _locationService.getSavedLocation();
-      
+
       if (location == null) {
         final useGps = await _locationService.getUseGps();
         if (useGps) {
@@ -57,7 +54,9 @@ class _CalendarTabState extends State<CalendarTab> {
       } else {
         setState(() {
           _isLoading = false;
-          _error = isHebrew ? 'נא לבחור מיקום בהגדרות' : 'Please select a location in Settings';
+          _error = isHebrew
+              ? 'נא לבחור מיקום בהגדרות'
+              : 'Please select a location in Settings';
         });
       }
     } catch (e) {
@@ -75,7 +74,11 @@ class _CalendarTabState extends State<CalendarTab> {
 
     try {
       // Get events for current month and surrounding months
-      final startDate = DateTime(_currentMonth.year, _currentMonth.month - 1, 1);
+      final startDate = DateTime(
+        _currentMonth.year,
+        _currentMonth.month - 1,
+        1,
+      );
       final endDate = DateTime(_currentMonth.year, _currentMonth.month + 2, 0);
 
       final events = await _hebcalService.getExtendedCandleLightingTimes(
@@ -123,18 +126,17 @@ class _CalendarTabState extends State<CalendarTab> {
   Widget build(BuildContext context) {
     return SafeArea(
       child: _isLoading
-          ? const Center(child: CircularProgressIndicator(color: Color(0xFFE8B923)))
+          ? const Center(
+              child: CircularProgressIndicator(color: Color(0xFFE8B923)),
+            )
           : _error != null
-              ? _buildErrorState()
-              : SingleChildScrollView(
-                  physics: const BouncingScrollPhysics(),
-                  child: Column(
-                    children: [
-                      _buildHeader(),
-                      _buildCalendarContent(),
-                    ],
-                  ),
-                ),
+          ? _buildErrorState()
+          : SingleChildScrollView(
+              physics: const BouncingScrollPhysics(),
+              child: Column(
+                children: [_buildHeader(), _buildCalendarContent()],
+              ),
+            ),
     );
   }
 
@@ -158,7 +160,11 @@ class _CalendarTabState extends State<CalendarTab> {
               if (_location != null)
                 Row(
                   children: [
-                    Icon(Icons.location_on_outlined, size: 14, color: Colors.grey[500]),
+                    Icon(
+                      Icons.location_on_outlined,
+                      size: 14,
+                      color: Colors.grey[500],
+                    ),
                     const SizedBox(width: 4),
                     Text(
                       _location!.displayName,
@@ -168,10 +174,7 @@ class _CalendarTabState extends State<CalendarTab> {
                 ),
             ],
           ),
-          Text(
-            'בס״ד',
-            style: TextStyle(fontSize: 14, color: Colors.grey[400]),
-          ),
+          Text('בס״ד', style: TextStyle(fontSize: 14, color: Colors.grey[400])),
         ],
       ),
     );
@@ -209,7 +212,7 @@ class _CalendarTabState extends State<CalendarTab> {
             child: Column(
               children: [
                 Text(
-                  isHebrew 
+                  isHebrew
                       ? hebrewMonthFormat.format(_currentMonth)
                       : monthFormat.format(_currentMonth),
                   style: const TextStyle(
@@ -221,10 +224,7 @@ class _CalendarTabState extends State<CalendarTab> {
                 const SizedBox(height: 2),
                 Text(
                   isHebrew ? 'לחץ לחזור להיום' : 'Tap to go to today',
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: Colors.grey[500],
-                  ),
+                  style: TextStyle(fontSize: 11, color: Colors.grey[500]),
                 ),
               ],
             ),
@@ -242,16 +242,16 @@ class _CalendarTabState extends State<CalendarTab> {
   }
 
   Widget _buildDayHeaders() {
-    final dayLabels = isHebrew 
+    final dayLabels = isHebrew
         ? ['א׳', 'ב׳', 'ג׳', 'ד׳', 'ה׳', 'ו׳', 'ש׳']
-        : ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+        : ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'ש'];
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Row(
         children: dayLabels.map((day) {
           final isFriday = day == 'Fri' || day == 'ו׳';
-          final isSaturday = day == 'Sat' || day == 'ש׳';
+          final isSaturday = day == 'ש' || day == 'ש׳';
           return Expanded(
             child: Container(
               padding: const EdgeInsets.symmetric(vertical: 8),
@@ -259,13 +259,13 @@ class _CalendarTabState extends State<CalendarTab> {
                 day,
                 textAlign: TextAlign.center,
                 style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: isFriday 
-                      ? const Color(0xFFE8B923) 
-                      : isSaturday 
-                          ? const Color(0xFF5C6BC0)
-                          : Colors.grey[500],
+                  fontSize: isSaturday && !isHebrew ? 18 : 12,
+                  fontWeight: isSaturday ? FontWeight.w900 : FontWeight.w600,
+                  color: isFriday
+                      ? const Color(0xFFE8B923)
+                      : isSaturday
+                      ? const Color(0xFF5C6BC0)
+                      : Colors.grey[500],
                 ),
               ),
             ),
@@ -276,9 +276,17 @@ class _CalendarTabState extends State<CalendarTab> {
   }
 
   Widget _buildCalendarGrid() {
-    final firstDayOfMonth = DateTime(_currentMonth.year, _currentMonth.month, 1);
-    final lastDayOfMonth = DateTime(_currentMonth.year, _currentMonth.month + 1, 0);
-    
+    final firstDayOfMonth = DateTime(
+      _currentMonth.year,
+      _currentMonth.month,
+      1,
+    );
+    final lastDayOfMonth = DateTime(
+      _currentMonth.year,
+      _currentMonth.month + 1,
+      0,
+    );
+
     int startWeekday = firstDayOfMonth.weekday % 7;
     final daysInMonth = lastDayOfMonth.day;
     final totalCells = ((startWeekday + daysInMonth) / 7).ceil() * 7;
@@ -297,12 +305,16 @@ class _CalendarTabState extends State<CalendarTab> {
         itemCount: totalCells,
         itemBuilder: (context, index) {
           final dayNumber = index - startWeekday + 1;
-          
+
           if (dayNumber < 1 || dayNumber > daysInMonth) {
             return const SizedBox();
           }
-          
-          final currentDate = DateTime(_currentMonth.year, _currentMonth.month, dayNumber);
+
+          final currentDate = DateTime(
+            _currentMonth.year,
+            _currentMonth.month,
+            dayNumber,
+          );
           return _buildCalendarDay(currentDate, dayNumber);
         },
       ),
@@ -311,24 +323,36 @@ class _CalendarTabState extends State<CalendarTab> {
 
   Widget _buildCalendarDay(DateTime date, int dayNumber) {
     final now = DateTime.now();
-    final isToday = date.year == now.year && date.month == now.month && date.day == now.day;
-    
+    final isToday =
+        date.year == now.year && date.month == now.month && date.day == now.day;
+
     // Check if this date has any events
-    final dayEvents = _events.where((e) => _isSameDay(e.candleLightingTime, date)).toList();
+    final dayEvents = _events
+        .where((e) => _isSameDay(e.candleLightingTime, date))
+        .toList();
     final hasEvent = dayEvents.isNotEmpty;
     final isShabbat = date.weekday == DateTime.saturday;
     final isFriday = date.weekday == DateTime.friday;
-    
+
     // Check for candle lighting on Friday
-    final hasCandleLighting = _events.any((e) => _isSameDay(e.candleLightingTime, date));
+    final hasCandleLighting = _events.any(
+      (e) => _isSameDay(e.candleLightingTime, date),
+    );
     // Check for havdalah on Saturday
-    final hasHavdalah = _events.any((e) => e.havdalahTime != null && _isSameDay(e.havdalahTime!, date));
-    
+    final hasHavdalah = _events.any(
+      (e) => e.havdalahTime != null && _isSameDay(e.havdalahTime!, date),
+    );
+
     // Check if it's a Yom Tov
-    final yomTovEvent = _events.where((e) => 
-      e.isYomTov && (_isSameDay(e.candleLightingTime, date) || 
-      (e.havdalahTime != null && _isSameDay(e.havdalahTime!, date)))
-    ).toList();
+    final yomTovEvent = _events
+        .where(
+          (e) =>
+              e.isYomTov &&
+              (_isSameDay(e.candleLightingTime, date) ||
+                  (e.havdalahTime != null &&
+                      _isSameDay(e.havdalahTime!, date))),
+        )
+        .toList();
     final isYomTov = yomTovEvent.isNotEmpty;
 
     Color? bgColor;
@@ -372,8 +396,8 @@ class _CalendarTabState extends State<CalendarTab> {
                 dayNumber.toString(),
                 style: TextStyle(
                   fontSize: 14,
-                  fontWeight: (hasCandleLighting || hasHavdalah || isToday) 
-                      ? FontWeight.w700 
+                  fontWeight: (hasCandleLighting || hasHavdalah || isToday)
+                      ? FontWeight.w700
                       : FontWeight.w500,
                   color: textColor,
                 ),
@@ -389,7 +413,7 @@ class _CalendarTabState extends State<CalendarTab> {
                     width: 4,
                     height: 4,
                     decoration: BoxDecoration(
-                      color: hasCandleLighting || hasHavdalah 
+                      color: hasCandleLighting || hasHavdalah
                           ? textColor.withValues(alpha: 0.7)
                           : const Color(0xFFE8B923),
                       shape: BoxShape.circle,
@@ -404,10 +428,13 @@ class _CalendarTabState extends State<CalendarTab> {
   }
 
   Widget _buildEventsForSelectedMonth() {
-    final monthEvents = _events.where((e) => 
-      e.candleLightingTime.year == _currentMonth.year && 
-      e.candleLightingTime.month == _currentMonth.month
-    ).toList();
+    final monthEvents = _events
+        .where(
+          (e) =>
+              e.candleLightingTime.year == _currentMonth.year &&
+              e.candleLightingTime.month == _currentMonth.month,
+        )
+        .toList();
 
     if (monthEvents.isEmpty) {
       return const SizedBox(height: 20);
@@ -443,12 +470,14 @@ class _CalendarTabState extends State<CalendarTab> {
         margin: const EdgeInsets.only(bottom: 12),
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: event.isYomTov 
+          color: event.isYomTov
               ? const Color(0xFFFFF8E1)
               : const Color(0xFFF8F8F8),
           borderRadius: BorderRadius.circular(16),
-          border: event.isYomTov 
-              ? Border.all(color: const Color(0xFFE8B923).withValues(alpha: 0.3))
+          border: event.isYomTov
+              ? Border.all(
+                  color: const Color(0xFFE8B923).withValues(alpha: 0.3),
+                )
               : null,
         ),
         child: Row(
@@ -458,13 +487,15 @@ class _CalendarTabState extends State<CalendarTab> {
               width: 44,
               height: 44,
               decoration: BoxDecoration(
-                color: event.isYomTov 
+                color: event.isYomTov
                     ? const Color(0xFFE8B923).withValues(alpha: 0.2)
                     : const Color(0xFFE8B923).withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Icon(
-                event.isYomTov ? Icons.celebration : Icons.local_fire_department,
+                event.isYomTov
+                    ? Icons.celebration
+                    : Icons.local_fire_department,
                 size: 22,
                 color: const Color(0xFFE8B923),
               ),
@@ -488,10 +519,7 @@ class _CalendarTabState extends State<CalendarTab> {
                   const SizedBox(height: 4),
                   Text(
                     dateFormat.format(event.candleLightingTime),
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: Colors.grey[600],
-                    ),
+                    style: TextStyle(fontSize: 13, color: Colors.grey[600]),
                   ),
                 ],
               ),
@@ -503,7 +531,11 @@ class _CalendarTabState extends State<CalendarTab> {
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.local_fire_department, size: 14, color: Colors.grey[500]),
+                    Icon(
+                      Icons.local_fire_department,
+                      size: 14,
+                      color: Colors.grey[500],
+                    ),
                     const SizedBox(width: 4),
                     Text(
                       timeFormat.format(event.candleLightingTime),
@@ -518,10 +550,7 @@ class _CalendarTabState extends State<CalendarTab> {
                 const SizedBox(height: 2),
                 Text(
                   isHebrew ? 'הדלקת נרות' : 'Candle lighting',
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: Colors.grey[500],
-                  ),
+                  style: TextStyle(fontSize: 11, color: Colors.grey[500]),
                 ),
               ],
             ),
@@ -555,7 +584,11 @@ class _CalendarTabState extends State<CalendarTab> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.location_off_outlined, size: 64, color: Colors.grey[300]),
+            Icon(
+              Icons.location_off_outlined,
+              size: 64,
+              color: Colors.grey[300],
+            ),
             const SizedBox(height: 24),
             Text(
               _error!,
@@ -564,7 +597,9 @@ class _CalendarTabState extends State<CalendarTab> {
             ),
             const SizedBox(height: 16),
             Text(
-              isHebrew ? 'עבור להגדרות לבחירת מיקום' : 'Go to Settings to select a location',
+              isHebrew
+                  ? 'עבור להגדרות לבחירת מיקום'
+                  : 'Go to Settings to select a location',
               textAlign: TextAlign.center,
               style: TextStyle(fontSize: 14, color: Colors.grey[500]),
             ),
@@ -574,5 +609,3 @@ class _CalendarTabState extends State<CalendarTab> {
     );
   }
 }
-
-
