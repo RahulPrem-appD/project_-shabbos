@@ -466,7 +466,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               value: _preMinutes,
               underline: const SizedBox(),
               isDense: true,
-              items: [10, 15, 20, 30, 45, 60].map((m) {
+              items: [20, 40, 60].map((m) {
                 return DropdownMenuItem(value: m, child: Text('$m'));
               }).toList(),
               onChanged: (value) async {

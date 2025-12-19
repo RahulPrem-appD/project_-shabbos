@@ -39,7 +39,7 @@ class NotificationService {
 
     // Initialize Flutter Local Notifications
     const androidSettings = AndroidInitializationSettings(
-      '@mipmap/ic_launcher',
+      '@drawable/ic_notification',
     );
     const iosSettings = DarwinInitializationSettings(
       requestAlertPermission: true,
@@ -256,7 +256,7 @@ class NotificationService {
       playSound: true,
       enableVibration: true,
       enableLights: true,
-      icon: '@mipmap/ic_launcher',
+      icon: '@drawable/ic_notification',
       category: AndroidNotificationCategory.alarm,
       visibility: NotificationVisibility.public,
       fullScreenIntent: true,
@@ -562,7 +562,10 @@ class NotificationService {
 
   Future<int> getPreNotificationMinutes() async {
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getInt(_preNotificationMinutesKey) ?? 20;
+    final saved = prefs.getInt(_preNotificationMinutesKey) ?? 20;
+    // Only allow 20, 40, or 60 minutes
+    if (saved == 40 || saved == 60) return saved;
+    return 20; // Default to 20 if invalid value
   }
 
   Future<void> setPreNotificationMinutes(int minutes) async {
