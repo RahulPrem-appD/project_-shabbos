@@ -683,8 +683,6 @@ class CandleLightingDetailScreen extends StatelessWidget {
   }
 
   Widget _buildDetailsCard() {
-    final duration = lighting.havdalahTime?.difference(lighting.candleLightingTime);
-
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -694,28 +692,10 @@ class CandleLightingDetailScreen extends StatelessWidget {
       child: Column(
         children: [
           _buildDetailRow(
-            icon: Icons.event,
-            label: isHebrew ? 'סוג' : 'Type',
-            value: lighting.isYomTov
-                ? (isHebrew ? 'יום טוב' : 'Yom Tov')
-                : (isHebrew ? 'שבת' : 'Shabbat'),
-          ),
-          _buildDetailDivider(),
-          _buildDetailRow(
             icon: Icons.calendar_today,
             label: isHebrew ? 'תאריך' : 'Date',
             value: DateFormat('MMMM d, yyyy').format(lighting.date),
           ),
-          if (duration != null) ...[
-            _buildDetailDivider(),
-            _buildDetailRow(
-              icon: Icons.timelapse,
-              label: isHebrew ? 'משך' : 'Duration',
-              value: isHebrew
-                  ? '${duration.inHours} שעות'
-                  : '${duration.inHours} hours',
-            ),
-          ],
           if (lighting.holidayName != null &&
               lighting.holidayName!.isNotEmpty &&
               lighting.holidayName != 'Shabbat') ...[
