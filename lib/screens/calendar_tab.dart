@@ -17,11 +17,10 @@ class CalendarTab extends StatefulWidget {
   State<CalendarTab> createState() => _CalendarTabState();
 }
 
-class _CalendarTabState extends State<CalendarTab> with SingleTickerProviderStateMixin {
+class _CalendarTabState extends State<CalendarTab> {
   final HebcalService _hebcalService = HebcalService();
   final LocationService _locationService = LocationService();
 
-  late AnimationController _shimmerController;
   DateTime _currentMonth = DateTime.now();
   List<CandleLighting> _events = [];
   LocationInfo? _location;
@@ -33,17 +32,7 @@ class _CalendarTabState extends State<CalendarTab> with SingleTickerProviderStat
   @override
   void initState() {
     super.initState();
-    _shimmerController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1500),
-    )..repeat();
     _loadData();
-  }
-
-  @override
-  void dispose() {
-    _shimmerController.dispose();
-    super.dispose();
   }
 
   Future<void> _loadData() async {
@@ -133,18 +122,19 @@ class _CalendarTabState extends State<CalendarTab> with SingleTickerProviderStat
   @override
   Widget build(BuildContext context) {
     return SafeArea(
-      child: Column(
-        children: [
-          _buildHeader(),
-          Expanded(
-            child: _isLoading
-                ? const Center(child: CircularProgressIndicator(color: Color(0xFFE8B923)))
-                : _error != null
-                    ? _buildErrorState()
-                    : _buildCalendarContent(),
-          ),
-        ],
-      ),
+      child: _isLoading
+          ? const Center(child: CircularProgressIndicator(color: Color(0xFFE8B923)))
+          : _error != null
+              ? _buildErrorState()
+              : SingleChildScrollView(
+                  physics: const BouncingScrollPhysics(),
+                  child: Column(
+                    children: [
+                      _buildHeader(),
+                      _buildCalendarContent(),
+                    ],
+                  ),
+                ),
     );
   }
 
@@ -192,7 +182,7 @@ class _CalendarTabState extends State<CalendarTab> with SingleTickerProviderStat
       children: [
         _buildMonthNavigation(),
         _buildDayHeaders(),
-        Expanded(child: _buildCalendarGrid()),
+        _buildCalendarGrid(),
         _buildEventsForSelectedMonth(),
       ],
     );
@@ -296,6 +286,7 @@ class _CalendarTabState extends State<CalendarTab> with SingleTickerProviderStat
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: GridView.builder(
+        shrinkWrap: true,
         physics: const NeverScrollableScrollPhysics(),
         gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
           crossAxisCount: 7,
@@ -422,114 +413,21 @@ class _CalendarTabState extends State<CalendarTab> with SingleTickerProviderStat
       return const SizedBox(height: 20);
     }
 
-    final hasMultipleEvents = monthEvents.length > 1;
-
     return Container(
-      height: 180,
-      padding: const EdgeInsets.fromLTRB(24, 16, 0, 8),
+      padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Padding(
-            padding: const EdgeInsets.only(right: 24),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  isHebrew ? 'אירועים החודש' : 'Events This Month',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.grey[600],
-                  ),
-                ),
-                if (hasMultipleEvents)
-                  AnimatedBuilder(
-                    animation: _shimmerController,
-                    builder: (context, child) {
-                      return ShaderMask(
-                        shaderCallback: (bounds) {
-                          return LinearGradient(
-                            begin: Alignment.centerLeft,
-                            end: Alignment.centerRight,
-                            colors: [
-                              Colors.grey.shade400,
-                              Colors.grey.shade600,
-                              const Color(0xFFE8B923),
-                              Colors.grey.shade600,
-                              Colors.grey.shade400,
-                            ],
-                            stops: [
-                              0.0,
-                              (_shimmerController.value - 0.3).clamp(0.0, 1.0),
-                              _shimmerController.value,
-                              (_shimmerController.value + 0.3).clamp(0.0, 1.0),
-                              1.0,
-                            ],
-                          ).createShader(bounds);
-                        },
-                        child: Row(
-                          children: [
-                            Text(
-                              isHebrew ? 'החלק לעוד' : 'Swipe for more',
-                              style: const TextStyle(
-                                fontSize: 11,
-                                color: Colors.white,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                            const SizedBox(width: 4),
-                            Icon(
-                              isHebrew ? Icons.arrow_back_ios : Icons.arrow_forward_ios,
-                              size: 10,
-                              color: Colors.white,
-                            ),
-                          ],
-                        ),
-                      );
-                    },
-                  ),
-              ],
+          Text(
+            isHebrew ? 'אירועים החודש' : 'Events This Month',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: Colors.grey[600],
             ),
           ),
           const SizedBox(height: 12),
-          Expanded(
-            child: Stack(
-              children: [
-                ListView.builder(
-                  scrollDirection: Axis.horizontal,
-                  padding: const EdgeInsets.only(right: 24),
-                  itemCount: monthEvents.length,
-                  itemBuilder: (context, index) {
-                    final event = monthEvents[index];
-                    return _buildEventCard(event);
-                  },
-                ),
-                // Right fade gradient hint
-                if (hasMultipleEvents)
-                  Positioned(
-                    right: 0,
-                    top: 0,
-                    bottom: 0,
-                    child: IgnorePointer(
-                      child: Container(
-                        width: 40,
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            begin: Alignment.centerLeft,
-                            end: Alignment.centerRight,
-                            colors: [
-                              Colors.white.withValues(alpha: 0),
-                              Colors.white.withValues(alpha: 0.9),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          ),
+          ...monthEvents.map((event) => _buildEventCard(event)),
         ],
       ),
     );
@@ -542,8 +440,7 @@ class _CalendarTabState extends State<CalendarTab> with SingleTickerProviderStat
     return GestureDetector(
       onTap: () => _openDetailScreen(event),
       child: Container(
-        width: 160,
-        margin: const EdgeInsets.only(right: 12),
+        margin: const EdgeInsets.only(bottom: 12),
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: event.isYomTov 
@@ -554,50 +451,76 @@ class _CalendarTabState extends State<CalendarTab> with SingleTickerProviderStat
               ? Border.all(color: const Color(0xFFE8B923).withValues(alpha: 0.3))
               : null,
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        child: Row(
           children: [
-            Row(
-              children: [
-                Icon(
-                  event.isYomTov ? Icons.celebration : Icons.local_fire_department,
-                  size: 16,
-                  color: const Color(0xFFE8B923),
-                ),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: Text(
+            // Left icon
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: event.isYomTov 
+                    ? const Color(0xFFE8B923).withValues(alpha: 0.2)
+                    : const Color(0xFFE8B923).withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(
+                event.isYomTov ? Icons.celebration : Icons.local_fire_department,
+                size: 22,
+                color: const Color(0xFFE8B923),
+              ),
+            ),
+            const SizedBox(width: 14),
+            // Event details
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
                     isHebrew ? event.hebrewDisplayName : event.displayName,
                     style: const TextStyle(
-                      fontSize: 13,
+                      fontSize: 15,
                       fontWeight: FontWeight.w600,
                       color: Color(0xFF1A1A1A),
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Text(
-              dateFormat.format(event.candleLightingTime),
-              style: TextStyle(
-                fontSize: 12,
-                color: Colors.grey[600],
+                  const SizedBox(height: 4),
+                  Text(
+                    dateFormat.format(event.candleLightingTime),
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: Colors.grey[600],
+                    ),
+                  ),
+                ],
               ),
             ),
-            const Spacer(),
-            Row(
+            // Time on the right
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
               children: [
-                Icon(Icons.local_fire_department, size: 12, color: Colors.grey[500]),
-                const SizedBox(width: 4),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.local_fire_department, size: 14, color: Colors.grey[500]),
+                    const SizedBox(width: 4),
+                    Text(
+                      timeFormat.format(event.candleLightingTime),
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFFE8B923),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 2),
                 Text(
-                  timeFormat.format(event.candleLightingTime),
+                  isHebrew ? 'הדלקת נרות' : 'Candle lighting',
                   style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.grey[700],
+                    fontSize: 11,
+                    color: Colors.grey[500],
                   ),
                 ),
               ],
