@@ -548,19 +548,36 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   void _testDelayedNotification() async {
-    // Schedule a notification for 10 seconds from now
-    await _notificationService.sendDelayedTestNotification(seconds: 10);
+    // Schedule the full candle lighting test flow:
+    // - Pre-notification (with countdown) in 10 seconds
+    // - Candle lighting notification in 30 seconds
+    await _notificationService.sendDelayedTestNotification(
+      preNotificationSeconds: 10,
+      candleLightingSeconds: 30,
+    );
 
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(
-            isHebrew
-                ? 'התראה תגיע בעוד 10 שניות - סגור את האפליקציה!'
-                : 'Notification scheduled for 10 seconds - close the app!',
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                isHebrew ? '🕯️ בדיקת זרימת הדלקת נרות' : '🕯️ Testing Candle Lighting Flow',
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                isHebrew
+                    ? '• תזכורת מוקדמת (עם ספירה לאחור): 10 שניות\n• התראת הדלקת נרות: 30 שניות\n\nסגור את האפליקציה לבדיקה!'
+                    : '• Early reminder (with countdown): 10 sec\n• Candle lighting alert: 30 sec\n\nClose the app to test!',
+                style: const TextStyle(fontSize: 13),
+              ),
+            ],
           ),
           behavior: SnackBarBehavior.floating,
-          duration: const Duration(seconds: 5),
+          duration: const Duration(seconds: 8),
           backgroundColor: const Color(0xFF1A1A1A),
           action: SnackBarAction(
             label: isHebrew ? 'הבנתי' : 'OK',

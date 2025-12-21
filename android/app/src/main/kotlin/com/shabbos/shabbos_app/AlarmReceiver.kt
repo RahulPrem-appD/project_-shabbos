@@ -256,33 +256,52 @@ class AlarmReceiver : BroadcastReceiver() {
             
             // For pre-notifications with valid candle lighting time, show countdown timer
             if (isPreNotification && candleLightingTime > 0) {
-                Log.d(TAG, "Setting up countdown notification to $candleLightingTime")
+                val timeFormat = java.text.SimpleDateFormat("h:mm a", java.util.Locale.getDefault())
+                val candleTimeStr = timeFormat.format(java.util.Date(candleLightingTime))
+                val remainingMillis = candleLightingTime - System.currentTimeMillis()
+                val remainingMinutes = (remainingMillis / 60000).toInt()
+                
+                Log.d(TAG, "========================================")
+                Log.d(TAG, "COUNTDOWN NOTIFICATION DEBUG:")
+                Log.d(TAG, "Candle lighting time (millis): $candleLightingTime")
+                Log.d(TAG, "Current time (millis): ${System.currentTimeMillis()}")
+                Log.d(TAG, "Remaining millis: $remainingMillis")
+                Log.d(TAG, "Remaining minutes: $remainingMinutes")
+                Log.d(TAG, "Formatted time: $candleTimeStr")
+                Log.d(TAG, "Android SDK: ${Build.VERSION.SDK_INT}")
+                Log.d(TAG, "========================================")
                 
                 // Use chronometer for countdown (API 24+)
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                    // Set chronometer with countdown
                     builder.setUsesChronometer(true)
                         .setChronometerCountDown(true)
                         .setWhen(candleLightingTime)
                         .setShowWhen(true)
                     
-                    // Enhanced style with countdown info
-                    val timeFormat = java.text.SimpleDateFormat("h:mm a", java.util.Locale.getDefault())
-                    val candleTimeStr = timeFormat.format(java.util.Date(candleLightingTime))
+                    // Update content to show countdown context
+                    builder.setContentTitle("⏱️ Countdown to Candle Lighting")
+                        .setContentText("Light candles at $candleTimeStr")
+                        .setSubText("$remainingMinutes min remaining")
+                    
+                    // BigTextStyle for expanded view
                     builder.setStyle(
                         NotificationCompat.BigTextStyle()
-                            .bigText("$body\n\n🕯️ Light candles at $candleTimeStr")
-                            .setSummaryText("Countdown to candle lighting")
+                            .setBigContentTitle("⏱️ Countdown to Candle Lighting")
+                            .bigText("$body\n\n🕯️ Light candles at $candleTimeStr\n⏰ $remainingMinutes minutes remaining")
+                            .setSummaryText("Shabbos preparation")
                     )
-                    builder.setSubText("🕯️ $candleTimeStr")
+                    
+                    Log.d(TAG, "Chronometer countdown set for: $candleLightingTime")
                 } else {
                     // Fallback for older devices - just show the time
-                    val timeFormat = java.text.SimpleDateFormat("h:mm a", java.util.Locale.getDefault())
-                    val candleTimeStr = timeFormat.format(java.util.Date(candleLightingTime))
-                    builder.setStyle(
-                        NotificationCompat.BigTextStyle()
-                            .bigText("$body\n\n🕯️ Light candles at $candleTimeStr")
-                    )
-                    builder.setWhen(candleLightingTime)
+                    builder.setContentTitle("🕯️ Candle Lighting Soon")
+                        .setContentText("Light candles at $candleTimeStr ($remainingMinutes min)")
+                        .setStyle(
+                            NotificationCompat.BigTextStyle()
+                                .bigText("$body\n\n🕯️ Light candles at $candleTimeStr\n⏰ About $remainingMinutes minutes remaining")
+                        )
+                        .setWhen(candleLightingTime)
                         .setShowWhen(true)
                 }
             } else {

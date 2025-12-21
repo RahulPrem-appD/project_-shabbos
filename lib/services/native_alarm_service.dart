@@ -93,9 +93,15 @@ class NativeAlarmService {
       debugPrint('NativeAlarmService: Timestamp: $timestampMillis');
       debugPrint('NativeAlarmService: Is pre-notification: $isPreNotification');
       debugPrint('NativeAlarmService: Candle lighting time: $candleLightingTime');
+      debugPrint('NativeAlarmService: Candle lighting millis: $candleLightingMillis');
       debugPrint(
         'NativeAlarmService: Seconds from now: ${(timestampMillis - now) / 1000}',
       );
+      if (candleLightingMillis > 0) {
+        debugPrint(
+          'NativeAlarmService: Candle lighting in: ${(candleLightingMillis - now) / 1000} seconds',
+        );
+      }
 
       final result = await _channel.invokeMethod('scheduleAlarm', {
         'id': id,

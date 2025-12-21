@@ -354,12 +354,15 @@ class NotificationService {
         Duration(minutes: preMinutes),
       );
       if (preTime.isAfter(now)) {
+        // Format candle lighting time
+        final candleTimeFormatted = '${lighting.candleLightingTime.hour}:${lighting.candleLightingTime.minute.toString().padLeft(2, '0')}';
+        
         final title = lighting.isYomTov 
-            ? '⏰ $preMinutes Minutes to Yom Tov!' 
-            : '⏰ $preMinutes Minutes to Shabbos!';
+            ? '⏱️ $preMinutes min to Yom Tov!' 
+            : '⏱️ $preMinutes min to Shabbos!';
         final body = lighting.isYomTov
-            ? 'יום טוב מגיע • Yom Tov is coming!'
-            : 'שבת מגיעה • Shabbos is coming!';
+            ? '🕯️ Light candles at $candleTimeFormatted\nיום טוב מגיע • Yom Tov is coming!'
+            : '🕯️ Light candles at $candleTimeFormatted\nשבת מגיעה • Shabbos is coming!';
 
         final success = await _scheduleNotification(
           id: id++,
@@ -509,100 +512,136 @@ class NotificationService {
     }
   }
 
-  /// Send a delayed test notification
-  Future<void> sendDelayedTestNotification({int seconds = 10}) async {
+  /// Send a delayed test notification that simulates the full candle lighting flow
+  /// - Pre-notification (early reminder) fires after [preNotificationSeconds]
+  /// - Candle lighting notification fires after [candleLightingSeconds]
+  /// - On Android: Pre-notification shows countdown timer to candle lighting
+  /// - On iOS: Starts Live Activity with countdown
+  Future<void> sendDelayedTestNotification({
+    int preNotificationSeconds = 10,
+    int candleLightingSeconds = 30,
+  }) async {
     debugPrint('==========================================');
-    debugPrint('NotificationService: SCHEDULING TEST NOTIFICATION');
+    debugPrint('NotificationService: SCHEDULING CANDLE LIGHTING TEST FLOW');
     debugPrint('==========================================');
-    debugPrint('NotificationService: Delay: $seconds seconds');
+    debugPrint('NotificationService: Pre-notification in: $preNotificationSeconds seconds');
+    debugPrint('NotificationService: Candle lighting in: $candleLightingSeconds seconds');
 
     await initialize();
     await requestPermissions();
 
     final now = DateTime.now();
-    final scheduledTime = now.add(Duration(seconds: seconds));
+    final preNotificationTime = now.add(Duration(seconds: preNotificationSeconds));
+    final candleLightingTime = now.add(Duration(seconds: candleLightingSeconds));
 
     debugPrint('NotificationService: Current time: $now');
-    debugPrint('NotificationService: Scheduled for: $scheduledTime');
-    debugPrint('NotificationService: Time difference: $seconds seconds');
+    debugPrint('NotificationService: Pre-notification at: $preNotificationTime');
+    debugPrint('NotificationService: Candle lighting at: $candleLightingTime');
+
+    // Cancel any existing test notifications
+    await _notifications.cancel(996);
+    await _notifications.cancel(997);
+    await _notifications.cancel(998);
+    if (Platform.isAndroid) {
+      await NativeAlarmService.cancelAlarm(996);
+      await NativeAlarmService.cancelAlarm(997);
+    }
 
     if (Platform.isAndroid) {
-      // Use native alarm for Android
-      final success = await NativeAlarmService.scheduleAlarm(
-        id: 998,
-        scheduledTime: scheduledTime,
-        title: 'שבת שלום! Good Shabbos!',
-        body: 'Scheduled test notification 🕯️🕯️ (Background test)',
+      // Schedule pre-notification with countdown (ID 996)
+      final preSuccess = await NativeAlarmService.scheduleAlarm(
+        id: 996,
+        scheduledTime: preNotificationTime,
+        title: '🕯️ Candle Lighting Soon!',
+        body: 'Time to prepare for Shabbos!',
+        isPreNotification: true,
+        candleLightingTime: candleLightingTime,
       );
+      debugPrint('NotificationService: Android pre-notification scheduled: $preSuccess');
 
-      debugPrint('NotificationService: Android alarm scheduled: $success');
-      debugPrint('NotificationService: Will fire at: $scheduledTime');
+      // Schedule candle lighting notification (ID 997)
+      final candleSuccess = await NativeAlarmService.scheduleAlarm(
+        id: 997,
+        scheduledTime: candleLightingTime,
+        title: '!שבת שלום Good Shabbos!',
+        body: 'Time to light candles 🕯️🕯️',
+        isPreNotification: false,
+      );
+      debugPrint('NotificationService: Android candle lighting scheduled: $candleSuccess');
     } else {
-      // iOS: Use zonedSchedule
-      debugPrint('NotificationService: Setting up iOS notification...');
-      debugPrint('NotificationService: Local timezone: ${tz.local.name}');
+      // iOS: Schedule both notifications
+      debugPrint('NotificationService: Setting up iOS notifications...');
 
-      final tzTime = tz.TZDateTime(
-        tz.local,
-        scheduledTime.year,
-        scheduledTime.month,
-        scheduledTime.day,
-        scheduledTime.hour,
-        scheduledTime.minute,
-        scheduledTime.second,
-      );
-
-      final nowTz = tz.TZDateTime.now(tz.local);
-      final difference = tzTime.difference(nowTz);
-
-      debugPrint('NotificationService: Current TZ time: $nowTz');
-      debugPrint('NotificationService: Scheduled TZ time: $tzTime');
-      debugPrint(
-        'NotificationService: Difference: ${difference.inSeconds} seconds',
-      );
+      // Get sounds
+      final preSoundId = await _audioService.getPreNotificationSound();
+      final candleSoundId = await _audioService.getCandleLightingSound();
+      final preIosSoundFile = _getIosSoundFile(preSoundId);
+      final candleIosSoundFile = _getIosSoundFile(candleSoundId);
 
       try {
-        // Cancel any existing test notifications first
-        await _notifications.cancel(998);
-        debugPrint(
-          'NotificationService: Cancelled previous test notifications',
+        // Calculate remaining time for the notification body
+        final remainingSeconds = candleLightingSeconds - preNotificationSeconds;
+        final remainingMinutes = (remainingSeconds / 60).ceil();
+        final candleTimeFormatted = '${candleLightingTime.hour}:${candleLightingTime.minute.toString().padLeft(2, '0')}';
+        
+        // Schedule pre-notification with countdown info in body
+        final preTzTime = tz.TZDateTime(
+          tz.local,
+          preNotificationTime.year,
+          preNotificationTime.month,
+          preNotificationTime.day,
+          preNotificationTime.hour,
+          preNotificationTime.minute,
+          preNotificationTime.second,
         );
 
-        // Get selected sound for iOS
-        final soundId = await _audioService.getCandleLightingSound();
-        final iosSoundFile = _getIosSoundFile(soundId);
-
-        // Schedule the test notification with custom sound
         await _notifications.zonedSchedule(
-          998,
-          '!שבת שלום Good Shabbos!',
-          'Scheduled test notification 🕯️🕯️ (Background test)',
-          tzTime,
-          _getNotificationDetails(iosSoundFile: iosSoundFile),
+          996,
+          '⏱️ $remainingMinutes min until Candle Lighting',
+          '🕯️ Light candles at $candleTimeFormatted\nTime to prepare for Shabbos!',
+          preTzTime,
+          _getNotificationDetails(iosSoundFile: preIosSoundFile),
           androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
         );
+        debugPrint('NotificationService: ✓ iOS pre-notification scheduled with sound: $preIosSoundFile');
 
-        debugPrint(
-          'NotificationService: ✓ iOS notification scheduled successfully with sound: $iosSoundFile!',
+        // Start Live Activity countdown (requires Widget Extension setup in Xcode)
+        await startLiveActivityCountdown(
+          candleLightingTime: candleLightingTime,
+          eventName: 'Test Shabbos Candle Lighting',
+          isYomTov: false,
+        );
+        debugPrint('NotificationService: ✓ iOS Live Activity started for countdown');
+
+        // Schedule candle lighting notification
+        final candleTzTime = tz.TZDateTime(
+          tz.local,
+          candleLightingTime.year,
+          candleLightingTime.month,
+          candleLightingTime.day,
+          candleLightingTime.hour,
+          candleLightingTime.minute,
+          candleLightingTime.second,
         );
 
-        // Verify notification was scheduled
+        await _notifications.zonedSchedule(
+          997,
+          '!שבת שלום Good Shabbos!',
+          '🕯️🕯️ Time to light candles!',
+          candleTzTime,
+          _getNotificationDetails(iosSoundFile: candleIosSoundFile),
+          androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+        );
+        debugPrint('NotificationService: ✓ iOS candle lighting notification scheduled with sound: $candleIosSoundFile');
+
+        // Verify notifications were scheduled
         final pending = await _notifications.pendingNotificationRequests();
-        debugPrint(
-          'NotificationService: Pending notifications: ${pending.length}',
-        );
-
-        if (pending.isEmpty) {
-          debugPrint(
-            'NotificationService: ⚠️ WARNING: No pending notifications found!',
-          );
-        } else {
-          for (final n in pending) {
-            debugPrint('  ✓ ID ${n.id}: ${n.title}');
-          }
+        debugPrint('NotificationService: Pending notifications: ${pending.length}');
+        for (final n in pending) {
+          debugPrint('  ✓ ID ${n.id}: ${n.title}');
         }
       } catch (e, stack) {
-        debugPrint('NotificationService: ✗ ERROR scheduling notification: $e');
+        debugPrint('NotificationService: ✗ ERROR scheduling notifications: $e');
         debugPrint('Stack trace: $stack');
       }
     }
