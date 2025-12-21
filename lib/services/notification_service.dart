@@ -101,7 +101,7 @@ class NotificationService {
       final offsetMinutes = offset.inMinutes;
 
       debugPrint(
-        'NotificationService: Device offset: ${offset.inHours}h ${offset.inMinutes % 60}m (${offsetMinutes} minutes)',
+        'NotificationService: Device offset: ${offset.inHours}h ${offset.inMinutes % 60}m ($offsetMinutes minutes)',
       );
 
       // Use minutes for accurate timezone detection (handles half-hour offsets like India +5:30)
