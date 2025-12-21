@@ -162,6 +162,8 @@ class NotificationService {
 
   void _onNotificationResponse(NotificationResponse response) {
     debugPrint('NotificationService: Notification tapped - ID: ${response.id}');
+    // Play custom sound when notification is tapped (iOS foreground scenario)
+    _playNotificationSound(response.id);
   }
 
   @pragma('vm:entry-point')
@@ -169,6 +171,26 @@ class NotificationService {
     debugPrint(
       'NotificationService: Background notification - ID: ${response.id}',
     );
+  }
+
+  /// Play custom sound based on notification type
+  Future<void> _playNotificationSound(int? notificationId) async {
+    try {
+      // Determine if this is a pre-notification (even IDs) or candle lighting (odd IDs)
+      // In scheduling loop: pre-notification gets even IDs (0, 2, 4...), candle lighting gets odd IDs (1, 3, 5...)
+      final isPreNotification = (notificationId ?? 0) % 2 == 0;
+      
+      final soundId = isPreNotification
+          ? await _audioService.getPreNotificationSound()
+          : await _audioService.getCandleLightingSound();
+      
+      if (soundId != 'silent') {
+        await _audioService.playSound(soundId);
+        debugPrint('NotificationService: Played sound: $soundId');
+      }
+    } catch (e) {
+      debugPrint('NotificationService: Error playing sound: $e');
+    }
   }
 
   Future<bool> requestPermissions() async {
@@ -246,7 +268,7 @@ class NotificationService {
     return false;
   }
 
-  NotificationDetails _getNotificationDetails() {
+  NotificationDetails _getNotificationDetails({String? iosSoundFile}) {
     const androidDetails = AndroidNotificationDetails(
       _channelId,
       _channelName,
@@ -262,15 +284,30 @@ class NotificationService {
       fullScreenIntent: true,
     );
 
-    const iosDetails = DarwinNotificationDetails(
+    final iosDetails = DarwinNotificationDetails(
       presentAlert: true,
       presentBadge: true,
       presentSound: true,
       badgeNumber: 1,
       interruptionLevel: InterruptionLevel.timeSensitive,
+      sound: iosSoundFile, // Custom sound file from app bundle
     );
 
-    return const NotificationDetails(android: androidDetails, iOS: iosDetails);
+    return NotificationDetails(android: androidDetails, iOS: iosDetails);
+  }
+
+  /// Map sound ID to iOS sound filename
+  String? _getIosSoundFile(String soundId) {
+    const soundFiles = {
+      'shofar_candle': 'Shofar-CandleAlarm.mp3',
+      'rav_shalom_shofar': 'RavShalomShofarDefaultlouder.mp3',
+      'shabbat_shalom_song': 'RYomTovShabbatShalomSong.mp3',
+      'yomtov_default': 'YomTov-Default.mp3',
+      'ata_bechartanu': 'Ata Bechartanu-YomTov.mp3',
+      'ata_bechartanu_2': 'Ata Bechartanu2-YomTov.mp3',
+      'hodu_lahashem': "Hodu La'Hashem Ki Tov-YomTov.mp3",
+    };
+    return soundFiles[soundId];
   }
 
   /// Schedule notifications for candle lighting times
@@ -320,6 +357,7 @@ class NotificationService {
           title: title,
           body: body,
           scheduledTime: preTime,
+          isPreNotification: true,
         );
         if (success) scheduled++;
       }
@@ -336,6 +374,7 @@ class NotificationService {
           title: title,
           body: body,
           scheduledTime: lighting.candleLightingTime,
+          isPreNotification: false,
         );
         if (success) scheduled++;
       }
@@ -366,6 +405,7 @@ class NotificationService {
     required String title,
     required String body,
     required DateTime scheduledTime,
+    bool isPreNotification = false,
   }) async {
     try {
       if (Platform.isAndroid) {
@@ -375,14 +415,15 @@ class NotificationService {
           scheduledTime: scheduledTime,
           title: title,
           body: body,
+          isPreNotification: isPreNotification,
         );
 
         debugPrint(
-          'NotificationService: Scheduled native alarm #$id for $scheduledTime: $success',
+          'NotificationService: Scheduled native alarm #$id for $scheduledTime (isPre=$isPreNotification): $success',
         );
         return success;
       } else {
-        // iOS: Use zonedSchedule with REQUIRED uiLocalNotificationDateInterpretation
+        // iOS: Use zonedSchedule with custom sound
         final tzTime = tz.TZDateTime(
           tz.local,
           scheduledTime.year,
@@ -393,23 +434,30 @@ class NotificationService {
           scheduledTime.second,
         );
 
+        // Get the appropriate sound for this notification type
+        final soundId = isPreNotification
+            ? await _audioService.getPreNotificationSound()
+            : await _audioService.getCandleLightingSound();
+        final iosSoundFile = _getIosSoundFile(soundId);
+
         debugPrint('NotificationService: Scheduling iOS notification #$id');
         debugPrint('NotificationService: Local timezone: ${tz.local.name}');
         debugPrint('NotificationService: Scheduled time: $scheduledTime');
         debugPrint('NotificationService: TZ time: $tzTime');
+        debugPrint('NotificationService: iOS sound file: $iosSoundFile');
 
-        // Schedule the notification using zonedSchedule
+        // Schedule the notification using zonedSchedule with custom sound
         await _notifications.zonedSchedule(
           id,
           title,
           body,
           tzTime,
-          _getNotificationDetails(),
+          _getNotificationDetails(iosSoundFile: iosSoundFile),
           androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
         );
 
         debugPrint(
-          'NotificationService: iOS notification #$id scheduled successfully',
+          'NotificationService: iOS notification #$id scheduled successfully with sound: $iosSoundFile',
         );
         return true;
       }
@@ -427,9 +475,12 @@ class NotificationService {
     await initialize();
     await requestPermissions();
 
-    // Play sound
+    // Get selected sound
     final soundId = await _audioService.getCandleLightingSound();
-    if (soundId != 'default' && soundId != 'silent') {
+    final iosSoundFile = _getIosSoundFile(soundId);
+
+    // Play sound on Android (iOS will play from notification)
+    if (Platform.isAndroid && soundId != 'silent') {
       await _audioService.playSound(soundId);
     }
 
@@ -438,9 +489,9 @@ class NotificationService {
         999,
         '!שבת שלום Good Shabbos!',
         'Test notification 🕯️🕯️',
-        _getNotificationDetails(),
+        _getNotificationDetails(iosSoundFile: iosSoundFile),
       );
-      debugPrint('NotificationService: Immediate test sent');
+      debugPrint('NotificationService: Immediate test sent with sound: $iosSoundFile');
     } catch (e) {
       debugPrint('NotificationService: Failed to send: $e');
     }
@@ -505,18 +556,22 @@ class NotificationService {
           'NotificationService: Cancelled previous test notifications',
         );
 
-        // Schedule the test notification
+        // Get selected sound for iOS
+        final soundId = await _audioService.getCandleLightingSound();
+        final iosSoundFile = _getIosSoundFile(soundId);
+
+        // Schedule the test notification with custom sound
         await _notifications.zonedSchedule(
           998,
           '!שבת שלום Good Shabbos!',
           'Scheduled test notification 🕯️🕯️ (Background test)',
           tzTime,
-          _getNotificationDetails(),
+          _getNotificationDetails(iosSoundFile: iosSoundFile),
           androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
         );
 
         debugPrint(
-          'NotificationService: ✓ iOS notification scheduled successfully!',
+          'NotificationService: ✓ iOS notification scheduled successfully with sound: $iosSoundFile!',
         );
 
         // Verify notification was scheduled

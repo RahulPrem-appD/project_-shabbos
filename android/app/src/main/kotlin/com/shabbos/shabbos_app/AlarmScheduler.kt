@@ -16,7 +16,7 @@ class AlarmScheduler(private val context: Context) {
         private const val TAG = "ShabbosAlarmScheduler"
     }
     
-    fun scheduleAlarm(id: Int, timestampMillis: Long, title: String, body: String): Boolean {
+    fun scheduleAlarm(id: Int, timestampMillis: Long, title: String, body: String, isPreNotification: Boolean = false): Boolean {
         try {
             val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
             val scheduledDate = Date(timestampMillis)
@@ -28,12 +28,14 @@ class AlarmScheduler(private val context: Context) {
             Log.d(TAG, "Current time: ${dateFormat.format(Date())}")
             Log.d(TAG, "Title: $title")
             Log.d(TAG, "Body: $body")
+            Log.d(TAG, "Is pre-notification: $isPreNotification")
             Log.d(TAG, "Android version: ${Build.VERSION.SDK_INT}")
             
             val intent = Intent(context, AlarmReceiver::class.java).apply {
                 putExtra("notification_id", id)
                 putExtra("notification_title", title)
                 putExtra("notification_body", body)
+                putExtra("is_pre_notification", isPreNotification)
                 // Add action to make intent unique
                 action = "com.shabbos.shabbos_app.ALARM_$id"
             }
