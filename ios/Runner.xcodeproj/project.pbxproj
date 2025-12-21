@@ -21,7 +21,7 @@
 		SHABBOS004 /* YomTov-Default.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = SHABBOS104 /* YomTov-Default.mp3 */; };
 		SHABBOS005 /* Ata Bechartanu-YomTov.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = SHABBOS105 /* Ata Bechartanu-YomTov.mp3 */; };
 		SHABBOS006 /* Ata Bechartanu2-YomTov.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = SHABBOS106 /* Ata Bechartanu2-YomTov.mp3 */; };
-		SHABBOS007 /* Hodu La'Hashem Ki Tov-YomTov.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = SHABBOS107 /* Hodu La'Hashem Ki Tov-YomTov.mp3 */; };
+		SHABBOS007 /* HoduLaHashem-YomTov.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = SHABBOS107 /* HoduLaHashem-YomTov.mp3 */; };
 		FA1D955D7F34C63EEBC4197B /* Pods_RunnerTests.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = C96A6DB2F783D0223F8161BD /* Pods_RunnerTests.framework */; };
 /* End PBXBuildFile section */
 
@@ -78,7 +78,7 @@
 		SHABBOS104 /* YomTov-Default.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = "YomTov-Default.mp3"; sourceTree = "<group>"; };
 		SHABBOS105 /* Ata Bechartanu-YomTov.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = "Ata Bechartanu-YomTov.mp3"; sourceTree = "<group>"; };
 		SHABBOS106 /* Ata Bechartanu2-YomTov.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = "Ata Bechartanu2-YomTov.mp3"; sourceTree = "<group>"; };
-		SHABBOS107 /* Hodu La'Hashem Ki Tov-YomTov.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = "Hodu La'Hashem Ki Tov-YomTov.mp3"; sourceTree = "<group>"; };
+		SHABBOS107 /* HoduLaHashem-YomTov.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = "HoduLaHashem-YomTov.mp3"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -175,7 +175,7 @@
 				SHABBOS104 /* YomTov-Default.mp3 */,
 				SHABBOS105 /* Ata Bechartanu-YomTov.mp3 */,
 				SHABBOS106 /* Ata Bechartanu2-YomTov.mp3 */,
-				SHABBOS107 /* Hodu La'Hashem Ki Tov-YomTov.mp3 */,
+				SHABBOS107 /* HoduLaHashem-YomTov.mp3 */,
 			);
 			path = Sounds;
 			sourceTree = "<group>";
@@ -300,7 +300,7 @@
 				SHABBOS004 /* YomTov-Default.mp3 in Resources */,
 				SHABBOS005 /* Ata Bechartanu-YomTov.mp3 in Resources */,
 				SHABBOS006 /* Ata Bechartanu2-YomTov.mp3 in Resources */,
-				SHABBOS007 /* Hodu La'Hashem Ki Tov-YomTov.mp3 in Resources */,
+				SHABBOS007 /* HoduLaHashem-YomTov.mp3 in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

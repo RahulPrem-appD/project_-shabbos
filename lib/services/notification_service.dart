@@ -305,7 +305,7 @@ class NotificationService {
       'yomtov_default': 'YomTov-Default.mp3',
       'ata_bechartanu': 'Ata Bechartanu-YomTov.mp3',
       'ata_bechartanu_2': 'Ata Bechartanu2-YomTov.mp3',
-      'hodu_lahashem': "Hodu La'Hashem Ki Tov-YomTov.mp3",
+      'hodu_lahashem': 'HoduLaHashem-YomTov.mp3',
     };
     return soundFiles[soundId];
   }
