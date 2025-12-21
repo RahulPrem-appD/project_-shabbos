@@ -57,5 +57,9 @@
 	<!-- Notification descriptions -->
 	<key>NSUserNotificationsUsageDescription</key>
 	<string>This app needs to send you notifications to remind you about Shabbat and Yom Tov candle lighting times.</string>
+	
+	<!-- Live Activities support -->
+	<key>NSSupportsLiveActivities</key>
+	<true/>
 </dict>
 </plist>

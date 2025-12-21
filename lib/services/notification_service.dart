@@ -7,6 +7,7 @@ import 'package:timezone/data/latest_all.dart' as tzdata;
 import '../models/candle_lighting.dart';
 import 'audio_service.dart';
 import 'native_alarm_service.dart';
+import 'live_activity_service.dart';
 
 class NotificationService {
   static final NotificationService _instance = NotificationService._internal();
@@ -16,6 +17,7 @@ class NotificationService {
   final FlutterLocalNotificationsPlugin _notifications =
       FlutterLocalNotificationsPlugin();
   final AudioService _audioService = AudioService();
+  final LiveActivityService _liveActivityService = LiveActivityService();
 
   static const String _notificationsEnabledKey = 'notifications_enabled';
   static const String _preNotificationMinutesKey = 'pre_notification_minutes';
@@ -64,6 +66,11 @@ class NotificationService {
     // Create Android notification channel
     if (Platform.isAndroid) {
       await _createAndroidChannel();
+    }
+
+    // Initialize Live Activities for iOS
+    if (Platform.isIOS) {
+      await _liveActivityService.initialize();
     }
 
     _isInitialized = true;
@@ -342,15 +349,17 @@ class NotificationService {
     final now = DateTime.now();
 
     for (final lighting in candleLightings) {
-      // Pre-notification
+      // Pre-notification with countdown
       final preTime = lighting.candleLightingTime.subtract(
         Duration(minutes: preMinutes),
       );
       if (preTime.isAfter(now)) {
-        final title = lighting.isYomTov ? '!יום טוב מגיע' : '!שבת מגיעה';
+        final title = lighting.isYomTov 
+            ? '⏰ $preMinutes Minutes to Yom Tov!' 
+            : '⏰ $preMinutes Minutes to Shabbos!';
         final body = lighting.isYomTov
-            ? 'Yom Tov in $preMinutes minutes • $preMinutes דקות ליום טוב'
-            : 'Shabbos in $preMinutes minutes • $preMinutes דקות לשבת';
+            ? 'יום טוב מגיע • Yom Tov is coming!'
+            : 'שבת מגיעה • Shabbos is coming!';
 
         final success = await _scheduleNotification(
           id: id++,
@@ -358,6 +367,7 @@ class NotificationService {
           body: body,
           scheduledTime: preTime,
           isPreNotification: true,
+          candleLightingTime: lighting.candleLightingTime, // Pass for countdown
         );
         if (success) scheduled++;
       }
@@ -406,6 +416,7 @@ class NotificationService {
     required String body,
     required DateTime scheduledTime,
     bool isPreNotification = false,
+    DateTime? candleLightingTime,
   }) async {
     try {
       if (Platform.isAndroid) {
@@ -416,10 +427,11 @@ class NotificationService {
           title: title,
           body: body,
           isPreNotification: isPreNotification,
+          candleLightingTime: candleLightingTime, // Pass for countdown display
         );
 
         debugPrint(
-          'NotificationService: Scheduled native alarm #$id for $scheduledTime (isPre=$isPreNotification): $success',
+          'NotificationService: Scheduled native alarm #$id for $scheduledTime (isPre=$isPreNotification, candleTime=$candleLightingTime): $success',
         );
         return success;
       } else {
@@ -636,5 +648,78 @@ class NotificationService {
   Future<void> setCandleNotificationEnabled(bool enabled) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_candleNotificationEnabledKey, enabled);
+  }
+
+  // ============================================
+  // Live Activity Methods (iOS Countdown)
+  // ============================================
+
+  /// Start a Live Activity countdown for the upcoming candle lighting
+  /// Call this when the pre-notification fires or when user opens the app
+  /// within the pre-notification window
+  Future<void> startLiveActivityCountdown({
+    required DateTime candleLightingTime,
+    required String eventName,
+    required bool isYomTov,
+  }) async {
+    if (!Platform.isIOS) {
+      debugPrint('NotificationService: Live Activities only supported on iOS');
+      return;
+    }
+
+    try {
+      await _liveActivityService.startCandleLightingCountdown(
+        candleLightingTime: candleLightingTime,
+        eventName: eventName,
+        isYomTov: isYomTov,
+      );
+      debugPrint('NotificationService: Started Live Activity countdown to $candleLightingTime');
+    } catch (e) {
+      debugPrint('NotificationService: Error starting Live Activity: $e');
+    }
+  }
+
+  /// End any active Live Activity countdown
+  Future<void> endLiveActivityCountdown() async {
+    if (!Platform.isIOS) return;
+
+    try {
+      await _liveActivityService.endCurrentActivity();
+      debugPrint('NotificationService: Ended Live Activity countdown');
+    } catch (e) {
+      debugPrint('NotificationService: Error ending Live Activity: $e');
+    }
+  }
+
+  /// Check if Live Activities are enabled
+  Future<bool> areLiveActivitiesEnabled() async {
+    if (!Platform.isIOS) return false;
+    return await _liveActivityService.areActivitiesEnabled();
+  }
+
+  /// Check if we should start a Live Activity based on current time and next candle lighting
+  Future<void> checkAndStartLiveActivity(List<CandleLighting> candleLightings) async {
+    if (!Platform.isIOS) return;
+
+    final now = DateTime.now();
+    final preMinutes = await getPreNotificationMinutes();
+
+    for (final lighting in candleLightings) {
+      final preTime = lighting.candleLightingTime.subtract(Duration(minutes: preMinutes));
+      
+      // If we're within the pre-notification window (between preTime and candleLightingTime)
+      if (now.isAfter(preTime) && now.isBefore(lighting.candleLightingTime)) {
+        // Start the Live Activity
+        await startLiveActivityCountdown(
+          candleLightingTime: lighting.candleLightingTime,
+          eventName: lighting.displayName,
+          isYomTov: lighting.isYomTov,
+        );
+        return;
+      }
+    }
+
+    // If we're not in any pre-notification window, end any existing activity
+    await endLiveActivityCountdown();
   }
 }

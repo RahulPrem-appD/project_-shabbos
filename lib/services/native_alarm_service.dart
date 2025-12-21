@@ -74,6 +74,7 @@ class NativeAlarmService {
     required String title,
     required String body,
     bool isPreNotification = false,
+    DateTime? candleLightingTime,
   }) async {
     if (!Platform.isAndroid) {
       debugPrint('NativeAlarmService: Only supported on Android');
@@ -82,6 +83,7 @@ class NativeAlarmService {
 
     try {
       final timestampMillis = scheduledTime.millisecondsSinceEpoch;
+      final candleLightingMillis = candleLightingTime?.millisecondsSinceEpoch ?? 0;
       final now = DateTime.now().millisecondsSinceEpoch;
 
       debugPrint('NativeAlarmService: ========================================');
@@ -90,6 +92,7 @@ class NativeAlarmService {
       debugPrint('NativeAlarmService: Scheduled time: $scheduledTime');
       debugPrint('NativeAlarmService: Timestamp: $timestampMillis');
       debugPrint('NativeAlarmService: Is pre-notification: $isPreNotification');
+      debugPrint('NativeAlarmService: Candle lighting time: $candleLightingTime');
       debugPrint(
         'NativeAlarmService: Seconds from now: ${(timestampMillis - now) / 1000}',
       );
@@ -100,6 +103,7 @@ class NativeAlarmService {
         'title': title,
         'body': body,
         'isPreNotification': isPreNotification,
+        'candleLightingTime': candleLightingMillis,
       });
 
       debugPrint(

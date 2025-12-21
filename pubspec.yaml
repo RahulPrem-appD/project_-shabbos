@@ -25,6 +25,7 @@ dependencies:
   timezone: ^0.10.1
   android_alarm_manager_plus: ^4.0.4
   url_launcher: ^6.2.5
+  live_activities: ^2.4.2
 
 dev_dependencies:
   flutter_test:

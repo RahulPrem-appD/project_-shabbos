@@ -54,11 +54,13 @@ class AlarmReceiver : BroadcastReceiver() {
             val title = intent.getStringExtra("notification_title") ?: "שבת שלום!"
             val body = intent.getStringExtra("notification_body") ?: "Time to light candles 🕯️🕯️"
             val isPreNotification = intent.getBooleanExtra("is_pre_notification", false)
+            val candleLightingTime = intent.getLongExtra("candle_lighting_time", 0L)
             
             Log.d(TAG, "Notification ID: $notificationId")
             Log.d(TAG, "Title: $title")
             Log.d(TAG, "Body: $body")
             Log.d(TAG, "Is pre-notification: $isPreNotification")
+            Log.d(TAG, "Candle lighting time: $candleLightingTime")
             
             // Check if notifications are enabled
             val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
@@ -90,7 +92,7 @@ class AlarmReceiver : BroadcastReceiver() {
             playCustomSound(context, isPreNotification)
             
             // Create and show notification (without system sound since we play our own)
-            showNotification(context, notificationId, title, body)
+            showNotification(context, notificationId, title, body, isPreNotification, candleLightingTime)
             
             Log.d(TAG, "Notification shown successfully")
         } catch (e: Exception) {
@@ -209,7 +211,14 @@ class AlarmReceiver : BroadcastReceiver() {
         }
     }
     
-    private fun showNotification(context: Context, id: Int, title: String, body: String) {
+    private fun showNotification(
+        context: Context, 
+        id: Int, 
+        title: String, 
+        body: String,
+        isPreNotification: Boolean = false,
+        candleLightingTime: Long = 0L
+    ) {
         try {
             val intent = Intent(context, MainActivity::class.java).apply {
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
@@ -230,24 +239,60 @@ class AlarmReceiver : BroadcastReceiver() {
                 pendingIntentFlags
             )
             
-            // Build notification WITHOUT sound (we play custom sound separately)
-            val notification = NotificationCompat.Builder(context, CHANNEL_ID)
+            // Build notification
+            val builder = NotificationCompat.Builder(context, CHANNEL_ID)
                 .setSmallIcon(R.drawable.ic_notification)
                 .setContentTitle(title)
                 .setContentText(body)
-                .setStyle(NotificationCompat.BigTextStyle().bigText(body))
                 .setPriority(NotificationCompat.PRIORITY_MAX)
                 .setCategory(NotificationCompat.CATEGORY_ALARM)
                 .setSound(null) // No system sound - we play our own
                 .setVibrate(longArrayOf(0, 500, 250, 500))
-                .setAutoCancel(true)
+                .setAutoCancel(false) // Keep notification until candle lighting
+                .setOngoing(isPreNotification && candleLightingTime > 0) // Make it sticky for countdown
                 .setContentIntent(pendingIntent)
                 .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
                 .setDefaults(NotificationCompat.DEFAULT_VIBRATE or NotificationCompat.DEFAULT_LIGHTS)
-                .setWhen(System.currentTimeMillis())
-                .setShowWhen(true)
-                .setFullScreenIntent(pendingIntent, false)
-                .build()
+            
+            // For pre-notifications with valid candle lighting time, show countdown timer
+            if (isPreNotification && candleLightingTime > 0) {
+                Log.d(TAG, "Setting up countdown notification to $candleLightingTime")
+                
+                // Use chronometer for countdown (API 24+)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                    builder.setUsesChronometer(true)
+                        .setChronometerCountDown(true)
+                        .setWhen(candleLightingTime)
+                        .setShowWhen(true)
+                    
+                    // Enhanced style with countdown info
+                    val timeFormat = java.text.SimpleDateFormat("h:mm a", java.util.Locale.getDefault())
+                    val candleTimeStr = timeFormat.format(java.util.Date(candleLightingTime))
+                    builder.setStyle(
+                        NotificationCompat.BigTextStyle()
+                            .bigText("$body\n\n🕯️ Light candles at $candleTimeStr")
+                            .setSummaryText("Countdown to candle lighting")
+                    )
+                    builder.setSubText("🕯️ $candleTimeStr")
+                } else {
+                    // Fallback for older devices - just show the time
+                    val timeFormat = java.text.SimpleDateFormat("h:mm a", java.util.Locale.getDefault())
+                    val candleTimeStr = timeFormat.format(java.util.Date(candleLightingTime))
+                    builder.setStyle(
+                        NotificationCompat.BigTextStyle()
+                            .bigText("$body\n\n🕯️ Light candles at $candleTimeStr")
+                    )
+                    builder.setWhen(candleLightingTime)
+                        .setShowWhen(true)
+                }
+            } else {
+                builder.setStyle(NotificationCompat.BigTextStyle().bigText(body))
+                    .setWhen(System.currentTimeMillis())
+                    .setShowWhen(true)
+                    .setFullScreenIntent(pendingIntent, false)
+            }
+            
+            val notification = builder.build()
             
             // Use NotificationManager directly for more reliability
             val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager

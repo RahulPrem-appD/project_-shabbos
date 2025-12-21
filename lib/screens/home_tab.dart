@@ -210,6 +210,9 @@ class _HomeTabState extends State<HomeTab> {
         await _notificationService.scheduleNotifications(
           futureTimes.take(10).toList(),
         );
+
+        // Check and start Live Activity for iOS if within pre-notification window
+        await _notificationService.checkAndStartLiveActivity(futureTimes);
       } else {
         setState(() {
           _isLoading = false;
