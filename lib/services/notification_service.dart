@@ -30,6 +30,10 @@ class NotificationService {
 
   bool _isInitialized = false;
 
+  // Store mapping of notification IDs to Yom Tov status
+  // Format: "notification_id:isYomTov" -> "true"/"false"
+  static const String _notificationYomTovPrefix = 'notification_yomtov_';
+
   Future<void> initialize() async {
     if (_isInitialized) return;
 
@@ -186,17 +190,73 @@ class NotificationService {
       // Determine if this is a pre-notification (even IDs) or candle lighting (odd IDs)
       // In scheduling loop: pre-notification gets even IDs (0, 2, 4...), candle lighting gets odd IDs (1, 3, 5...)
       final isPreNotification = (notificationId ?? 0) % 2 == 0;
-      
-      final soundId = isPreNotification
-          ? await _audioService.getPreNotificationSound()
-          : await _audioService.getCandleLightingSound();
-      
+
+      // Check if this is a Yom Tov notification
+      final isYomTov = await _isNotificationYomTov(notificationId ?? 0);
+
+      // Get the appropriate sound based on notification type and Yom Tov status
+      final soundId = await _getSoundIdForNotification(
+        isPreNotification: isPreNotification,
+        isYomTov: isYomTov,
+      );
+
       if (soundId != 'silent') {
         await _audioService.playSound(soundId);
-        debugPrint('NotificationService: Played sound: $soundId');
+        debugPrint(
+          'NotificationService: Played sound: $soundId (isPre=$isPreNotification, isYomTov=$isYomTov)',
+        );
       }
     } catch (e) {
       debugPrint('NotificationService: Error playing sound: $e');
+    }
+  }
+
+  /// Store Yom Tov status for a notification ID
+  Future<void> _storeNotificationYomTov(
+    int notificationId,
+    bool isYomTov,
+  ) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(
+        '$_notificationYomTovPrefix$notificationId',
+        isYomTov,
+      );
+    } catch (e) {
+      debugPrint('NotificationService: Error storing Yom Tov status: $e');
+    }
+  }
+
+  /// Retrieve Yom Tov status for a notification ID
+  Future<bool> _isNotificationYomTov(int notificationId) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getBool('$_notificationYomTovPrefix$notificationId') ??
+          false;
+    } catch (e) {
+      debugPrint('NotificationService: Error retrieving Yom Tov status: $e');
+      return false;
+    }
+  }
+
+  /// Clean up stored Yom Tov status for old notifications
+  Future<void> _cleanupNotificationYomTovStatus() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final keys = prefs.getKeys();
+      for (final key in keys) {
+        if (key.startsWith(_notificationYomTovPrefix)) {
+          // Keep only recent notification IDs (last 100)
+          final idStr = key.substring(_notificationYomTovPrefix.length);
+          final id = int.tryParse(idStr);
+          if (id != null && id < 0) {
+            // Remove old negative test IDs or very old IDs
+            await prefs.remove(key);
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('NotificationService: Error cleaning up Yom Tov status: $e');
     }
   }
 
@@ -306,7 +366,6 @@ class NotificationService {
   /// Map sound ID to iOS sound filename
   String? _getIosSoundFile(String soundId) {
     const soundFiles = {
-      'shofar_candle': 'Shofar-CandleAlarm.mp3',
       'rav_shalom_shofar': 'RavShalomShofarDefaultlouder.mp3',
       'shabbat_shalom_song': 'RYomTovShabbatShalomSong.mp3',
       'yomtov_default': 'YomTov-Default.mp3',
@@ -315,6 +374,28 @@ class NotificationService {
       'hodu_lahashem': 'HoduLaHashem-YomTov.mp3',
     };
     return soundFiles[soundId];
+  }
+
+  /// Get the appropriate sound ID for a notification type
+  /// - Early reminder: Music (user selected) for Shabbos, Yom Tov sound for Yom Tov
+  /// - Candle lighting: ALWAYS Rav Shalom Shofar (fixed)
+  Future<String> _getSoundIdForNotification({
+    required bool isPreNotification,
+    required bool isYomTov,
+  }) async {
+    if (!isPreNotification) {
+      // Candle lighting notification: ALWAYS use Rav Shalom Shofar
+      return _audioService.getCandleLightingSound();
+    }
+
+    // Pre-notification (early reminder)
+    if (isYomTov) {
+      // Yom Tov events use Yom Tov sound
+      return await _audioService.getYomTovSound();
+    } else {
+      // Shabbos events use early reminder music
+      return await _audioService.getEarlyReminderSound();
+    }
   }
 
   /// Schedule notifications for candle lighting times
@@ -332,6 +413,9 @@ class NotificationService {
     if (Platform.isAndroid) {
       await NativeAlarmService.cancelAllAlarms();
     }
+
+    // Clean up old Yom Tov status entries
+    await _cleanupNotificationYomTovStatus();
 
     final prefs = await SharedPreferences.getInstance();
     final enabled = prefs.getBool(_notificationsEnabledKey) ?? true;
@@ -355,24 +439,31 @@ class NotificationService {
       );
       if (preTime.isAfter(now)) {
         // Format candle lighting time
-        final candleTimeFormatted = '${lighting.candleLightingTime.hour}:${lighting.candleLightingTime.minute.toString().padLeft(2, '0')}';
-        
-        final title = lighting.isYomTov 
-            ? '⏱️ $preMinutes min to Yom Tov!' 
+        final candleTimeFormatted =
+            '${lighting.candleLightingTime.hour}:${lighting.candleLightingTime.minute.toString().padLeft(2, '0')}';
+
+        final title = lighting.isYomTov
+            ? '⏱️ $preMinutes min to Yom Tov!'
             : '⏱️ $preMinutes min to Shabbos!';
         final body = lighting.isYomTov
             ? '🕯️ Light candles at $candleTimeFormatted\nיום טוב מגיע • Yom Tov is coming!'
             : '🕯️ Light candles at $candleTimeFormatted\nשבת מגיעה • Shabbos is coming!';
 
+        final notificationId = id++;
         final success = await _scheduleNotification(
-          id: id++,
+          id: notificationId,
           title: title,
           body: body,
           scheduledTime: preTime,
           isPreNotification: true,
+          isYomTov: lighting.isYomTov,
           candleLightingTime: lighting.candleLightingTime, // Pass for countdown
         );
-        if (success) scheduled++;
+        if (success) {
+          scheduled++;
+          // Store Yom Tov status for this notification
+          await _storeNotificationYomTov(notificationId, lighting.isYomTov);
+        }
       }
 
       // Candle lighting notification
@@ -382,14 +473,20 @@ class NotificationService {
             ? 'Good Yom Tov! Time to light candles 🕯️🕯️'
             : 'Good Shabbos! Time to light candles 🕯️🕯️';
 
+        final notificationId = id++;
         final success = await _scheduleNotification(
-          id: id++,
+          id: notificationId,
           title: title,
           body: body,
           scheduledTime: lighting.candleLightingTime,
           isPreNotification: false,
+          isYomTov: lighting.isYomTov,
         );
-        if (success) scheduled++;
+        if (success) {
+          scheduled++;
+          // Store Yom Tov status for this notification
+          await _storeNotificationYomTov(notificationId, lighting.isYomTov);
+        }
       }
     }
 
@@ -419,9 +516,16 @@ class NotificationService {
     required String body,
     required DateTime scheduledTime,
     bool isPreNotification = false,
+    bool isYomTov = false,
     DateTime? candleLightingTime,
   }) async {
     try {
+      // Get the appropriate sound for this notification type
+      final soundId = await _getSoundIdForNotification(
+        isPreNotification: isPreNotification,
+        isYomTov: isYomTov,
+      );
+
       if (Platform.isAndroid) {
         // Use native alarm scheduler for maximum reliability on Android
         final success = await NativeAlarmService.scheduleAlarm(
@@ -431,14 +535,16 @@ class NotificationService {
           body: body,
           isPreNotification: isPreNotification,
           candleLightingTime: candleLightingTime, // Pass for countdown display
+          soundId: soundId, // Pass sound ID for Android playback
         );
 
         debugPrint(
-          'NotificationService: Scheduled native alarm #$id for $scheduledTime (isPre=$isPreNotification, candleTime=$candleLightingTime): $success',
+          'NotificationService: Scheduled native alarm #$id for $scheduledTime (isPre=$isPreNotification, isYomTov=$isYomTov, sound=$soundId): $success',
         );
         return success;
       } else {
         // iOS: Use zonedSchedule with custom sound
+        // All sounds are now trimmed to 30 seconds for iOS compatibility
         final tzTime = tz.TZDateTime(
           tz.local,
           scheduledTime.year,
@@ -449,19 +555,18 @@ class NotificationService {
           scheduledTime.second,
         );
 
-        // Get the appropriate sound for this notification type
-        final soundId = isPreNotification
-            ? await _audioService.getPreNotificationSound()
-            : await _audioService.getCandleLightingSound();
         final iosSoundFile = _getIosSoundFile(soundId);
 
         debugPrint('NotificationService: Scheduling iOS notification #$id');
         debugPrint('NotificationService: Local timezone: ${tz.local.name}');
         debugPrint('NotificationService: Scheduled time: $scheduledTime');
         debugPrint('NotificationService: TZ time: $tzTime');
-        debugPrint('NotificationService: iOS sound file: $iosSoundFile');
+        debugPrint('NotificationService: Sound ID: $soundId');
+        debugPrint(
+          'NotificationService: iOS sound file: $iosSoundFile (isPre=$isPreNotification, isYomTov=$isYomTov)',
+        );
 
-        // Schedule the notification using zonedSchedule with custom sound
+        // Schedule the notification with custom sound
         await _notifications.zonedSchedule(
           id,
           title,
@@ -472,7 +577,7 @@ class NotificationService {
         );
 
         debugPrint(
-          'NotificationService: iOS notification #$id scheduled successfully with sound: $iosSoundFile',
+          'NotificationService: iOS notification #$id scheduled with sound: $iosSoundFile',
         );
         return true;
       }
@@ -490,23 +595,33 @@ class NotificationService {
     await initialize();
     await requestPermissions();
 
-    // Get selected sound
-    final soundId = await _audioService.getCandleLightingSound();
+    // Candle lighting sound is always Rav Shalom Shofar (fixed)
+    final soundId = _audioService.getCandleLightingSound();
     final iosSoundFile = _getIosSoundFile(soundId);
 
-    // Play sound on Android (iOS will play from notification)
-    if (Platform.isAndroid && soundId != 'silent') {
+    debugPrint('NotificationService: Using sound ID: $soundId');
+    debugPrint('NotificationService: iOS sound file: $iosSoundFile');
+
+    // Play sound via Flutter AudioService (works for both platforms)
+    // iOS notification sounds have a 30-second limit, so we play via AudioService
+    if (soundId != 'silent') {
+      debugPrint(
+        'NotificationService: Playing sound via Flutter AudioService...',
+      );
       await _audioService.playSound(soundId);
     }
 
     try {
+      // Show notification without sound (we play our own)
       await _notifications.show(
         999,
         '!שבת שלום Good Shabbos!',
         'Test notification 🕯️🕯️',
-        _getNotificationDetails(iosSoundFile: iosSoundFile),
+        _getNotificationDetails(
+          iosSoundFile: null,
+        ), // No notification sound - we play via AudioService
       );
-      debugPrint('NotificationService: Immediate test sent with sound: $iosSoundFile');
+      debugPrint('NotificationService: Immediate test sent');
     } catch (e) {
       debugPrint('NotificationService: Failed to send: $e');
     }
@@ -524,18 +639,28 @@ class NotificationService {
     debugPrint('==========================================');
     debugPrint('NotificationService: SCHEDULING CANDLE LIGHTING TEST FLOW');
     debugPrint('==========================================');
-    debugPrint('NotificationService: Pre-notification in: $preNotificationSeconds seconds');
-    debugPrint('NotificationService: Candle lighting in: $candleLightingSeconds seconds');
+    debugPrint(
+      'NotificationService: Pre-notification in: $preNotificationSeconds seconds',
+    );
+    debugPrint(
+      'NotificationService: Candle lighting in: $candleLightingSeconds seconds',
+    );
 
     await initialize();
     await requestPermissions();
 
     final now = DateTime.now();
-    final preNotificationTime = now.add(Duration(seconds: preNotificationSeconds));
-    final candleLightingTime = now.add(Duration(seconds: candleLightingSeconds));
+    final preNotificationTime = now.add(
+      Duration(seconds: preNotificationSeconds),
+    );
+    final candleLightingTime = now.add(
+      Duration(seconds: candleLightingSeconds),
+    );
 
     debugPrint('NotificationService: Current time: $now');
-    debugPrint('NotificationService: Pre-notification at: $preNotificationTime');
+    debugPrint(
+      'NotificationService: Pre-notification at: $preNotificationTime',
+    );
     debugPrint('NotificationService: Candle lighting at: $candleLightingTime');
 
     // Cancel any existing test notifications
@@ -547,6 +672,10 @@ class NotificationService {
       await NativeAlarmService.cancelAlarm(997);
     }
 
+    // Get sounds for the test (using Shabbos sounds, not Yom Tov)
+    final earlyReminderSoundId = await _audioService.getEarlyReminderSound();
+    final candleLightingSoundId = _audioService.getCandleLightingSound();
+
     if (Platform.isAndroid) {
       // Schedule pre-notification with countdown (ID 996)
       final preSuccess = await NativeAlarmService.scheduleAlarm(
@@ -556,8 +685,11 @@ class NotificationService {
         body: 'Time to prepare for Shabbos!',
         isPreNotification: true,
         candleLightingTime: candleLightingTime,
+        soundId: earlyReminderSoundId,
       );
-      debugPrint('NotificationService: Android pre-notification scheduled: $preSuccess');
+      debugPrint(
+        'NotificationService: Android pre-notification scheduled: $preSuccess (sound: $earlyReminderSoundId)',
+      );
 
       // Schedule candle lighting notification (ID 997)
       final candleSuccess = await NativeAlarmService.scheduleAlarm(
@@ -566,24 +698,33 @@ class NotificationService {
         title: '!שבת שלום Good Shabbos!',
         body: 'Time to light candles 🕯️🕯️',
         isPreNotification: false,
+        soundId: candleLightingSoundId,
       );
-      debugPrint('NotificationService: Android candle lighting scheduled: $candleSuccess');
+      debugPrint(
+        'NotificationService: Android candle lighting scheduled: $candleSuccess (sound: $candleLightingSoundId)',
+      );
     } else {
-      // iOS: Schedule both notifications
+      // iOS: Schedule both notifications with custom sounds
+      // All sounds are now trimmed to 30 seconds for iOS compatibility
       debugPrint('NotificationService: Setting up iOS notifications...');
+      debugPrint(
+        'NotificationService: Early reminder sound ID: $earlyReminderSoundId',
+      );
+      debugPrint(
+        'NotificationService: Candle lighting sound ID: $candleLightingSoundId',
+      );
 
-      // Get sounds
-      final preSoundId = await _audioService.getPreNotificationSound();
-      final candleSoundId = await _audioService.getCandleLightingSound();
-      final preIosSoundFile = _getIosSoundFile(preSoundId);
-      final candleIosSoundFile = _getIosSoundFile(candleSoundId);
+      // Get iOS sound filenames
+      final preIosSoundFile = _getIosSoundFile(earlyReminderSoundId);
+      final candleIosSoundFile = _getIosSoundFile(candleLightingSoundId);
 
       try {
         // Calculate remaining time for the notification body
         final remainingSeconds = candleLightingSeconds - preNotificationSeconds;
         final remainingMinutes = (remainingSeconds / 60).ceil();
-        final candleTimeFormatted = '${candleLightingTime.hour}:${candleLightingTime.minute.toString().padLeft(2, '0')}';
-        
+        final candleTimeFormatted =
+            '${candleLightingTime.hour}:${candleLightingTime.minute.toString().padLeft(2, '0')}';
+
         // Schedule pre-notification with countdown info in body
         final preTzTime = tz.TZDateTime(
           tz.local,
@@ -595,6 +736,7 @@ class NotificationService {
           preNotificationTime.second,
         );
 
+        // Schedule with custom sound (trimmed to 30s)
         await _notifications.zonedSchedule(
           996,
           '⏱️ $remainingMinutes min until Candle Lighting',
@@ -603,7 +745,9 @@ class NotificationService {
           _getNotificationDetails(iosSoundFile: preIosSoundFile),
           androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
         );
-        debugPrint('NotificationService: ✓ iOS pre-notification scheduled with sound: $preIosSoundFile');
+        debugPrint(
+          'NotificationService: ✓ iOS pre-notification scheduled with sound: $preIosSoundFile',
+        );
 
         // Start Live Activity countdown (requires Widget Extension setup in Xcode)
         await startLiveActivityCountdown(
@@ -611,7 +755,9 @@ class NotificationService {
           eventName: 'Test Shabbos Candle Lighting',
           isYomTov: false,
         );
-        debugPrint('NotificationService: ✓ iOS Live Activity started for countdown');
+        debugPrint(
+          'NotificationService: ✓ iOS Live Activity started for countdown',
+        );
 
         // Schedule candle lighting notification
         final candleTzTime = tz.TZDateTime(
@@ -624,6 +770,7 @@ class NotificationService {
           candleLightingTime.second,
         );
 
+        // Schedule with custom shofar sound
         await _notifications.zonedSchedule(
           997,
           '!שבת שלום Good Shabbos!',
@@ -632,11 +779,15 @@ class NotificationService {
           _getNotificationDetails(iosSoundFile: candleIosSoundFile),
           androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
         );
-        debugPrint('NotificationService: ✓ iOS candle lighting notification scheduled with sound: $candleIosSoundFile');
+        debugPrint(
+          'NotificationService: ✓ iOS candle lighting notification scheduled with sound: $candleIosSoundFile',
+        );
 
         // Verify notifications were scheduled
         final pending = await _notifications.pendingNotificationRequests();
-        debugPrint('NotificationService: Pending notifications: ${pending.length}');
+        debugPrint(
+          'NotificationService: Pending notifications: ${pending.length}',
+        );
         for (final n in pending) {
           debugPrint('  ✓ ID ${n.id}: ${n.title}');
         }
@@ -712,7 +863,9 @@ class NotificationService {
         eventName: eventName,
         isYomTov: isYomTov,
       );
-      debugPrint('NotificationService: Started Live Activity countdown to $candleLightingTime');
+      debugPrint(
+        'NotificationService: Started Live Activity countdown to $candleLightingTime',
+      );
     } catch (e) {
       debugPrint('NotificationService: Error starting Live Activity: $e');
     }
@@ -737,15 +890,19 @@ class NotificationService {
   }
 
   /// Check if we should start a Live Activity based on current time and next candle lighting
-  Future<void> checkAndStartLiveActivity(List<CandleLighting> candleLightings) async {
+  Future<void> checkAndStartLiveActivity(
+    List<CandleLighting> candleLightings,
+  ) async {
     if (!Platform.isIOS) return;
 
     final now = DateTime.now();
     final preMinutes = await getPreNotificationMinutes();
 
     for (final lighting in candleLightings) {
-      final preTime = lighting.candleLightingTime.subtract(Duration(minutes: preMinutes));
-      
+      final preTime = lighting.candleLightingTime.subtract(
+        Duration(minutes: preMinutes),
+      );
+
       // If we're within the pre-notification window (between preTime and candleLightingTime)
       if (now.isAfter(preTime) && now.isBefore(lighting.candleLightingTime)) {
         // Start the Live Activity

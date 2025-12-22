@@ -46,10 +46,11 @@ class MainActivity: FlutterActivity() {
                     val body = call.argument<String>("body") ?: "Time to light candles 🕯️🕯️"
                     val isPreNotification = call.argument<Boolean>("isPreNotification") ?: false
                     val candleLightingTime = call.argument<Long>("candleLightingTime") ?: 0L
+                    val soundId = call.argument<String>("soundId") ?: "rav_shalom_shofar"
                     
-                    Log.d(TAG, "Scheduling alarm from Flutter: ID=$id, time=$timestampMillis, isPre=$isPreNotification, candleTime=$candleLightingTime")
+                    Log.d(TAG, "Scheduling alarm from Flutter: ID=$id, time=$timestampMillis, isPre=$isPreNotification, candleTime=$candleLightingTime, sound=$soundId")
                     
-                    val success = alarmScheduler.scheduleAlarm(id, timestampMillis, title, body, isPreNotification, candleLightingTime)
+                    val success = alarmScheduler.scheduleAlarm(id, timestampMillis, title, body, isPreNotification, candleLightingTime, soundId)
                     result.success(success)
                 }
                 "cancelAlarm" -> {

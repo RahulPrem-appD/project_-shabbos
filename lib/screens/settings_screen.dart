@@ -550,10 +550,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
   void _testDelayedNotification() async {
     // Schedule the full candle lighting test flow:
     // - Pre-notification (with countdown) in 10 seconds
-    // - Candle lighting notification in 30 seconds
+    // - Candle lighting notification in 70 seconds (60 seconds after early reminder)
+    // iOS needs 60 second gap so the 30-second sound can finish playing
     await _notificationService.sendDelayedTestNotification(
       preNotificationSeconds: 10,
-      candleLightingSeconds: 30,
+      candleLightingSeconds: 70,
     );
 
     if (mounted) {
@@ -570,8 +571,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
               const SizedBox(height: 4),
               Text(
                 isHebrew
-                    ? '• תזכורת מוקדמת (עם ספירה לאחור): 10 שניות\n• התראת הדלקת נרות: 30 שניות\n\nסגור את האפליקציה לבדיקה!'
-                    : '• Early reminder (with countdown): 10 sec\n• Candle lighting alert: 30 sec\n\nClose the app to test!',
+                    ? '• תזכורת מוקדמת (עם ספירה לאחור): 10 שניות\n• התראת הדלקת נרות: 70 שניות\n\nסגור את האפליקציה לבדיקה!'
+                    : '• Early reminder (with countdown): 10 sec\n• Candle lighting alert: 70 sec\n\nClose the app to test!',
                 style: const TextStyle(fontSize: 13),
               ),
             ],
@@ -590,16 +591,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   String _getSoundName(String soundId) {
-    // First check built-in sounds
-    final builtInSound = SoundOption.builtInSounds.where(
-      (s) => s.id == soundId,
-    );
-    if (builtInSound.isNotEmpty) {
-      return isHebrew ? builtInSound.first.nameHe : builtInSound.first.nameEn;
-    }
-    // If it's a custom sound, show "Custom Sound"
-    if (soundId.startsWith('custom_')) {
-      return isHebrew ? 'צליל מותאם' : 'Custom Sound';
+    // Find sound in all available sounds
+    final sound = SoundOption.findById(soundId);
+    if (sound != null) {
+      return isHebrew ? sound.nameHe : sound.nameEn;
     }
     // Default fallback
     return isHebrew ? 'ברירת מחדל' : 'System Default';

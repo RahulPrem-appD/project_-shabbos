@@ -22,7 +22,8 @@ class AlarmScheduler(private val context: Context) {
         title: String, 
         body: String, 
         isPreNotification: Boolean = false,
-        candleLightingTime: Long = 0L
+        candleLightingTime: Long = 0L,
+        soundId: String = "rav_shalom_shofar"
     ): Boolean {
         try {
             val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
@@ -36,6 +37,7 @@ class AlarmScheduler(private val context: Context) {
             Log.d(TAG, "Title: $title")
             Log.d(TAG, "Body: $body")
             Log.d(TAG, "Is pre-notification: $isPreNotification")
+            Log.d(TAG, "Sound ID: $soundId")
             Log.d(TAG, "Candle lighting time: $candleLightingTime")
             Log.d(TAG, "Android version: ${Build.VERSION.SDK_INT}")
             
@@ -45,6 +47,7 @@ class AlarmScheduler(private val context: Context) {
                 putExtra("notification_body", body)
                 putExtra("is_pre_notification", isPreNotification)
                 putExtra("candle_lighting_time", candleLightingTime)
+                putExtra("sound_id", soundId)
                 // Add action to make intent unique
                 action = "com.shabbos.shabbos_app.ALARM_$id"
             }

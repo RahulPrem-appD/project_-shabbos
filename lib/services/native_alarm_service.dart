@@ -75,6 +75,7 @@ class NativeAlarmService {
     required String body,
     bool isPreNotification = false,
     DateTime? candleLightingTime,
+    String? soundId,
   }) async {
     if (!Platform.isAndroid) {
       debugPrint('NativeAlarmService: Only supported on Android');
@@ -92,6 +93,7 @@ class NativeAlarmService {
       debugPrint('NativeAlarmService: Scheduled time: $scheduledTime');
       debugPrint('NativeAlarmService: Timestamp: $timestampMillis');
       debugPrint('NativeAlarmService: Is pre-notification: $isPreNotification');
+      debugPrint('NativeAlarmService: Sound ID: $soundId');
       debugPrint('NativeAlarmService: Candle lighting time: $candleLightingTime');
       debugPrint('NativeAlarmService: Candle lighting millis: $candleLightingMillis');
       debugPrint(
@@ -110,6 +112,7 @@ class NativeAlarmService {
         'body': body,
         'isPreNotification': isPreNotification,
         'candleLightingTime': candleLightingMillis,
+        'soundId': soundId ?? 'rav_shalom_shofar',
       });
 
       debugPrint(

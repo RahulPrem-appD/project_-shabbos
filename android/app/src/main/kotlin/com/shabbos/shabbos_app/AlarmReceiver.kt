@@ -23,8 +23,8 @@ class AlarmReceiver : BroadcastReceiver() {
         private const val PREFS_NAME = "FlutterSharedPreferences"
         
         // Sound file mappings (must match audio_service.dart)
+        // NOTE: shofar_candle removed - Candle lighting ALWAYS uses rav_shalom_shofar
         private val SOUND_FILES = mapOf(
-            "shofar_candle" to "flutter_assets/assets/sounds/Shofar-CandleAlarm.mp3",
             "rav_shalom_shofar" to "flutter_assets/assets/sounds/RavShalomShofarDefaultlouder.mp3",
             "shabbat_shalom_song" to "flutter_assets/assets/sounds/RYomTovShabbatShalomSong.mp3",
             "yomtov_default" to "flutter_assets/assets/sounds/YomTov-Default.mp3",
@@ -55,12 +55,14 @@ class AlarmReceiver : BroadcastReceiver() {
             val body = intent.getStringExtra("notification_body") ?: "Time to light candles 🕯️🕯️"
             val isPreNotification = intent.getBooleanExtra("is_pre_notification", false)
             val candleLightingTime = intent.getLongExtra("candle_lighting_time", 0L)
+            val soundId = intent.getStringExtra("sound_id") ?: "rav_shalom_shofar"
             
             Log.d(TAG, "Notification ID: $notificationId")
             Log.d(TAG, "Title: $title")
             Log.d(TAG, "Body: $body")
             Log.d(TAG, "Is pre-notification: $isPreNotification")
             Log.d(TAG, "Candle lighting time: $candleLightingTime")
+            Log.d(TAG, "Sound ID: $soundId")
             
             // Check if notifications are enabled
             val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
@@ -88,8 +90,8 @@ class AlarmReceiver : BroadcastReceiver() {
                 }
             }
             
-            // Play custom sound
-            playCustomSound(context, isPreNotification)
+            // Play custom sound using the sound ID passed from Flutter
+            playCustomSound(context, soundId)
             
             // Create and show notification (without system sound since we play our own)
             showNotification(context, notificationId, title, body, isPreNotification, candleLightingTime)
@@ -109,20 +111,9 @@ class AlarmReceiver : BroadcastReceiver() {
         }
     }
     
-    private fun playCustomSound(context: Context, isPreNotification: Boolean) {
+    private fun playCustomSound(context: Context, soundId: String) {
         try {
-            // Get the selected sound from SharedPreferences
-            val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-            
-            // Flutter SharedPreferences adds "flutter." prefix
-            val soundKey = if (isPreNotification) {
-                "flutter.pre_notification_sound"
-            } else {
-                "flutter.candle_lighting_sound"
-            }
-            
-            val soundId = prefs.getString(soundKey, "shofar_candle") ?: "shofar_candle"
-            Log.d(TAG, "Selected sound ID: $soundId for key: $soundKey")
+            Log.d(TAG, "Playing sound ID: $soundId")
             
             // Check for silent mode
             if (soundId == "silent") {
@@ -133,8 +124,8 @@ class AlarmReceiver : BroadcastReceiver() {
             // Get the asset path for the sound
             val assetPath = SOUND_FILES[soundId]
             if (assetPath == null) {
-                Log.e(TAG, "No asset path found for sound ID: $soundId, using default")
-                playAssetSound(context, SOUND_FILES["shofar_candle"]!!)
+                Log.e(TAG, "No asset path found for sound ID: $soundId, using default (rav_shalom_shofar)")
+                playAssetSound(context, SOUND_FILES["rav_shalom_shofar"]!!)
                 return
             }
             
@@ -147,16 +138,32 @@ class AlarmReceiver : BroadcastReceiver() {
     }
     
     private fun playAssetSound(context: Context, assetPath: String) {
+        Log.d(TAG, "========================================")
+        Log.d(TAG, "playAssetSound called with path: $assetPath")
+        
         try {
             // Release any existing player
             mediaPlayer?.release()
+            mediaPlayer = null
             
+            // List available assets for debugging
+            try {
+                val assetList = context.assets.list("flutter_assets/assets/sounds")
+                Log.d(TAG, "Available sound assets: ${assetList?.joinToString()}")
+            } catch (e: Exception) {
+                Log.e(TAG, "Could not list assets: ${e.message}")
+            }
+            
+            Log.d(TAG, "Creating MediaPlayer...")
             mediaPlayer = MediaPlayer().apply {
+                Log.d(TAG, "Opening asset file descriptor...")
                 val assetManager = context.assets
                 val afd: AssetFileDescriptor = assetManager.openFd(assetPath)
+                Log.d(TAG, "Asset opened - length: ${afd.length}, startOffset: ${afd.startOffset}")
                 
                 setDataSource(afd.fileDescriptor, afd.startOffset, afd.length)
                 afd.close()
+                Log.d(TAG, "Data source set successfully")
                 
                 setAudioAttributes(
                     AudioAttributes.Builder()
@@ -164,30 +171,34 @@ class AlarmReceiver : BroadcastReceiver() {
                         .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
                         .build()
                 )
+                Log.d(TAG, "Audio attributes set to ALARM")
                 
                 setOnPreparedListener {
-                    Log.d(TAG, "MediaPlayer prepared, starting playback")
+                    Log.d(TAG, "✓ MediaPlayer prepared, starting playback NOW")
                     start()
+                    Log.d(TAG, "✓ MediaPlayer.start() called")
                 }
                 
                 setOnCompletionListener {
-                    Log.d(TAG, "Sound playback completed")
+                    Log.d(TAG, "✓ Sound playback completed")
                     release()
                 }
                 
                 setOnErrorListener { _, what, extra ->
-                    Log.e(TAG, "MediaPlayer error: what=$what, extra=$extra")
+                    Log.e(TAG, "✗ MediaPlayer error: what=$what, extra=$extra")
                     release()
                     true
                 }
                 
+                Log.d(TAG, "Calling prepareAsync()...")
                 prepareAsync()
             }
             
-            Log.d(TAG, "MediaPlayer setup complete, preparing async")
+            Log.d(TAG, "MediaPlayer setup complete, waiting for prepare callback...")
+            Log.d(TAG, "========================================")
             
         } catch (e: Exception) {
-            Log.e(TAG, "Error setting up MediaPlayer: ${e.message}", e)
+            Log.e(TAG, "✗ Error setting up MediaPlayer: ${e.message}", e)
             e.printStackTrace()
         }
     }
