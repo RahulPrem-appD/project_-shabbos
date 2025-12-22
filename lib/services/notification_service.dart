@@ -399,6 +399,13 @@ class NotificationService {
   }
 
   /// Schedule notifications for candle lighting times
+  ///
+  /// IMPORTANT ALARM RULES:
+  /// - NO alarms during Shabbat (Friday night through Saturday night)
+  /// - NO alarms during Yom Tov (any holiday day)
+  /// - NO alarms if Saturday night is start of a holiday
+  /// - Alarms ONLY play BEFORE Shabbat/Yom Tov starts (pre-notification)
+  /// - Candle lighting notification is SILENT (no alarm sound) - it marks the START of Shabbat/Yom Tov
   Future<void> scheduleNotifications(
     List<CandleLighting> candleLightings,
   ) async {
@@ -430,6 +437,7 @@ class NotificationService {
 
     int id = 0;
     int scheduled = 0;
+    int skipped = 0;
     final now = DateTime.now();
 
     for (final lighting in candleLightings) {
@@ -437,36 +445,52 @@ class NotificationService {
       final preTime = lighting.candleLightingTime.subtract(
         Duration(minutes: preMinutes),
       );
+
       if (preTime.isAfter(now)) {
-        // Format candle lighting time
-        final candleTimeFormatted =
-            '${lighting.candleLightingTime.hour}:${lighting.candleLightingTime.minute.toString().padLeft(2, '0')}';
+        // CHECK ALARM RULES: Can we play an alarm at this time?
+        final canPlayAlarm = _canPlayAlarmAt(preTime, candleLightings);
 
-        final title = lighting.isYomTov
-            ? '⏱️ $preMinutes min to Yom Tov!'
-            : '⏱️ $preMinutes min to Shabbos!';
-        final body = lighting.isYomTov
-            ? '🕯️ Light candles at $candleTimeFormatted\nיום טוב מגיע • Yom Tov is coming!'
-            : '🕯️ Light candles at $candleTimeFormatted\nשבת מגיעה • Shabbos is coming!';
+        if (canPlayAlarm) {
+          // Format candle lighting time
+          final candleTimeFormatted =
+              '${lighting.candleLightingTime.hour}:${lighting.candleLightingTime.minute.toString().padLeft(2, '0')}';
 
-        final notificationId = id++;
-        final success = await _scheduleNotification(
-          id: notificationId,
-          title: title,
-          body: body,
-          scheduledTime: preTime,
-          isPreNotification: true,
-          isYomTov: lighting.isYomTov,
-          candleLightingTime: lighting.candleLightingTime, // Pass for countdown
-        );
-        if (success) {
-          scheduled++;
-          // Store Yom Tov status for this notification
-          await _storeNotificationYomTov(notificationId, lighting.isYomTov);
+          final title = lighting.isYomTov
+              ? '⏱️ $preMinutes min to Yom Tov!'
+              : '⏱️ $preMinutes min to Shabbos!';
+          final body = lighting.isYomTov
+              ? '🕯️ Light candles at $candleTimeFormatted\nיום טוב מגיע • Yom Tov is coming!'
+              : '🕯️ Light candles at $candleTimeFormatted\nשבת מגיעה • Shabbos is coming!';
+
+          final notificationId = id++;
+          final success = await _scheduleNotification(
+            id: notificationId,
+            title: title,
+            body: body,
+            scheduledTime: preTime,
+            isPreNotification: true,
+            isYomTov: lighting.isYomTov,
+            candleLightingTime:
+                lighting.candleLightingTime, // Pass for countdown
+          );
+          if (success) {
+            scheduled++;
+            // Store Yom Tov status for this notification
+            await _storeNotificationYomTov(notificationId, lighting.isYomTov);
+            debugPrint(
+              'NotificationService: ✓ Scheduled pre-notification for ${lighting.displayName} at $preTime',
+            );
+          }
+        } else {
+          skipped++;
+          debugPrint(
+            'NotificationService: ✗ SKIPPED pre-notification for ${lighting.displayName} - alarm time falls during Shabbat/Yom Tov',
+          );
         }
       }
 
-      // Candle lighting notification
+      // Candle lighting notification - ALWAYS SILENT (no alarm sound)
+      // This notification marks the START of Shabbat/Yom Tov, so no alarm should play
       if (candleEnabled && lighting.candleLightingTime.isAfter(now)) {
         final title = lighting.isYomTov ? '!יום טוב שמח' : '!שבת שלום';
         final body = lighting.isYomTov
@@ -474,6 +498,7 @@ class NotificationService {
             : 'Good Shabbos! Time to light candles 🕯️🕯️';
 
         final notificationId = id++;
+        // Schedule as SILENT notification (no alarm sound at candle lighting time)
         final success = await _scheduleNotification(
           id: notificationId,
           title: title,
@@ -481,19 +506,90 @@ class NotificationService {
           scheduledTime: lighting.candleLightingTime,
           isPreNotification: false,
           isYomTov: lighting.isYomTov,
+          isSilent: true, // SILENT - Shabbat/Yom Tov is starting
         );
         if (success) {
           scheduled++;
           // Store Yom Tov status for this notification
           await _storeNotificationYomTov(notificationId, lighting.isYomTov);
+          debugPrint(
+            'NotificationService: ✓ Scheduled SILENT candle lighting notification for ${lighting.displayName}',
+          );
         }
       }
     }
 
-    debugPrint('NotificationService: Scheduled $scheduled notifications');
+    debugPrint(
+      'NotificationService: Scheduled $scheduled notifications, skipped $skipped (during Shabbat/Yom Tov)',
+    );
 
     // Verify scheduled notifications
     await _verifyPendingNotifications();
+  }
+
+  /// Check if an alarm can be played at the given time
+  /// Returns FALSE if the time falls during Shabbat or Yom Tov
+  ///
+  /// Rules:
+  /// - No alarms on Friday night (after candle lighting)
+  /// - No alarms on Saturday (until after Havdalah)
+  /// - No alarms on Saturday night if a Yom Tov starts
+  /// - No alarms during any Yom Tov day
+  bool _canPlayAlarmAt(DateTime alarmTime, List<CandleLighting> allEvents) {
+    // Check each event to see if the alarm time falls within a restricted period
+    for (final event in allEvents) {
+      final candleLighting = event.candleLightingTime;
+      final havdalah = event.havdalahTime;
+
+      // If alarm time is AFTER candle lighting and BEFORE havdalah, it's during Shabbat/Yom Tov
+      if (alarmTime.isAfter(candleLighting) ||
+          alarmTime.isAtSameMomentAs(candleLighting)) {
+        if (havdalah != null) {
+          // There's a havdalah time - check if alarm is before it
+          if (alarmTime.isBefore(havdalah)) {
+            debugPrint(
+              'NotificationService: Alarm at $alarmTime blocked - during ${event.displayName} (candle: $candleLighting, havdalah: $havdalah)',
+            );
+            return false;
+          }
+        } else {
+          // No havdalah time - assume it's a multi-day event
+          // Block alarms for 25 hours after candle lighting (typical Shabbat duration)
+          final assumedEnd = candleLighting.add(const Duration(hours: 25));
+          if (alarmTime.isBefore(assumedEnd)) {
+            debugPrint(
+              'NotificationService: Alarm at $alarmTime blocked - during ${event.displayName} (candle: $candleLighting, no havdalah, assumed end: $assumedEnd)',
+            );
+            return false;
+          }
+        }
+      }
+
+      // Special case: Saturday night Yom Tov
+      // If it's Saturday and a Yom Tov starts that night, no alarm on Saturday
+      if (event.isYomTov) {
+        final candleDay = candleLighting.weekday;
+        final alarmDay = alarmTime.weekday;
+
+        // If Yom Tov candle lighting is on Saturday (weekday 6)
+        // and alarm is on Saturday, block it
+        if (candleDay == DateTime.saturday && alarmDay == DateTime.saturday) {
+          // Check if alarm is on the same Saturday
+          if (_isSameDay(alarmTime, candleLighting)) {
+            debugPrint(
+              'NotificationService: Alarm at $alarmTime blocked - Saturday before Yom Tov ${event.displayName}',
+            );
+            return false;
+          }
+        }
+      }
+    }
+
+    return true;
+  }
+
+  bool _isSameDay(DateTime a, DateTime b) {
+    return a.year == b.year && a.month == b.month && a.day == b.day;
   }
 
   Future<void> _verifyPendingNotifications() async {
@@ -518,13 +614,18 @@ class NotificationService {
     bool isPreNotification = false,
     bool isYomTov = false,
     DateTime? candleLightingTime,
+    bool isSilent =
+        false, // If true, no alarm sound (for candle lighting notifications)
   }) async {
     try {
       // Get the appropriate sound for this notification type
-      final soundId = await _getSoundIdForNotification(
-        isPreNotification: isPreNotification,
-        isYomTov: isYomTov,
-      );
+      // If silent, use 'silent' sound ID
+      final soundId = isSilent
+          ? 'silent'
+          : await _getSoundIdForNotification(
+              isPreNotification: isPreNotification,
+              isYomTov: isYomTov,
+            );
 
       if (Platform.isAndroid) {
         // Use native alarm scheduler for maximum reliability on Android
@@ -535,11 +636,11 @@ class NotificationService {
           body: body,
           isPreNotification: isPreNotification,
           candleLightingTime: candleLightingTime, // Pass for countdown display
-          soundId: soundId, // Pass sound ID for Android playback
+          soundId: soundId, // Pass sound ID for Android playback (or 'silent')
         );
 
         debugPrint(
-          'NotificationService: Scheduled native alarm #$id for $scheduledTime (isPre=$isPreNotification, isYomTov=$isYomTov, sound=$soundId): $success',
+          'NotificationService: Scheduled native alarm #$id for $scheduledTime (isPre=$isPreNotification, isYomTov=$isYomTov, sound=$soundId, silent=$isSilent): $success',
         );
         return success;
       } else {
@@ -555,18 +656,21 @@ class NotificationService {
           scheduledTime.second,
         );
 
-        final iosSoundFile = _getIosSoundFile(soundId);
+        // If silent, don't include a sound file
+        final iosSoundFile = isSilent ? null : _getIosSoundFile(soundId);
 
         debugPrint('NotificationService: Scheduling iOS notification #$id');
         debugPrint('NotificationService: Local timezone: ${tz.local.name}');
         debugPrint('NotificationService: Scheduled time: $scheduledTime');
         debugPrint('NotificationService: TZ time: $tzTime');
-        debugPrint('NotificationService: Sound ID: $soundId');
+        debugPrint(
+          'NotificationService: Sound ID: $soundId (silent=$isSilent)',
+        );
         debugPrint(
           'NotificationService: iOS sound file: $iosSoundFile (isPre=$isPreNotification, isYomTov=$isYomTov)',
         );
 
-        // Schedule the notification with custom sound
+        // Schedule the notification with custom sound (or silent)
         await _notifications.zonedSchedule(
           id,
           title,
@@ -577,7 +681,7 @@ class NotificationService {
         );
 
         debugPrint(
-          'NotificationService: iOS notification #$id scheduled with sound: $iosSoundFile',
+          'NotificationService: iOS notification #$id scheduled with sound: ${iosSoundFile ?? 'SILENT'}',
         );
         return true;
       }
