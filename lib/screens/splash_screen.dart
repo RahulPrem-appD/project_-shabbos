@@ -206,6 +206,8 @@ class _SplashScreenState extends State<SplashScreen>
     super.dispose();
   }
 
+  bool get isHebrew => widget.locale == 'he';
+
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
@@ -300,21 +302,21 @@ class _SplashScreenState extends State<SplashScreen>
 
               SizedBox(height: size.height * 0.04),
 
-              // Hebrew title (primary - bigger and first)
+              // Primary title (bigger and first) - Hebrew for Hebrew locale, English for English locale
               Transform.translate(
                 offset: Offset(0, _titleSlide.value),
                 child: Opacity(
                   opacity: _titleOpacity.value,
-                  child: _buildHebrewTitle(),
+                  child: isHebrew ? _buildHebrewTitle() : _buildEnglishTitlePrimary(),
                 ),
               ),
 
               const SizedBox(height: 6),
 
-              // English title (secondary - smaller)
+              // Secondary title (smaller)
               Opacity(
                 opacity: _hebrewOpacity.value,
-                child: _buildEnglishTitle(),
+                child: isHebrew ? _buildEnglishTitle() : _buildHebrewTitleSecondary(),
               ),
 
               SizedBox(height: size.height * 0.022),
@@ -746,6 +748,7 @@ class _SplashScreenState extends State<SplashScreen>
       blendMode: BlendMode.srcIn,
       child: Text(
         'שבת!!',
+        textDirection: TextDirection.ltr,
         style: TextStyle(
           fontSize: 62,
           fontWeight: FontWeight.w800,
@@ -771,6 +774,69 @@ class _SplashScreenState extends State<SplashScreen>
   Widget _buildEnglishTitle() {
     return Text(
       'Shabbos!!',
+      textDirection: TextDirection.ltr,
+      style: TextStyle(
+        fontSize: 28,
+        fontWeight: FontWeight.w600,
+        color: Colors.white.withValues(alpha: 0.85),
+        letterSpacing: 4,
+        shadows: [
+          Shadow(
+            color: const Color(0xFFD4A84B).withValues(alpha: 0.3),
+            blurRadius: 15,
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Primary English title (for English locale)
+  Widget _buildEnglishTitlePrimary() {
+    final glow = _glowPulseController.value;
+    return ShaderMask(
+      shaderCallback: (bounds) {
+        final shimmer = _shimmerController.value;
+        return LinearGradient(
+          begin: Alignment(-1.5 + shimmer * 3, 0),
+          end: Alignment(-0.5 + shimmer * 3, 0),
+          colors: const [
+            Color(0xFFD4A84B),
+            Color(0xFFFFE082),
+            Color(0xFFD4A84B),
+          ],
+        ).createShader(bounds);
+      },
+      blendMode: BlendMode.srcIn,
+      child: Text(
+        'Shabbos!!',
+        textDirection: TextDirection.ltr,
+        style: TextStyle(
+          fontSize: 58,
+          fontWeight: FontWeight.w800,
+          letterSpacing: 6,
+          height: 1.1,
+          shadows: [
+            Shadow(
+              color: const Color(
+                0xFFD4A84B,
+              ).withValues(alpha: 0.6 + glow * 0.25),
+              blurRadius: 30 + glow * 15,
+            ),
+            Shadow(
+              color: const Color(0xFFFFAA33).withValues(alpha: 0.3),
+              blurRadius: 50,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Secondary Hebrew title (for English locale)
+  Widget _buildHebrewTitleSecondary() {
+    return Text(
+      'שבת!!',
+      textDirection: TextDirection.ltr,
       style: TextStyle(
         fontSize: 28,
         fontWeight: FontWeight.w600,
@@ -825,31 +891,65 @@ class _SplashScreenState extends State<SplashScreen>
   }
 
   Widget _buildSubtitles() {
-    return Column(
-      children: [
-        Text(
-          'CANDLE LIGHTING ALERT\nFOR SHABBAT AND YOM TOV',
-          style: TextStyle(
-            fontSize: 10,
-            color: Colors.white.withValues(alpha: 0.6),
-            letterSpacing: 3,
-            fontWeight: FontWeight.w400,
-            height: 1.6,
+    if (isHebrew) {
+      // Hebrew locale: Hebrew first (primary), English second
+      return Column(
+        children: [
+          Text(
+            'התראת הדלקת נרות לשבת וליום טוב',
+            textDirection: TextDirection.rtl,
+            style: TextStyle(
+              fontSize: 14,
+              color: Colors.white.withValues(alpha: 0.6),
+              letterSpacing: 1,
+            ),
+            textAlign: TextAlign.center,
           ),
-          textAlign: TextAlign.center,
-        ),
-        const SizedBox(height: 8),
-        Text(
-          'התראת הדלקת נרות לשבת וליום טוב',
-          style: TextStyle(
-            fontSize: 14,
-            color: Colors.white.withValues(alpha: 0.45),
-            letterSpacing: 1,
+          const SizedBox(height: 8),
+          Text(
+            'CANDLE LIGHTING ALERT\nFOR SHABBAT AND YOM TOV',
+            textDirection: TextDirection.ltr,
+            style: TextStyle(
+              fontSize: 10,
+              color: Colors.white.withValues(alpha: 0.45),
+              letterSpacing: 3,
+              fontWeight: FontWeight.w400,
+              height: 1.6,
+            ),
+            textAlign: TextAlign.center,
           ),
-          textAlign: TextAlign.center,
-        ),
-      ],
-    );
+        ],
+      );
+    } else {
+      // English locale: English first (primary), Hebrew second
+      return Column(
+        children: [
+          Text(
+            'CANDLE LIGHTING ALERT\nFOR SHABBAT AND YOM TOV',
+            textDirection: TextDirection.ltr,
+            style: TextStyle(
+              fontSize: 10,
+              color: Colors.white.withValues(alpha: 0.6),
+              letterSpacing: 3,
+              fontWeight: FontWeight.w400,
+              height: 1.6,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'התראת הדלקת נרות לשבת וליום טוב',
+            textDirection: TextDirection.rtl,
+            style: TextStyle(
+              fontSize: 14,
+              color: Colors.white.withValues(alpha: 0.45),
+              letterSpacing: 1,
+            ),
+            textAlign: TextAlign.center,
+          ),
+        ],
+      );
+    }
   }
 
   Widget _buildLoadingIndicator() {

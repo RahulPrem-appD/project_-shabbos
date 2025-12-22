@@ -253,6 +253,7 @@ class _HomeTabState extends State<HomeTab> {
               children: [
                 Text(
                   isHebrew ? 'שבת!!' : 'Shabbos!!',
+                  textDirection: TextDirection.ltr,
                   style: const TextStyle(
                     fontSize: 28,
                     fontWeight: FontWeight.w700,
