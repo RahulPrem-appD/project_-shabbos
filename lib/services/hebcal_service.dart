@@ -89,6 +89,7 @@ class HebcalService {
         'mod': 'off', // Modern holidays
         'nx': 'off', // Rosh Chodesh
         's': 'off', // Parasha
+        'd': 'on', // Add Hebrew date to each item
       };
 
       // Add timezone if available
@@ -403,6 +404,11 @@ class HebcalService {
         }
       }
 
+      // Get Hebrew date from the candle item
+      final hebrewDate = candleItem['heDateParts'] != null
+          ? _formatHebrewDate(candleItem['heDateParts'])
+          : candleItem['hdate'] as String?;
+
       results.add(
         CandleLighting(
           date: candleDate,
@@ -412,6 +418,7 @@ class HebcalService {
           hebrewHolidayName: hebrewHolidayName,
           isShabbat: !isYomTov,
           isYomTov: isYomTov,
+          hebrewDate: hebrewDate,
         ),
       );
     }
@@ -427,4 +434,183 @@ class HebcalService {
 
     return results;
   }
+
+  /// Format Hebrew date parts into a readable string
+  String? _formatHebrewDate(dynamic heDateParts) {
+    if (heDateParts == null) return null;
+    try {
+      final day = heDateParts['d'] as String?;
+      final month = heDateParts['m'] as String?;
+      final year = heDateParts['y'] as String?;
+      if (day != null && month != null) {
+        return year != null ? '$day $month $year' : '$day $month';
+      }
+    } catch (e) {
+      debugPrint('HebcalService: Error formatting Hebrew date: $e');
+    }
+    return null;
+  }
+
+  /// Get Hebrew date for a specific Gregorian date
+  Future<HebrewDateInfo?> getHebrewDate(DateTime date) async {
+    try {
+      final queryParams = {
+        'cfg': 'json',
+        'gy': date.year.toString(),
+        'gm': date.month.toString(),
+        'gd': date.day.toString(),
+      };
+
+      final uri = Uri.parse(
+        'https://www.hebcal.com/converter',
+      ).replace(queryParameters: queryParams);
+
+      debugPrint('HebcalService: Fetching Hebrew date from $uri');
+
+      final response = await http.get(uri);
+
+      if (response.statusCode != 200) {
+        throw Exception('Failed to fetch Hebrew date: ${response.statusCode}');
+      }
+
+      final data = json.decode(response.body);
+      return HebrewDateInfo.fromJson(data);
+    } catch (e) {
+      debugPrint('HebcalService: Error fetching Hebrew date: $e');
+      return null;
+    }
+  }
+
+  /// Get Hebrew month information for calendar display
+  Future<HebrewMonthInfo?> getHebrewMonthInfo(int hebrewYear, int hebrewMonth) async {
+    try {
+      final queryParams = {
+        'cfg': 'json',
+        'hy': hebrewYear.toString(),
+        'hm': _getHebrewMonthName(hebrewMonth),
+        'hd': '1',
+      };
+
+      final uri = Uri.parse(
+        'https://www.hebcal.com/converter',
+      ).replace(queryParameters: queryParams);
+
+      final response = await http.get(uri);
+
+      if (response.statusCode != 200) {
+        return null;
+      }
+
+      final data = json.decode(response.body);
+      return HebrewMonthInfo(
+        hebrewYear: hebrewYear,
+        hebrewMonth: hebrewMonth,
+        hebrewMonthName: data['hm'] as String? ?? '',
+        hebrewMonthNameHebrew: data['hebrew'] as String? ?? '',
+        gregorianStartDate: DateTime(
+          data['gy'] as int,
+          data['gm'] as int,
+          data['gd'] as int,
+        ),
+      );
+    } catch (e) {
+      debugPrint('HebcalService: Error fetching Hebrew month info: $e');
+      return null;
+    }
+  }
+
+  String _getHebrewMonthName(int month) {
+    const months = [
+      'Nisan', 'Iyyar', 'Sivan', 'Tamuz', 'Av', 'Elul',
+      'Tishrei', 'Cheshvan', 'Kislev', 'Tevet', 'Shvat', 'Adar',
+      'Adar2', // For leap years
+    ];
+    if (month >= 1 && month <= months.length) {
+      return months[month - 1];
+    }
+    return 'Tishrei';
+  }
+}
+
+/// Hebrew date information
+class HebrewDateInfo {
+  final int hebrewDay;
+  final int hebrewMonth;
+  final int hebrewYear;
+  final String hebrewMonthName;
+  final String hebrew; // Full Hebrew date string
+  final DateTime gregorianDate;
+
+  HebrewDateInfo({
+    required this.hebrewDay,
+    required this.hebrewMonth,
+    required this.hebrewYear,
+    required this.hebrewMonthName,
+    required this.hebrew,
+    required this.gregorianDate,
+  });
+
+  factory HebrewDateInfo.fromJson(Map<String, dynamic> json) {
+    return HebrewDateInfo(
+      hebrewDay: json['hd'] as int? ?? 1,
+      hebrewMonth: json['hm_num'] as int? ?? 1,
+      hebrewYear: json['hy'] as int? ?? 5785,
+      hebrewMonthName: json['hm'] as String? ?? '',
+      hebrew: json['hebrew'] as String? ?? '',
+      gregorianDate: DateTime(
+        json['gy'] as int? ?? DateTime.now().year,
+        json['gm'] as int? ?? 1,
+        json['gd'] as int? ?? 1,
+      ),
+    );
+  }
+
+  /// Get Hebrew day as gematria (Hebrew numerals)
+  String get hebrewDayGematria {
+    return _toHebrewNumerals(hebrewDay);
+  }
+
+  static String _toHebrewNumerals(int number) {
+    if (number <= 0 || number > 30) return number.toString();
+    
+    const ones = ['', 'א', 'ב', 'ג', 'ד', 'ה', 'ו', 'ז', 'ח', 'ט'];
+    const tens = ['', 'י', 'כ', 'ל'];
+    
+    // Special cases for 15 and 16 (avoid spelling God's name)
+    if (number == 15) return 'ט״ו';
+    if (number == 16) return 'ט״ז';
+    
+    final ten = number ~/ 10;
+    final one = number % 10;
+    
+    String result = '';
+    if (ten > 0) result += tens[ten];
+    if (one > 0) result += ones[one];
+    
+    // Add gershayim (״) before last letter for numbers > 9
+    if (result.length > 1) {
+      result = '${result.substring(0, result.length - 1)}״${result.substring(result.length - 1)}';
+    } else if (result.isNotEmpty) {
+      result = '$result׳';
+    }
+    
+    return result;
+  }
+}
+
+/// Hebrew month information for calendar display
+class HebrewMonthInfo {
+  final int hebrewYear;
+  final int hebrewMonth;
+  final String hebrewMonthName;
+  final String hebrewMonthNameHebrew;
+  final DateTime gregorianStartDate;
+
+  HebrewMonthInfo({
+    required this.hebrewYear,
+    required this.hebrewMonth,
+    required this.hebrewMonthName,
+    required this.hebrewMonthNameHebrew,
+    required this.gregorianStartDate,
+  });
 }

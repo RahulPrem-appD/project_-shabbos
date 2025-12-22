@@ -6,6 +6,7 @@ class CandleLighting {
   final String? hebrewHolidayName;
   final bool isShabbat;
   final bool isYomTov;
+  final String? hebrewDate; // Hebrew date string (e.g., "כ״ב כסלו תשפ״ה")
 
   CandleLighting({
     required this.date,
@@ -15,6 +16,7 @@ class CandleLighting {
     this.hebrewHolidayName,
     this.isShabbat = false,
     this.isYomTov = false,
+    this.hebrewDate,
   });
 
   String get displayName {

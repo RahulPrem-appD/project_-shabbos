@@ -24,6 +24,10 @@ class _CalendarTabState extends State<CalendarTab> {
   bool _isLoading = true;
   String? _error;
 
+  // Hebrew calendar state
+  HebrewDateInfo? _currentHebrewDate;
+  Map<String, HebrewDateInfo> _hebrewDatesCache = {};
+
   bool get isHebrew => widget.locale == 'he';
 
   @override
@@ -89,6 +93,11 @@ class _CalendarTabState extends State<CalendarTab> {
         timezone: _location!.timezone,
       );
 
+      // Load Hebrew dates only for Hebrew locale (Hebrew calendar display)
+      if (isHebrew) {
+        await _loadHebrewDatesForMonth();
+      }
+
       setState(() {
         _events = events;
         _isLoading = false;
@@ -99,6 +108,96 @@ class _CalendarTabState extends State<CalendarTab> {
         _error = e.toString();
       });
     }
+  }
+
+  Future<void> _loadHebrewDatesForMonth() async {
+    // Clear cache for new month
+    _hebrewDatesCache.clear();
+
+    // Fetch Hebrew dates for key days: 1st, 15th, and last day of month
+    // This helps us handle Hebrew month transitions accurately
+    final firstDay = DateTime(_currentMonth.year, _currentMonth.month, 1);
+    final midDay = DateTime(_currentMonth.year, _currentMonth.month, 15);
+    final lastDayOfMonth = DateTime(
+      _currentMonth.year,
+      _currentMonth.month + 1,
+      0,
+    );
+
+    // Fetch first day (required for month header)
+    final firstHebrewDate = await _hebcalService.getHebrewDate(firstDay);
+    if (firstHebrewDate == null) return;
+
+    _currentHebrewDate = firstHebrewDate;
+
+    // Fetch mid-month to detect Hebrew month change
+    final midHebrewDate = await _hebcalService.getHebrewDate(midDay);
+
+    // Fetch last day to detect month end
+    final lastHebrewDate = await _hebcalService.getHebrewDate(lastDayOfMonth);
+
+    // Build the cache by interpolating between known dates
+    int currentHebrewDay = firstHebrewDate.hebrewDay;
+    int currentHebrewMonth = firstHebrewDate.hebrewMonth;
+    int currentHebrewYear = firstHebrewDate.hebrewYear;
+    String currentHebrewMonthName = firstHebrewDate.hebrewMonthName;
+
+    for (int day = 1; day <= lastDayOfMonth.day; day++) {
+      final date = DateTime(_currentMonth.year, _currentMonth.month, day);
+      final key = '${date.year}-${date.month}-${date.day}';
+
+      // Check if we have an exact date from API
+      if (day == 1) {
+        _hebrewDatesCache[key] = firstHebrewDate;
+        currentHebrewDay = firstHebrewDate.hebrewDay;
+        currentHebrewMonth = firstHebrewDate.hebrewMonth;
+        currentHebrewYear = firstHebrewDate.hebrewYear;
+        currentHebrewMonthName = firstHebrewDate.hebrewMonthName;
+      } else if (day == 15 && midHebrewDate != null) {
+        _hebrewDatesCache[key] = midHebrewDate;
+        currentHebrewDay = midHebrewDate.hebrewDay;
+        currentHebrewMonth = midHebrewDate.hebrewMonth;
+        currentHebrewYear = midHebrewDate.hebrewYear;
+        currentHebrewMonthName = midHebrewDate.hebrewMonthName;
+      } else if (day == lastDayOfMonth.day && lastHebrewDate != null) {
+        _hebrewDatesCache[key] = lastHebrewDate;
+      } else {
+        // Interpolate: increment Hebrew day
+        currentHebrewDay++;
+
+        // Check for month transition (Hebrew months are 29-30 days)
+        // If the day wrapped around (e.g., went from 29/30 to 1), update month
+        if (day == 15 &&
+            midHebrewDate != null &&
+            midHebrewDate.hebrewMonth != currentHebrewMonth) {
+          currentHebrewMonth = midHebrewDate.hebrewMonth;
+          currentHebrewMonthName = midHebrewDate.hebrewMonthName;
+          currentHebrewDay = midHebrewDate.hebrewDay;
+        } else if (currentHebrewDay > 30) {
+          // Fallback: assume month transition at day 30
+          currentHebrewDay = 1;
+          if (midHebrewDate != null &&
+              midHebrewDate.hebrewMonth != firstHebrewDate.hebrewMonth) {
+            currentHebrewMonth = midHebrewDate.hebrewMonth;
+            currentHebrewMonthName = midHebrewDate.hebrewMonthName;
+          }
+        }
+
+        _hebrewDatesCache[key] = HebrewDateInfo(
+          hebrewDay: currentHebrewDay,
+          hebrewMonth: currentHebrewMonth,
+          hebrewYear: currentHebrewYear,
+          hebrewMonthName: currentHebrewMonthName,
+          hebrew: '',
+          gregorianDate: date,
+        );
+      }
+    }
+  }
+
+  HebrewDateInfo? _getHebrewDateForDay(DateTime date) {
+    final key = '${date.year}-${date.month}-${date.day}';
+    return _hebrewDatesCache[key];
   }
 
   void _previousMonth() {
@@ -150,7 +249,7 @@ class _CalendarTabState extends State<CalendarTab> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                isHebrew ? 'לוח שנה עברי' : 'Hebrew Calendar',
+                isHebrew ? 'לוח שנה עברי' : 'Calendar',
                 style: const TextStyle(
                   fontSize: 24,
                   fontWeight: FontWeight.w700,
@@ -193,7 +292,14 @@ class _CalendarTabState extends State<CalendarTab> {
 
   Widget _buildMonthNavigation() {
     final monthFormat = DateFormat('MMMM yyyy');
-    final hebrewMonthFormat = DateFormat('MMMM yyyy', 'he');
+
+    // Build Hebrew month display
+    String hebrewMonthDisplay = '';
+    if (isHebrew && _currentHebrewDate != null) {
+      // Show Hebrew month and year
+      hebrewMonthDisplay =
+          '${_currentHebrewDate!.hebrewMonthName} ${_toHebrewYear(_currentHebrewDate!.hebrewYear)}';
+    }
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
@@ -211,9 +317,10 @@ class _CalendarTabState extends State<CalendarTab> {
             onTap: _goToToday,
             child: Column(
               children: [
+                // Primary display: Hebrew month for Hebrew locale, Gregorian for English
                 Text(
-                  isHebrew
-                      ? hebrewMonthFormat.format(_currentMonth)
+                  isHebrew && hebrewMonthDisplay.isNotEmpty
+                      ? hebrewMonthDisplay
                       : monthFormat.format(_currentMonth),
                   style: const TextStyle(
                     fontSize: 18,
@@ -221,6 +328,15 @@ class _CalendarTabState extends State<CalendarTab> {
                     color: Color(0xFF1A1A1A),
                   ),
                 ),
+                // Secondary display: Gregorian date for Hebrew locale
+                if (isHebrew)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 2),
+                    child: Text(
+                      monthFormat.format(_currentMonth),
+                      style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                    ),
+                  ),
                 const SizedBox(height: 2),
                 Text(
                   isHebrew ? 'לחץ לחזור להיום' : 'Tap to go to today',
@@ -241,6 +357,41 @@ class _CalendarTabState extends State<CalendarTab> {
     );
   }
 
+  String _toHebrewYear(int year) {
+    // Convert year to Hebrew numerals (simplified - just show last 3 digits)
+    // e.g., 5785 -> תשפ״ה
+    final lastThree = year % 1000;
+    return _toHebrewNumerals(lastThree);
+  }
+
+  String _toHebrewNumerals(int number) {
+    if (number <= 0) return '';
+
+    const hundreds = ['', 'ק', 'ר', 'ש', 'ת', 'תק', 'תר', 'תש', 'תת', 'תתק'];
+    const tens = ['', 'י', 'כ', 'ל', 'מ', 'נ', 'ס', 'ע', 'פ', 'צ'];
+    const ones = ['', 'א', 'ב', 'ג', 'ד', 'ה', 'ו', 'ז', 'ח', 'ט'];
+
+    final h = (number ~/ 100) % 10;
+    final t = (number ~/ 10) % 10;
+    final o = number % 10;
+
+    // Special cases for 15 and 16
+    if (t == 1 && o == 5) return '${hundreds[h]}ט״ו';
+    if (t == 1 && o == 6) return '${hundreds[h]}ט״ז';
+
+    String result = hundreds[h] + tens[t] + ones[o];
+
+    // Add gershayim before last letter
+    if (result.length > 1) {
+      result =
+          '${result.substring(0, result.length - 1)}״${result.substring(result.length - 1)}';
+    } else if (result.isNotEmpty) {
+      result = '$result׳';
+    }
+
+    return result;
+  }
+
   Widget _buildDayHeaders() {
     final dayLabels = isHebrew
         ? ['א׳', 'ב׳', 'ג׳', 'ד׳', 'ה׳', 'ו׳', 'ש׳']
@@ -251,7 +402,7 @@ class _CalendarTabState extends State<CalendarTab> {
       child: Row(
         children: dayLabels.map((day) {
           final isFriday = day == 'Fri' || day == 'ו׳';
-          final isSaturday = day == 'ש' || day == 'ש׳';
+          final isSaturday = day == 'Sat' || day == 'ש׳';
           return Expanded(
             child: Container(
               padding: const EdgeInsets.symmetric(vertical: 8),
@@ -259,8 +410,8 @@ class _CalendarTabState extends State<CalendarTab> {
                 day,
                 textAlign: TextAlign.center,
                 style: TextStyle(
-                  fontSize: isSaturday && !isHebrew ? 18 : 12,
-                  fontWeight: isSaturday ? FontWeight.w900 : FontWeight.w600,
+                  fontSize: 12,
+                  fontWeight: isSaturday ? FontWeight.w700 : FontWeight.w600,
                   color: isFriday
                       ? const Color(0xFFE8B923)
                       : isSaturday
@@ -355,6 +506,9 @@ class _CalendarTabState extends State<CalendarTab> {
         .toList();
     final isYomTov = yomTovEvent.isNotEmpty;
 
+    // Get Hebrew date for this day
+    final hebrewDate = _getHebrewDateForDay(date);
+
     Color? bgColor;
     Color textColor = const Color(0xFF1A1A1A);
     BoxBorder? border;
@@ -377,6 +531,14 @@ class _CalendarTabState extends State<CalendarTab> {
       border = Border.all(color: const Color(0xFF1A1A1A), width: 2);
     }
 
+    // Determine what to display based on locale
+    // Hebrew locale: Hebrew date primary, Gregorian secondary
+    // English locale: Gregorian date primary only (Hebrew shown in events)
+    final primaryText = isHebrew && hebrewDate != null
+        ? hebrewDate.hebrewDayGematria
+        : dayNumber.toString();
+    final secondaryText = isHebrew ? dayNumber.toString() : null;
+
     return GestureDetector(
       onTap: () {
         if (dayEvents.isNotEmpty) {
@@ -391,21 +553,37 @@ class _CalendarTabState extends State<CalendarTab> {
         ),
         child: Stack(
           children: [
+            // Primary date (center)
             Center(
-              child: Text(
-                dayNumber.toString(),
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: (hasCandleLighting || hasHavdalah || isToday)
-                      ? FontWeight.w700
-                      : FontWeight.w500,
-                  color: textColor,
-                ),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    primaryText,
+                    style: TextStyle(
+                      fontSize: isHebrew ? 13 : 14,
+                      fontWeight: (hasCandleLighting || hasHavdalah || isToday)
+                          ? FontWeight.w700
+                          : FontWeight.w500,
+                      color: textColor,
+                    ),
+                  ),
+                  // Show secondary date (smaller) for Hebrew locale
+                  if (secondaryText != null)
+                    Text(
+                      secondaryText,
+                      style: TextStyle(
+                        fontSize: 9,
+                        fontWeight: FontWeight.w400,
+                        color: textColor.withValues(alpha: 0.6),
+                      ),
+                    ),
+                ],
               ),
             ),
             if (hasEvent || isYomTov)
               Positioned(
-                bottom: 4,
+                bottom: 2,
                 left: 0,
                 right: 0,
                 child: Center(
@@ -463,6 +641,10 @@ class _CalendarTabState extends State<CalendarTab> {
   Widget _buildEventCard(CandleLighting event) {
     final timeFormat = DateFormat('h:mm a');
     final dateFormat = DateFormat('EEE, MMM d');
+    final hebrewDateFormat = DateFormat('EEEE, d MMMM', 'he');
+
+    // Get Hebrew date for the event
+    final hebrewDate = _getHebrewDateForDay(event.candleLightingTime);
 
     return GestureDetector(
       onTap: () => _openDetailScreen(event),
@@ -517,10 +699,31 @@ class _CalendarTabState extends State<CalendarTab> {
                     overflow: TextOverflow.ellipsis,
                   ),
                   const SizedBox(height: 4),
+                  // Primary date based on locale
+                  // Hebrew: Show Hebrew date, English: Show Gregorian date
                   Text(
-                    dateFormat.format(event.candleLightingTime),
+                    isHebrew
+                        ? (hebrewDate != null
+                              ? '${hebrewDate.hebrewDayGematria} ${hebrewDate.hebrewMonthName}'
+                              : (event.hebrewDate ??
+                                    hebrewDateFormat.format(
+                                      event.candleLightingTime,
+                                    )))
+                        : dateFormat.format(event.candleLightingTime),
                     style: TextStyle(fontSize: 13, color: Colors.grey[600]),
                   ),
+                  // Secondary date: Hebrew shows Gregorian, English shows Hebrew (from event data if available)
+                  if (isHebrew)
+                    Text(
+                      dateFormat.format(event.candleLightingTime),
+                      style: TextStyle(fontSize: 11, color: Colors.grey[400]),
+                    )
+                  else if (event.hebrewDate != null &&
+                      event.hebrewDate!.isNotEmpty)
+                    Text(
+                      event.hebrewDate!,
+                      style: TextStyle(fontSize: 11, color: Colors.grey[400]),
+                    ),
                 ],
               ),
             ),
