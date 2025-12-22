@@ -492,7 +492,7 @@ class NotificationService {
       // Candle lighting notification - ALWAYS SILENT (no alarm sound)
       // This notification marks the START of Shabbat/Yom Tov, so no alarm should play
       if (candleEnabled && lighting.candleLightingTime.isAfter(now)) {
-        final title = lighting.isYomTov ? '!יום טוב שמח' : '!שבת שלום';
+        final title = lighting.isYomTov ? 'יום טוב שמח!' : 'שבת שלום!';
         final body = lighting.isYomTov
             ? 'Good Yom Tov! Time to light candles 🕯️🕯️'
             : 'Good Shabbos! Time to light candles 🕯️🕯️';
@@ -719,7 +719,7 @@ class NotificationService {
       // Show notification without sound (we play our own)
       await _notifications.show(
         999,
-        '!שבת שלום Good Shabbos!',
+        'שבת שלום! Good Shabbos!',
         'Test notification 🕯️🕯️',
         _getNotificationDetails(
           iosSoundFile: null,
@@ -799,7 +799,7 @@ class NotificationService {
       final candleSuccess = await NativeAlarmService.scheduleAlarm(
         id: 997,
         scheduledTime: candleLightingTime,
-        title: '!שבת שלום Good Shabbos!',
+        title: 'שבת שלום! Good Shabbos!',
         body: 'Time to light candles 🕯️🕯️',
         isPreNotification: false,
         soundId: candleLightingSoundId,
@@ -877,7 +877,7 @@ class NotificationService {
         // Schedule with custom shofar sound
         await _notifications.zonedSchedule(
           997,
-          '!שבת שלום Good Shabbos!',
+          'שבת שלום! Good Shabbos!',
           '🕯️🕯️ Time to light candles!',
           candleTzTime,
           _getNotificationDetails(iosSoundFile: candleIosSoundFile),

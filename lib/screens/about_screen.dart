@@ -30,19 +30,19 @@ From there, Shabbos!! was born — an app designed to give everyone that experie
 With this app, the feeling of welcoming Shabbat can be right at your fingertips — wherever you are.''';
 
   static const String aboutHe =
-      '''!!Shabbos נוצרה מתוך אהבה לאווירה המיוחדת המלווה את הרגעים שלפני כניסת שבת ויום טוב.
+      '''Shabbos!! נוצרה מתוך אהבה לאווירה המיוחדת המלווה את הרגעים שלפני כניסת שבת ויום טוב.
 
 בירושלים ובערים רבות ברחבי ארץ ישראל, נשמעת צפירה כ־20 דקות לפני הדלקת הנרות, ושוב בזמן הדלקת הנרות. במקומות מסוימים מתנגנת מוזיקה שקטה בדקות האחרונות הללו, ויוצרת תחושה מיוחדת של רוגע, ציפייה וקדושה עם התקרבות השבת.
 
 במהלך ביקור בבית שמש חוויתי זאת שוב, והדבר ריגש אותי מאוד. תמיד אהבתי את האווירה הזו, ותמיד ייחלתי שתהיה גם בעיר שבה אני גר — אך לצערי, אין.
 
-החוויה הזו הציתה רעיון.
+החוויה הזו הציתה בי רעיון.
 
-התחלתי להתנסות בהגדרת תזכורות ואזעקות כדי לשחזר את התחושה הזו, ומיד הרגשתי עד כמה הדבר משמעותי. המעבר אל השבת הפך להיות רגוע יותר, ממוקד יותר ומרומם יותר.
+התחלתי לנסות להשתמש בהגדרת תזכורות וצופר כדי לשחזר את התחושה הזו, ומיד הרגשתי עד כמה הדבר משמעותי. המעבר אל השבת הפך להיות רגוע יותר, ממוקד יותר ומרומם יותר.
 
-ומשם נולדה !!Shabbos — אפליקציה שנועדה להעניק את החוויה הזו לכולם:
+ומשם נולדה Shabbos!! — אפליקציה שנועדה להעניק את החוויה הזו לכולם:
 
-• לאלו החיים מחוץ לישראל ורוצים להתחבר לקצב השבת בארץ ישראל
+• לאלו החיים מחוץ לארץ ישראל ורוצים להתחבר לקצב השבת בארץ
 
 • ולאלו החיים בישראל, אך בעירם אין תזכורת מסוג זה
 
@@ -56,6 +56,10 @@ my mother, Betty bas Yechiel ע״ה,
 and my wife's father, Levi ben Ephraim ז״ל,
 who was very careful about taking in Shabbat on time.
 
+My dear and beloved friends' parents:
+Mordechai ben Aaron HaCohen ז״ל
+Yenta bat Avraham HaLevy ז״ל
+
 May their neshamos continue to rise higher and higher in Gan Eden,
 and may they be meilitzei tov for their entire family
 and for all of Klal Yisrael.''';
@@ -66,9 +70,13 @@ and for all of Klal Yisrael.''';
 אמי, בטי בת יחיאל ע״ה,
 וחמי, לוי בן אפרים ז״ל, שהיה מדקדק מאוד בקבלת השבת בזמן.
 
+הורי ידידי היקר והאהוב
+מרדכי בן אהרן הכהן ז״ל
+ינטה בת אברהם הלוי ז״ל
+
 יהי רצון שנשמותיהם ימשיכו לעלות מעלה מעלה בגן עדן,
 ויהיו מליצי יושר בעד כל משפחתם
-ובעבור כל כלל ישראל.''';
+ובעבור כל ישראל.''';
 
   // Credits text (without developer name - added separately as clickable link)
   static const String creditsEn = '''Music & Sound
@@ -193,7 +201,7 @@ Users are encouraged to always double-check candle-lighting times with reliable 
                 const SizedBox(height: 24),
 
                 Text(
-                  isHebrew ? '!!שבת' : 'Shabbos!!',
+                  isHebrew ? 'שבת!!' : 'Shabbos!!',
                   style: const TextStyle(
                     fontSize: 32,
                     fontWeight: FontWeight.w700,
@@ -286,7 +294,7 @@ Users are encouraged to always double-check candle-lighting times with reliable 
                 // Closing greeting
                 Text(
                   isHebrew
-                      ? 'גוט שַׁבָּוֹסססס!!'
+                      ? 'גוט שַׁבֶּסססס!!'
                       : 'Gooood Shaaaaaaabbbooossss!!',
                   style: const TextStyle(
                     fontSize: 22,

@@ -252,7 +252,7 @@ class _HomeTabState extends State<HomeTab> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  isHebrew ? '!!שבת' : 'Shabbos!!',
+                  isHebrew ? 'שבת!!' : 'Shabbos!!',
                   style: const TextStyle(
                     fontSize: 28,
                     fontWeight: FontWeight.w700,

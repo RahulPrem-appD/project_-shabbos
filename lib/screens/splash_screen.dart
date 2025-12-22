@@ -745,7 +745,7 @@ class _SplashScreenState extends State<SplashScreen>
       },
       blendMode: BlendMode.srcIn,
       child: Text(
-        '!!שבת',
+        'שבת!!',
         style: TextStyle(
           fontSize: 62,
           fontWeight: FontWeight.w800,
