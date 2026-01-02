@@ -195,6 +195,7 @@ class _HomeTabState extends State<HomeTab> {
           startDate: now,
           endDate: now.add(const Duration(days: 60)),
           timezone: location.timezone,
+          locale: widget.locale,
         );
 
         final futureTimes = times

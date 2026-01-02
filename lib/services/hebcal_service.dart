@@ -68,10 +68,15 @@ class HebcalService {
     required DateTime startDate,
     required DateTime endDate,
     String? timezone,
+    String locale = 'en', // 'he' for Hebrew, 'en' for English
   }) async {
     try {
       // Determine timezone - use provided or detect from coordinates
       final tz = timezone ?? await _detectTimezone(latitude, longitude);
+
+      // Set language parameter based on locale
+      // Hebrew: he-x-NoNikud, English: sh (Sephardic transliteration)
+      final language = locale == 'he' ? 'he-x-NoNikud' : 'sh';
 
       final queryParams = {
         'cfg': 'json',
@@ -81,15 +86,18 @@ class HebcalService {
         'longitude': longitude.toStringAsFixed(4),
         'start': _formatDate(startDate),
         'end': _formatDate(endDate),
-        'c': 'on', // Candle lighting
-        'M': 'on', // Havdalah
-        'b': '18', // Minutes before sunset
+        'yt': 'H', // Yom Tov type
+        'i': 'on', // Yom Tov info
         'maj': 'on', // Major holidays
-        'min': 'off', // Minor holidays
-        'mod': 'off', // Modern holidays
-        'nx': 'off', // Rosh Chodesh
-        's': 'off', // Parasha
+        's': 'on', // Parasha (Torah portion)
+        'mm': '2', // Month mode
+        'lg': language, // Language: he-x-NoNikud for Hebrew, sh for English
         'd': 'on', // Add Hebrew date to each item
+        'c': 'on', // Candle lighting
+        'b': '18', // Minutes before sunset
+        'M': 'on', // Havdalah
+        'm': '', // Empty month parameter
+        'ue': 'off', // User events off
       };
 
       // Add timezone if available

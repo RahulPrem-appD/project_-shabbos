@@ -90,6 +90,7 @@ class _CalendarTabState extends State<CalendarTab> {
         startDate: startDate,
         endDate: endDate,
         timezone: _location!.timezone,
+        locale: widget.locale,
       );
 
       // Load Hebrew dates only for Hebrew locale (Hebrew calendar display)

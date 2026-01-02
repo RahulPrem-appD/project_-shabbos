@@ -70,6 +70,7 @@ class _HomeScreenState extends State<HomeScreen> {
           startDate: now,
           endDate: now.add(const Duration(days: 60)),
           timezone: location.timezone,
+          locale: widget.locale,
         );
 
         final futureTimes = times.where((t) => t.candleLightingTime.isAfter(now)).toList();
