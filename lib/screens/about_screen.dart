@@ -148,21 +148,10 @@ Users are encouraged to always double-check candle-lighting times with reliable 
                   style: const TextStyle(
                     fontSize: 20,
                     fontWeight: FontWeight.w600,
-                    color: Color(0xFF1A1A1A),
-                  ),
+                  color: Color(0xFF1A1A1A),
                 ),
-                actions: [
-                  Padding(
-                    padding: const EdgeInsets.only(right: 16),
-                    child: Center(
-                      child: Text(
-                        'בס״ד',
-                        style: TextStyle(fontSize: 14, color: Colors.grey[400]),
-                      ),
-                    ),
-                  ),
-                ],
-              )
+              ),
+            )
             : null,
         body: SafeArea(
           child: SingleChildScrollView(
@@ -170,22 +159,13 @@ Users are encouraged to always double-check candle-lighting times with reliable 
             child: Column(
               children: [
                 if (!showAppBar) ...[
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        isHebrew ? 'אודות' : 'About',
-                        style: const TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.w700,
-                          color: Color(0xFF1A1A1A),
-                        ),
-                      ),
-                      Text(
-                        'בס״ד',
-                        style: TextStyle(fontSize: 14, color: Colors.grey[400]),
-                      ),
-                    ],
+                  Text(
+                    isHebrew ? 'אודות' : 'About',
+                    style: const TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF1A1A1A),
+                    ),
                   ),
                   const SizedBox(height: 24),
                 ] else
