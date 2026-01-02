@@ -345,17 +345,22 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
                 ],
               ),
             ),
-            // בס״ד at the top of everything - centered
+            // בס״ד at the top of everything - divine symbol kept above all
             Positioned(
-              top: MediaQuery.of(context).padding.top + 8,
+              top: MediaQuery.of(context).padding.top,
               left: 0,
               right: 0,
-              child: Center(
-                child: Text(
-                  'בס״ד',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Colors.grey[400],
+              child: Container(
+                padding: const EdgeInsets.only(bottom: 16),
+                child: Center(
+                  child: Text(
+                    'בס״ד',
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w900,
+                      color: const Color(0xFFE8B923),
+                      letterSpacing: 2,
+                    ),
                   ),
                 ),
               ),
