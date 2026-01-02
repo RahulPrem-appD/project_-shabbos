@@ -77,6 +77,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ? AppBar(
                 backgroundColor: Colors.white,
                 elevation: 0,
+                surfaceTintColor: Colors.transparent,
                 leading: IconButton(
                   icon: const Icon(Icons.arrow_back, color: Color(0xFF1A1A1A)),
                   onPressed: () => Navigator.pop(context),
@@ -89,45 +90,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     color: Color(0xFF1A1A1A),
                   ),
                 ),
-                actions: [
-                  Padding(
-                    padding: const EdgeInsets.only(right: 16),
-                    child: Center(
-                      child: Text(
-                        'בס״ד',
-                        style: TextStyle(fontSize: 14, color: Colors.grey[400]),
-                      ),
-                    ),
-                  ),
-                ],
               )
             : null,
-        body: SafeArea(
-          child: ListView(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-            children: [
-              if (!widget.showAppBar) ...[
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(4, 16, 4, 8),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        isHebrew ? 'הגדרות' : 'Settings',
-                        style: const TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.w700,
-                          color: Color(0xFF1A1A1A),
-                        ),
-                      ),
-                      Text(
-                        'בס״ד',
-                        style: TextStyle(fontSize: 14, color: Colors.grey[400]),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
+        body: Column(
+          children: [
+            if (!widget.showAppBar) _buildHeader(),
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                children: [
               _buildSection(
                 title: isHebrew ? 'שפה' : 'Language',
                 children: [_buildLanguageSelector()],
@@ -217,8 +188,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
 
               const SizedBox(height: 40),
-            ],
-          ),
+                ],
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -627,6 +600,32 @@ class _SettingsScreenState extends State<SettingsScreen> {
           widget.onLocationChanged();
           if (context.mounted) Navigator.pop(context);
         },
+      ),
+    );
+  }
+
+  Widget _buildHeader() {
+    return Builder(
+      builder: (context) => Container(
+        padding: EdgeInsets.fromLTRB(
+          24,
+          MediaQuery.of(context).padding.top + 16,
+          24,
+          8,
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              isHebrew ? 'הגדרות' : 'Settings',
+              style: const TextStyle(
+                fontSize: 28,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF1A1A1A),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

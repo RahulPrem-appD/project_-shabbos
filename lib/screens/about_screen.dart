@@ -139,6 +139,7 @@ Users are encouraged to always double-check candle-lighting times with reliable 
             ? AppBar(
                 backgroundColor: Colors.white,
                 elevation: 0,
+                surfaceTintColor: Colors.transparent,
                 leading: IconButton(
                   icon: const Icon(Icons.arrow_back, color: Color(0xFF1A1A1A)),
                   onPressed: () => Navigator.pop(context),
@@ -148,165 +149,191 @@ Users are encouraged to always double-check candle-lighting times with reliable 
                   style: const TextStyle(
                     fontSize: 20,
                     fontWeight: FontWeight.w600,
-                  color: Color(0xFF1A1A1A),
-                ),
-              ),
-            )
-            : null,
-        body: SafeArea(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              children: [
-                if (!showAppBar) ...[
-                  Text(
-                    isHebrew ? 'אודות' : 'About',
-                    style: const TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.w700,
-                      color: Color(0xFF1A1A1A),
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                ] else
-                  const SizedBox(height: 20),
-
-                // Logo
-                Container(
-                  width: 100,
-                  height: 100,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF1A1A1A),
-                    borderRadius: BorderRadius.circular(24),
-                  ),
-                  child: const Center(
-                    child: Text('🕯️🕯️', style: TextStyle(fontSize: 36)),
-                  ),
-                ),
-
-                const SizedBox(height: 24),
-
-                Text(
-                  isHebrew ? 'שבת!!' : 'Shabbos!!',
-                  textDirection: isHebrew ? TextDirection.rtl : TextDirection.ltr,
-                  style: const TextStyle(
-                    fontSize: 32,
-                    fontWeight: FontWeight.w700,
                     color: Color(0xFF1A1A1A),
                   ),
                 ),
+              )
+            : null,
+        body: Column(
+          children: [
+            if (!showAppBar) _buildHeader(),
+            Expanded(
+              child: SingleChildScrollView(
+                padding: EdgeInsets.fromLTRB(24, showAppBar ? 24 : 8, 24, 24),
+                child: Column(
+                  children: [
+                    // Logo
+                    Container(
+                      width: 100,
+                      height: 100,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF1A1A1A),
+                        borderRadius: BorderRadius.circular(24),
+                      ),
+                      child: const Center(
+                        child: Text('🕯️🕯️', style: TextStyle(fontSize: 36)),
+                      ),
+                    ),
 
-                const SizedBox(height: 4),
+                    const SizedBox(height: 24),
 
-                Text(
-                  isHebrew
-                      ? 'התראת הדלקת נרות לשבת וליום טוב'
-                      : 'Candle Lighting Alert for Shabbat and Yom Tov',
-                  style: TextStyle(fontSize: 14, color: Colors.grey[500]),
-                  textAlign: TextAlign.center,
+                    Text(
+                      isHebrew ? 'שבת!!' : 'Shabbos!!',
+                      textDirection: isHebrew
+                          ? TextDirection.rtl
+                          : TextDirection.ltr,
+                      style: const TextStyle(
+                        fontSize: 32,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF1A1A1A),
+                      ),
+                    ),
+
+                    const SizedBox(height: 4),
+
+                    Text(
+                      isHebrew
+                          ? 'התראת הדלקת נרות לשבת וליום טוב'
+                          : 'Candle Lighting Alert for Shabbat and Yom Tov',
+                      style: TextStyle(fontSize: 14, color: Colors.grey[500]),
+                      textAlign: TextAlign.center,
+                    ),
+
+                    const SizedBox(height: 8),
+
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF5F5F5),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        'v1.0.0',
+                        style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                      ),
+                    ),
+
+                    const SizedBox(height: 40),
+
+                    // About section
+                    _buildSection(
+                      icon: Icons.menu_book_rounded,
+                      iconColor: const Color(0xFF1A1A1A),
+                      title: isHebrew ? 'אודות האפליקציה' : 'About the App',
+                      content: isHebrew ? aboutHe : aboutEn,
+                      backgroundColor: const Color(0xFFF8F8F8),
+                    ),
+
+                    const SizedBox(height: 24),
+
+                    // Dedication section
+                    _buildSection(
+                      icon: Icons.local_fire_department,
+                      iconColor: const Color(0xFFE8B923),
+                      title: isHebrew ? 'הקדשה' : 'Dedication',
+                      content: isHebrew ? dedicationHe : dedicationEn,
+                      backgroundColor: const Color(0xFFFFFBEB),
+                      borderColor: const Color(
+                        0xFFE8B923,
+                      ).withValues(alpha: 0.3),
+                      centered: true,
+                    ),
+
+                    const SizedBox(height: 24),
+
+                    // Credits section
+                    _buildCreditsSection(isHebrew),
+
+                    const SizedBox(height: 24),
+
+                    // Special Thanks section
+                    _buildSection(
+                      icon: Icons.favorite,
+                      iconColor: const Color(0xFFE57373),
+                      title: isHebrew ? 'תודות מיוחדות' : 'Special Thanks',
+                      content: isHebrew ? thanksHe : thanksEn,
+                      backgroundColor: const Color(0xFFFCE4EC),
+                      borderColor: const Color(
+                        0xFFE57373,
+                      ).withValues(alpha: 0.3),
+                    ),
+
+                    const SizedBox(height: 24),
+
+                    // Disclaimer section
+                    _buildSection(
+                      icon: Icons.warning_amber_rounded,
+                      iconColor: const Color(0xFFFF9800),
+                      title: isHebrew ? 'כתב ויתור' : 'Disclaimer',
+                      content: isHebrew ? disclaimerHe : disclaimerEn,
+                      backgroundColor: const Color(0xFFFFF8E1),
+                      borderColor: const Color(
+                        0xFFFF9800,
+                      ).withValues(alpha: 0.3),
+                    ),
+
+                    const SizedBox(height: 40),
+
+                    // Closing greeting
+                    Text(
+                      isHebrew
+                          ? 'גוט שַׁבֶּסססס!!'
+                          : 'Gooood Shaaaaaaabbbooossss!!',
+                      textDirection: TextDirection.ltr,
+                      style: const TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFFE8B923),
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+
+                    const SizedBox(height: 12),
+
+                    Text(
+                      isHebrew ? 'אברהם ונשמח' : 'Avraham Venismach',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                        color: Colors.grey[600],
+                      ),
+                    ),
+
+                    const SizedBox(height: 40),
+                  ],
                 ),
-
-                const SizedBox(height: 8),
-
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 6,
-                  ),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF5F5F5),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(
-                    'v1.0.0',
-                    style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-                  ),
-                ),
-
-                const SizedBox(height: 40),
-
-                // About section
-                _buildSection(
-                  icon: Icons.menu_book_rounded,
-                  iconColor: const Color(0xFF1A1A1A),
-                  title: isHebrew ? 'אודות האפליקציה' : 'About the App',
-                  content: isHebrew ? aboutHe : aboutEn,
-                  backgroundColor: const Color(0xFFF8F8F8),
-                ),
-
-                const SizedBox(height: 24),
-
-                // Dedication section
-                _buildSection(
-                  icon: Icons.local_fire_department,
-                  iconColor: const Color(0xFFE8B923),
-                  title: isHebrew ? 'הקדשה' : 'Dedication',
-                  content: isHebrew ? dedicationHe : dedicationEn,
-                  backgroundColor: const Color(0xFFFFFBEB),
-                  borderColor: const Color(0xFFE8B923).withValues(alpha: 0.3),
-                  centered: true,
-                ),
-
-                const SizedBox(height: 24),
-
-                // Credits section
-                _buildCreditsSection(isHebrew),
-
-                const SizedBox(height: 24),
-
-                // Special Thanks section
-                _buildSection(
-                  icon: Icons.favorite,
-                  iconColor: const Color(0xFFE57373),
-                  title: isHebrew ? 'תודות מיוחדות' : 'Special Thanks',
-                  content: isHebrew ? thanksHe : thanksEn,
-                  backgroundColor: const Color(0xFFFCE4EC),
-                  borderColor: const Color(0xFFE57373).withValues(alpha: 0.3),
-                ),
-
-                const SizedBox(height: 24),
-
-                // Disclaimer section
-                _buildSection(
-                  icon: Icons.warning_amber_rounded,
-                  iconColor: const Color(0xFFFF9800),
-                  title: isHebrew ? 'כתב ויתור' : 'Disclaimer',
-                  content: isHebrew ? disclaimerHe : disclaimerEn,
-                  backgroundColor: const Color(0xFFFFF8E1),
-                  borderColor: const Color(0xFFFF9800).withValues(alpha: 0.3),
-                ),
-
-                const SizedBox(height: 40),
-
-                // Closing greeting
-                Text(
-                  isHebrew
-                      ? 'גוט שַׁבֶּסססס!!'
-                      : 'Gooood Shaaaaaaabbbooossss!!',
-                  textDirection: TextDirection.ltr,
-                  style: const TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.w700,
-                    color: Color(0xFFE8B923),
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-
-                const SizedBox(height: 12),
-
-                Text(
-                  isHebrew ? 'אברהם ונשמח' : 'Avraham Venismach',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w500,
-                    color: Colors.grey[600],
-                  ),
-                ),
-
-                const SizedBox(height: 40),
-              ],
+              ),
             ),
-          ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHeader() {
+    return Builder(
+      builder: (context) => Container(
+        padding: EdgeInsets.fromLTRB(
+          24,
+          MediaQuery.of(context).padding.top + 16,
+          24,
+          8,
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              isHebrew ? 'אודות' : 'About',
+              style: const TextStyle(
+                fontSize: 28,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF1A1A1A),
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -446,14 +473,11 @@ Users are encouraged to always double-check candle-lighting times with reliable 
   Future<void> _launchDeveloperUrl() async {
     try {
       final uri = Uri.parse(_developerUrl);
-      
+
       // Try to launch the URL
       final canLaunch = await canLaunchUrl(uri);
       if (canLaunch) {
-        await launchUrl(
-          uri,
-          mode: LaunchMode.externalApplication,
-        );
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
       } else {
         // If can't launch, try with platform default mode
         await launchUrl(uri);
