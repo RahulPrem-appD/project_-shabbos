@@ -401,11 +401,11 @@ class NotificationService {
   /// Schedule notifications for candle lighting times
   ///
   /// IMPORTANT ALARM RULES:
-  /// - NO alarms during Shabbat (Friday night through Saturday night)
+  /// - NO alarms during Shabbat (after candle lighting time)
   /// - NO alarms during Yom Tov (any holiday day)
   /// - NO alarms if Saturday night is start of a holiday
   /// - Alarms ONLY play BEFORE Shabbat/Yom Tov starts (pre-notification)
-  /// - Candle lighting notification is SILENT (no alarm sound) - it marks the START of Shabbat/Yom Tov
+  /// - Candle lighting notification PLAYS SHOFAR - it marks the exact moment Shabbat/Yom Tov starts
   Future<void> scheduleNotifications(
     List<CandleLighting> candleLightings,
   ) async {
@@ -489,8 +489,9 @@ class NotificationService {
         }
       }
 
-      // Candle lighting notification - ALWAYS SILENT (no alarm sound)
-      // This notification marks the START of Shabbat/Yom Tov, so no alarm should play
+      // Candle lighting notification - PLAY SHOFAR SOUND
+      // The shofar should play at the exact moment Shabbat/Yom Tov starts (candle lighting time)
+      // This is the last moment before Shabbat begins, so the shofar is allowed
       if (candleEnabled && lighting.candleLightingTime.isAfter(now)) {
         final title = lighting.isYomTov ? 'יום טוב שמח!' : 'שבת שלום!';
         final body = lighting.isYomTov
@@ -498,7 +499,8 @@ class NotificationService {
             : 'Good Shabbos! Time to light candles 🕯️🕯️';
 
         final notificationId = id++;
-        // Schedule as SILENT notification (no alarm sound at candle lighting time)
+        // Schedule with SHOFAR SOUND at candle lighting time
+        // The shofar marks the start of Shabbat/Yom Tov and is allowed at this exact moment
         final success = await _scheduleNotification(
           id: notificationId,
           title: title,
@@ -506,14 +508,14 @@ class NotificationService {
           scheduledTime: lighting.candleLightingTime,
           isPreNotification: false,
           isYomTov: lighting.isYomTov,
-          isSilent: true, // SILENT - Shabbat/Yom Tov is starting
+          isSilent: false, // PLAY SHOFAR - this is the moment Shabbat starts
         );
         if (success) {
           scheduled++;
           // Store Yom Tov status for this notification
           await _storeNotificationYomTov(notificationId, lighting.isYomTov);
           debugPrint(
-            'NotificationService: ✓ Scheduled SILENT candle lighting notification for ${lighting.displayName}',
+            'NotificationService: ✓ Scheduled candle lighting notification with SHOFAR for ${lighting.displayName}',
           );
         }
       }
@@ -541,9 +543,9 @@ class NotificationService {
       final candleLighting = event.candleLightingTime;
       final havdalah = event.havdalahTime;
 
-      // If alarm time is AFTER candle lighting and BEFORE havdalah, it's during Shabbat/Yom Tov
-      if (alarmTime.isAfter(candleLighting) ||
-          alarmTime.isAtSameMomentAs(candleLighting)) {
+      // If alarm time is AFTER candle lighting (not at the exact moment) and BEFORE havdalah, it's during Shabbat/Yom Tov
+      // Note: The exact moment of candle lighting is allowed (for shofar sound)
+      if (alarmTime.isAfter(candleLighting)) {
         if (havdalah != null) {
           // There's a havdalah time - check if alarm is before it
           if (alarmTime.isBefore(havdalah)) {
