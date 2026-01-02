@@ -85,6 +85,9 @@ and for all of Klal Yisrael.''';
 • Shofar recordings – Used with permission Rabbi Shalom Gold
 • "Shabbat Shalom" – Used with permission of Rabbi Yom Tov Glaser
 
+Jewish Calendar & Times
+• Jewish calendar, Shabbat times, and holiday information provided by Hebcal.com
+
 App Development''';
 
   static const String creditsHe = '''מוזיקה וקול
@@ -92,6 +95,9 @@ App Development''';
 • מוזיקה מקורית שנוצרה באמצעות בינה מלאכותית (ברישיון)
 • הקלטות שופר – בשימוש באישור הרב שלום גולד
 • ״שבת שלום״ – בשימוש באישור הרב יום טוב גלזר
+
+לוח שנה יהודי וזמנים
+• מידע על לוח השנה היהודי, זמני שבת וחגים באדיבות Hebcal.com
 
 פיתוח האפליקציה''';
 
