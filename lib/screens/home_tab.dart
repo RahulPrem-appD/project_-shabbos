@@ -241,6 +241,45 @@ class _HomeTabState extends State<HomeTab> {
     );
   }
 
+  Widget _buildLanguageToggle() {
+    return GestureDetector(
+      onTap: () {
+        final newLocale = isHebrew ? 'en' : 'he';
+        widget.onLocaleChanged(newLocale);
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF5F5F5),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: const Color(0xFFE8B923).withValues(alpha: 0.3),
+            width: 1,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              isHebrew ? 'עב' : 'EN',
+              style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF1A1A1A),
+              ),
+            ),
+            const SizedBox(width: 4),
+            Icon(
+              Icons.language,
+              size: 16,
+              color: const Color(0xFF1A1A1A).withValues(alpha: 0.7),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildHeader() {
     return Container(
       padding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
@@ -253,7 +292,7 @@ class _HomeTabState extends State<HomeTab> {
               children: [
                 Text(
                   isHebrew ? 'שבת!!' : 'Shabbos!!',
-                  textDirection: TextDirection.ltr,
+                  textDirection: isHebrew ? TextDirection.rtl : TextDirection.ltr,
                   style: const TextStyle(
                     fontSize: 28,
                     fontWeight: FontWeight.w700,
@@ -301,7 +340,7 @@ class _HomeTabState extends State<HomeTab> {
               ],
             ),
           ),
-          Text('בס״ד', style: TextStyle(fontSize: 14, color: Colors.grey[400])),
+          _buildLanguageToggle(),
         ],
       ),
     );

@@ -124,7 +124,7 @@ class _HomeScreenState extends State<HomeScreen> {
             children: [
               Text(
                 isHebrew ? 'שבת!!' : 'Shabbos!!',
-                textDirection: TextDirection.ltr,
+                textDirection: isHebrew ? TextDirection.rtl : TextDirection.ltr,
                 style: const TextStyle(
                   fontSize: 28,
                   fontWeight: FontWeight.w700,

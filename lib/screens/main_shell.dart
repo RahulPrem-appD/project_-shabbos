@@ -323,25 +323,44 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
       textDirection: isHebrew ? TextDirection.rtl : TextDirection.ltr,
       child: Scaffold(
         backgroundColor: Colors.white,
-        body: KeyedSubtree(
-          key: _refreshKey,
-          child: IndexedStack(
-            index: _currentIndex,
-            children: [
-              HomeTab(
-                locale: widget.locale,
-                onLocaleChanged: widget.onLocaleChanged,
+        body: Stack(
+          children: [
+            KeyedSubtree(
+              key: _refreshKey,
+              child: IndexedStack(
+                index: _currentIndex,
+                children: [
+                  HomeTab(
+                    locale: widget.locale,
+                    onLocaleChanged: widget.onLocaleChanged,
+                  ),
+                  CalendarTab(locale: widget.locale),
+                  AboutScreen(locale: widget.locale, showAppBar: false),
+                  SettingsScreen(
+                    locale: widget.locale,
+                    onLocaleChanged: widget.onLocaleChanged,
+                    onLocationChanged: _onLocationChanged,
+                    showAppBar: false,
+                  ),
+                ],
               ),
-              CalendarTab(locale: widget.locale),
-              AboutScreen(locale: widget.locale, showAppBar: false),
-              SettingsScreen(
-                locale: widget.locale,
-                onLocaleChanged: widget.onLocaleChanged,
-                onLocationChanged: _onLocationChanged,
-                showAppBar: false,
+            ),
+            // בס״ד at the top of everything - centered
+            Positioned(
+              top: MediaQuery.of(context).padding.top + 8,
+              left: 0,
+              right: 0,
+              child: Center(
+                child: Text(
+                  'בס״ד',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.grey[400],
+                  ),
+                ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
         bottomNavigationBar: _buildBottomNavBar(),
       ),

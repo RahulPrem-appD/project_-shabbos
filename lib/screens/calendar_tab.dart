@@ -273,7 +273,6 @@ class _CalendarTabState extends State<CalendarTab> {
                 ),
             ],
           ),
-          Text('בס״ד', style: TextStyle(fontSize: 14, color: Colors.grey[400])),
         ],
       ),
     );

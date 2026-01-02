@@ -202,7 +202,7 @@ Users are encouraged to always double-check candle-lighting times with reliable 
 
                 Text(
                   isHebrew ? 'שבת!!' : 'Shabbos!!',
-                  textDirection: TextDirection.ltr,
+                  textDirection: isHebrew ? TextDirection.rtl : TextDirection.ltr,
                   style: const TextStyle(
                     fontSize: 32,
                     fontWeight: FontWeight.w700,
