@@ -42,7 +42,7 @@ class AppLocalizationsHe extends AppLocalizations {
   String get thisWeek => 'השבוע';
 
   @override
-  String get upcoming => 'קרוב';
+  String get upcoming => 'בקרוב';
 
   @override
   String get noUpcoming => 'אין זמני הדלקת נרות קרובים';

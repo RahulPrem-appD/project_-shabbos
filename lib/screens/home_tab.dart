@@ -388,7 +388,7 @@ class _HomeTabState extends State<HomeTab> {
           const SizedBox(height: 32),
           if (_candleLightings.length > 1) ...[
             Text(
-              isHebrew ? 'קרוב' : 'Upcoming',
+              isHebrew ? 'בקרוב' : 'Upcoming',
               style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w600,
