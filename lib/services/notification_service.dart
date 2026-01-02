@@ -34,6 +34,10 @@ class NotificationService {
   // Format: "notification_id:isYomTov" -> "true"/"false"
   static const String _notificationYomTovPrefix = 'notification_yomtov_';
 
+  // Store mapping of notification IDs to notification type
+  // Format: "notification_type_id" -> "pre" | "candle" | "issur"
+  static const String _notificationTypePrefix = 'notification_type_';
+
   Future<void> initialize() async {
     if (_isInitialized) return;
 
@@ -187,14 +191,22 @@ class NotificationService {
   /// Play custom sound based on notification type
   Future<void> _playNotificationSound(int? notificationId) async {
     try {
-      // Determine if this is a pre-notification (even IDs) or candle lighting (odd IDs)
-      // In scheduling loop: pre-notification gets even IDs (0, 2, 4...), candle lighting gets odd IDs (1, 3, 5...)
-      final isPreNotification = (notificationId ?? 0) % 2 == 0;
+      if (notificationId == null) return;
+
+      // Get the notification type from stored data
+      final notificationType = await _getNotificationType(notificationId);
+
+      // Determine if this is a pre-notification based on stored type
+      // If type is not stored, fall back to even/odd ID logic for backward compatibility
+      final isPreNotification =
+          notificationType == 'pre' ||
+          (notificationType == null && (notificationId % 2 == 0));
 
       // Check if this is a Yom Tov notification
-      final isYomTov = await _isNotificationYomTov(notificationId ?? 0);
+      final isYomTov = await _isNotificationYomTov(notificationId);
 
       // Get the appropriate sound based on notification type and Yom Tov status
+      // Both "candle" and "issur" types should play shofar (isPreNotification = false)
       final soundId = await _getSoundIdForNotification(
         isPreNotification: isPreNotification,
         isYomTov: isYomTov,
@@ -203,11 +215,11 @@ class NotificationService {
       if (soundId != 'silent') {
         await _audioService.playSound(soundId);
         debugPrint(
-          'NotificationService: Played sound: $soundId (isPre=$isPreNotification, isYomTov=$isYomTov)',
+          'NotificationService: Played sound: $soundId (type=$notificationType, isPre=$isPreNotification, isYomTov=$isYomTov)',
         );
       }
     } catch (e) {
-      debugPrint('NotificationService: Error playing sound: $e');
+      debugPrint('NotificationService: Error playing notification sound: $e');
     }
   }
 
@@ -239,15 +251,42 @@ class NotificationService {
     }
   }
 
+  /// Store notification type for a notification ID
+  /// Types: "pre" (pre-notification), "candle" (candle lighting), "issur" (Issur Melacha)
+  Future<void> _storeNotificationType(int notificationId, String type) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('$_notificationTypePrefix$notificationId', type);
+    } catch (e) {
+      debugPrint('NotificationService: Error storing notification type: $e');
+    }
+  }
+
+  /// Retrieve notification type for a notification ID
+  /// Returns "pre", "candle", "issur", or null if not found
+  Future<String?> _getNotificationType(int notificationId) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getString('$_notificationTypePrefix$notificationId');
+    } catch (e) {
+      debugPrint('NotificationService: Error retrieving notification type: $e');
+      return null;
+    }
+  }
+
   /// Clean up stored Yom Tov status for old notifications
   Future<void> _cleanupNotificationYomTovStatus() async {
     try {
       final prefs = await SharedPreferences.getInstance();
       final keys = prefs.getKeys();
       for (final key in keys) {
-        if (key.startsWith(_notificationYomTovPrefix)) {
+        if (key.startsWith(_notificationYomTovPrefix) ||
+            key.startsWith(_notificationTypePrefix)) {
           // Keep only recent notification IDs (last 100)
-          final idStr = key.substring(_notificationYomTovPrefix.length);
+          final prefix = key.startsWith(_notificationYomTovPrefix)
+              ? _notificationYomTovPrefix
+              : _notificationTypePrefix;
+          final idStr = key.substring(prefix.length);
           final id = int.tryParse(idStr);
           if (id != null && id < 0) {
             // Remove old negative test IDs or very old IDs
@@ -475,8 +514,9 @@ class NotificationService {
           );
           if (success) {
             scheduled++;
-            // Store Yom Tov status for this notification
+            // Store Yom Tov status and notification type for this notification
             await _storeNotificationYomTov(notificationId, lighting.isYomTov);
+            await _storeNotificationType(notificationId, 'pre');
             debugPrint(
               'NotificationService: ✓ Scheduled pre-notification for ${lighting.displayName} at $preTime',
             );
@@ -512,11 +552,51 @@ class NotificationService {
         );
         if (success) {
           scheduled++;
-          // Store Yom Tov status for this notification
+          // Store Yom Tov status and notification type for this notification
           await _storeNotificationYomTov(notificationId, lighting.isYomTov);
+          await _storeNotificationType(notificationId, 'candle');
           debugPrint(
             'NotificationService: ✓ Scheduled candle lighting notification with SHOFAR for ${lighting.displayName}',
           );
+        }
+
+        // Issur Melacha notification - 18 minutes after candle lighting
+        // Fixed time notification that always plays shofar sound (full sound, not silent)
+        final issurMelachaTime = lighting.candleLightingTime.add(
+          const Duration(minutes: 18),
+        );
+        if (issurMelachaTime.isAfter(now)) {
+          final issurTitle = lighting.isYomTov
+              ? 'איסור מלאכה • Issur Melacha'
+              : 'איסור מלאכה • Issur Melacha';
+          final issurBody = lighting.isYomTov
+              ? 'Work is now prohibited 🕯️'
+              : 'Work is now prohibited 🕯️';
+
+          final issurNotificationId = id++;
+          // Schedule Issur Melacha notification with SHOFAR (full sound, not silent)
+          // This is a fixed time notification that bypasses alarm rules
+          final issurSuccess = await _scheduleNotification(
+            id: issurNotificationId,
+            title: issurTitle,
+            body: issurBody,
+            scheduledTime: issurMelachaTime,
+            isPreNotification: false,
+            isYomTov: lighting.isYomTov,
+            isSilent: false, // FULL SHOFAR SOUND - fixed time for Issur Melacha
+          );
+          if (issurSuccess) {
+            scheduled++;
+            // Store Yom Tov status and notification type for this notification
+            await _storeNotificationYomTov(
+              issurNotificationId,
+              lighting.isYomTov,
+            );
+            await _storeNotificationType(issurNotificationId, 'issur');
+            debugPrint(
+              'NotificationService: ✓ Scheduled Issur Melacha notification (18 min after candle lighting) with SHOFAR for ${lighting.displayName}',
+            );
+          }
         }
       }
     }
