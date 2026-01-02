@@ -95,7 +95,7 @@ App Development''';
 
 פיתוח האפליקציה''';
 
-  static const String _developerUrl = 'https://fiverr.com/sanjay_prem';
+  static const String _developerUrl = 'https://www.fiverr.com/sanjay_prem';
 
   // Special Thanks text
   static const String thanksEn =
@@ -458,9 +458,23 @@ Users are encouraged to always double-check candle-lighting times with reliable 
   }
 
   Future<void> _launchDeveloperUrl() async {
-    final uri = Uri.parse(_developerUrl);
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    try {
+      final uri = Uri.parse(_developerUrl);
+      
+      // Try to launch the URL
+      final canLaunch = await canLaunchUrl(uri);
+      if (canLaunch) {
+        await launchUrl(
+          uri,
+          mode: LaunchMode.externalApplication,
+        );
+      } else {
+        // If can't launch, try with platform default mode
+        await launchUrl(uri);
+      }
+    } catch (e) {
+      debugPrint('Error launching URL: $e');
+      // Silently fail - user will see nothing happens
     }
   }
 }
