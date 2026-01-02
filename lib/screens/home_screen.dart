@@ -6,7 +6,6 @@ import '../services/location_service.dart';
 import '../services/notification_service.dart';
 import 'settings_screen.dart';
 import 'about_screen.dart';
-import 'candle_lighting_detail_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   final String locale;
@@ -191,18 +190,6 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  void _openDetailScreen(CandleLighting lighting) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => CandleLightingDetailScreen(
-          lighting: lighting,
-          locale: widget.locale,
-          locationName: _location?.displayName,
-        ),
-      ),
-    );
-  }
 
   Widget _buildBody() {
     if (_isLoading) {
@@ -226,10 +213,7 @@ class _HomeScreenState extends State<HomeScreen> {
         padding: const EdgeInsets.symmetric(horizontal: 24),
         children: [
           const SizedBox(height: 24),
-          GestureDetector(
-            onTap: () => _openDetailScreen(_candleLightings.first),
-            child: _buildNextCandleLighting(_candleLightings.first),
-          ),
+          _buildNextCandleLighting(_candleLightings.first),
           const SizedBox(height: 32),
           if (_candleLightings.length > 1) ...[
             Text(
@@ -242,10 +226,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             const SizedBox(height: 16),
             ..._candleLightings.skip(1).take(5).map((lighting) => 
-              GestureDetector(
-                onTap: () => _openDetailScreen(lighting),
-                child: _buildUpcomingCard(lighting),
-              ),
+              _buildUpcomingCard(lighting),
             ),
           ],
           const SizedBox(height: 100),

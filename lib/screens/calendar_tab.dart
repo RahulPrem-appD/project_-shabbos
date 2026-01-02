@@ -3,7 +3,6 @@ import 'package:intl/intl.dart' hide TextDirection;
 import '../models/candle_lighting.dart';
 import '../services/hebcal_service.dart';
 import '../services/location_service.dart';
-import 'candle_lighting_detail_screen.dart';
 
 class CalendarTab extends StatefulWidget {
   final String locale;
@@ -541,13 +540,7 @@ class _CalendarTabState extends State<CalendarTab> {
         : dayNumber.toString();
     final secondaryText = isHebrew ? dayNumber.toString() : null;
 
-    return GestureDetector(
-      onTap: () {
-        if (dayEvents.isNotEmpty) {
-          _openDetailScreen(dayEvents.first);
-        }
-      },
-      child: Container(
+    return Container(
         decoration: BoxDecoration(
           color: bgColor,
           borderRadius: BorderRadius.circular(8),
@@ -603,7 +596,6 @@ class _CalendarTabState extends State<CalendarTab> {
               ),
           ],
         ),
-      ),
     );
   }
 
@@ -648,9 +640,7 @@ class _CalendarTabState extends State<CalendarTab> {
     // Get Hebrew date for the event
     final hebrewDate = _getHebrewDateForDay(event.candleLightingTime);
 
-    return GestureDetector(
-      onTap: () => _openDetailScreen(event),
-      child: Container(
+    return Container(
         margin: const EdgeInsets.only(bottom: 12),
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
@@ -761,22 +751,9 @@ class _CalendarTabState extends State<CalendarTab> {
             ),
           ],
         ),
-      ),
     );
   }
 
-  void _openDetailScreen(CandleLighting lighting) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => CandleLightingDetailScreen(
-          lighting: lighting,
-          locale: widget.locale,
-          locationName: _location?.displayName,
-        ),
-      ),
-    );
-  }
 
   bool _isSameDay(DateTime a, DateTime b) {
     return a.year == b.year && a.month == b.month && a.day == b.day;
