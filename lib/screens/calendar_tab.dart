@@ -302,56 +302,59 @@ class _CalendarTabState extends State<CalendarTab> {
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          IconButton(
-            onPressed: _previousMonth,
-            icon: Icon(
-              isHebrew ? Icons.chevron_right : Icons.chevron_left,
-              color: const Color(0xFF1A1A1A),
+      child: Directionality(
+        textDirection: isHebrew ? TextDirection.rtl : TextDirection.ltr,
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            IconButton(
+              onPressed: _previousMonth,
+              icon: const Icon(
+                Icons.chevron_left,
+                color: Color(0xFF1A1A1A),
+              ),
             ),
-          ),
-          GestureDetector(
-            onTap: _goToToday,
-            child: Column(
-              children: [
-                // Primary display: Hebrew month for Hebrew locale, Gregorian for English
-                Text(
-                  isHebrew && hebrewMonthDisplay.isNotEmpty
-                      ? hebrewMonthDisplay
-                      : monthFormat.format(_currentMonth),
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w600,
-                    color: Color(0xFF1A1A1A),
-                  ),
-                ),
-                // Secondary display: Gregorian date for Hebrew locale
-                if (isHebrew)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 2),
-                    child: Text(
-                      monthFormat.format(_currentMonth),
-                      style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+            GestureDetector(
+              onTap: _goToToday,
+              child: Column(
+                children: [
+                  // Primary display: Hebrew month for Hebrew locale, Gregorian for English
+                  Text(
+                    isHebrew && hebrewMonthDisplay.isNotEmpty
+                        ? hebrewMonthDisplay
+                        : monthFormat.format(_currentMonth),
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF1A1A1A),
                     ),
                   ),
-                const SizedBox(height: 2),
-                Text(
-                  isHebrew ? 'לחץ לחזור להיום' : 'Tap to go to today',
-                  style: TextStyle(fontSize: 11, color: Colors.grey[500]),
-                ),
-              ],
+                  // Secondary display: Gregorian date for Hebrew locale
+                  if (isHebrew)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 2),
+                      child: Text(
+                        monthFormat.format(_currentMonth),
+                        style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                      ),
+                    ),
+                  const SizedBox(height: 2),
+                  Text(
+                    isHebrew ? 'לחץ לחזור להיום' : 'Tap to go to today',
+                    style: TextStyle(fontSize: 11, color: Colors.grey[500]),
+                  ),
+                ],
+              ),
             ),
-          ),
-          IconButton(
-            onPressed: _nextMonth,
-            icon: Icon(
-              isHebrew ? Icons.chevron_left : Icons.chevron_right,
-              color: const Color(0xFF1A1A1A),
+            IconButton(
+              onPressed: _nextMonth,
+              icon: const Icon(
+                Icons.chevron_right,
+                color: Color(0xFF1A1A1A),
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
