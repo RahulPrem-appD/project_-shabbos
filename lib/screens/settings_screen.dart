@@ -4,6 +4,7 @@ import '../models/candle_lighting.dart';
 import '../services/location_service.dart';
 import '../services/notification_service.dart';
 import '../services/audio_service.dart';
+import '../services/hebcal_service.dart';
 import 'sound_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -28,6 +29,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   final LocationService _locationService = LocationService();
   final NotificationService _notificationService = NotificationService();
   final AudioService _audioService = AudioService();
+  final HebcalService _hebcalService = HebcalService();
 
   bool _useGps = true;
   LocationInfo? _savedLocation;
@@ -53,8 +55,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final preMinutes = await _notificationService.getPreNotificationMinutes();
     final candleEnabled = await _notificationService
         .getCandleNotificationEnabled();
-    final preSound = await _audioService.getPreNotificationSound();
-    final candleSound = await _audioService.getCandleLightingSound();
+    final preSound = await _audioService.getEarlyReminderSound();
+    final candleSound = _audioService.getCandleLightingSound();
 
     setState(() {
       _useGps = useGps;
@@ -97,97 +99,102 @@ class _SettingsScreenState extends State<SettingsScreen> {
             if (!widget.showAppBar) _buildHeader(),
             Expanded(
               child: ListView(
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 8,
+                ),
                 children: [
-              _buildSection(
-                title: isHebrew ? 'שפה' : 'Language',
-                children: [_buildLanguageSelector()],
-              ),
+                  _buildSection(
+                    title: isHebrew ? 'שפה' : 'Language',
+                    children: [_buildLanguageSelector()],
+                  ),
 
-              _buildSection(
-                title: isHebrew ? 'מיקום' : 'Location',
-                children: [
-                  _buildSwitchTile(
-                    icon: Icons.gps_fixed,
-                    title: isHebrew ? 'מיקום אוטומטי' : 'Auto Location',
-                    subtitle: isHebrew ? 'השתמש ב-GPS' : 'Use GPS',
-                    value: _useGps,
-                    onChanged: _onGpsChanged,
+                  _buildSection(
+                    title: isHebrew ? 'מיקום' : 'Location',
+                    children: [
+                      _buildSwitchTile(
+                        icon: Icons.gps_fixed,
+                        title: isHebrew ? 'מיקום אוטומטי' : 'Auto Location',
+                        subtitle: isHebrew ? 'השתמש ב-GPS' : 'Use GPS',
+                        value: _useGps,
+                        onChanged: _onGpsChanged,
+                      ),
+                      _buildActionTile(
+                        icon: Icons.location_city,
+                        title: isHebrew ? 'בחר עיר' : 'Select City',
+                        subtitle: _savedLocation?.displayName,
+                        onTap: _showCityPicker,
+                      ),
+                    ],
                   ),
-                  _buildActionTile(
-                    icon: Icons.location_city,
-                    title: isHebrew ? 'בחר עיר' : 'Select City',
-                    subtitle: _savedLocation?.displayName,
-                    onTap: _showCityPicker,
-                  ),
-                ],
-              ),
 
-              _buildSection(
-                title: isHebrew ? 'התראות' : 'Notifications',
-                children: [
-                  _buildSwitchTile(
-                    icon: Icons.notifications_outlined,
-                    title: isHebrew ? 'הפעל התראות' : 'Enable Notifications',
-                    value: _notificationsEnabled,
-                    onChanged: _onNotificationsChanged,
+                  _buildSection(
+                    title: isHebrew ? 'התראות' : 'Notifications',
+                    children: [
+                      _buildSwitchTile(
+                        icon: Icons.notifications_outlined,
+                        title: isHebrew
+                            ? 'הפעל התראות'
+                            : 'Enable Notifications',
+                        value: _notificationsEnabled,
+                        onChanged: _onNotificationsChanged,
+                      ),
+                      if (_notificationsEnabled) ...[
+                        _buildTimePicker(),
+                        _buildSwitchTile(
+                          icon: Icons.local_fire_department,
+                          title: isHebrew ? 'בזמן הדלקה' : 'At Candle Lighting',
+                          subtitle: isHebrew
+                              ? 'התראה בזמן ההדלקה'
+                              : 'Notification at lighting time',
+                          value: _candleNotificationEnabled,
+                          onChanged: _onCandleNotificationChanged,
+                        ),
+                        _buildActionTile(
+                          icon: Icons.play_circle_outline,
+                          title: isHebrew ? 'בדוק התראה' : 'Test Notification',
+                          subtitle: isHebrew
+                              ? 'התראה מיידית'
+                              : 'Immediate notification',
+                          onTap: _testNotification,
+                        ),
+                        _buildActionTile(
+                          icon: Icons.schedule_send,
+                          title: isHebrew
+                              ? 'בדוק התראה מתוזמנת'
+                              : 'Test Scheduled Notification',
+                          subtitle: isHebrew
+                              ? 'התראה בעוד 10 שניות (סגור את האפליקציה)'
+                              : 'Notification in 10 seconds (close app)',
+                          onTap: _testDelayedNotification,
+                        ),
+                      ],
+                    ],
                   ),
-                  if (_notificationsEnabled) ...[
-                    _buildTimePicker(),
-                    _buildSwitchTile(
-                      icon: Icons.local_fire_department,
-                      title: isHebrew ? 'בזמן הדלקה' : 'At Candle Lighting',
-                      subtitle: isHebrew
-                          ? 'התראה בזמן ההדלקה'
-                          : 'Notification at lighting time',
-                      value: _candleNotificationEnabled,
-                      onChanged: _onCandleNotificationChanged,
-                    ),
-                    _buildActionTile(
-                      icon: Icons.play_circle_outline,
-                      title: isHebrew ? 'בדוק התראה' : 'Test Notification',
-                      subtitle: isHebrew
-                          ? 'התראה מיידית'
-                          : 'Immediate notification',
-                      onTap: _testNotification,
-                    ),
-                    _buildActionTile(
-                      icon: Icons.schedule_send,
-                      title: isHebrew
-                          ? 'בדוק התראה מתוזמנת'
-                          : 'Test Scheduled Notification',
-                      subtitle: isHebrew
-                          ? 'התראה בעוד 10 שניות (סגור את האפליקציה)'
-                          : 'Notification in 10 seconds (close app)',
-                      onTap: _testDelayedNotification,
-                    ),
-                  ],
-                ],
-              ),
 
-              _buildSection(
-                title: isHebrew ? 'צלילים' : 'Sounds',
-                children: [
-                  _buildActionTile(
-                    icon: Icons.music_note,
-                    title: isHebrew
-                        ? 'צליל תזכורת מוקדמת'
-                        : 'Early Reminder Sound',
-                    subtitle: _getSoundName(_preSound),
-                    onTap: () => _openSoundScreen(),
+                  _buildSection(
+                    title: isHebrew ? 'צלילים' : 'Sounds',
+                    children: [
+                      _buildActionTile(
+                        icon: Icons.music_note,
+                        title: isHebrew
+                            ? 'צליל תזכורת מוקדמת'
+                            : 'Early Reminder Sound',
+                        subtitle: _getSoundName(_preSound),
+                        onTap: () => _openSoundScreen(),
+                      ),
+                      _buildActionTile(
+                        icon: Icons.notifications_active,
+                        title: isHebrew
+                            ? 'צליל הדלקת נרות'
+                            : 'Candle Lighting Sound',
+                        subtitle: _getSoundName(_candleSound),
+                        onTap: () => _openSoundScreen(),
+                      ),
+                    ],
                   ),
-                  _buildActionTile(
-                    icon: Icons.notifications_active,
-                    title: isHebrew
-                        ? 'צליל הדלקת נרות'
-                        : 'Candle Lighting Sound',
-                    subtitle: _getSoundName(_candleSound),
-                    onTap: () => _openSoundScreen(),
-                  ),
-                ],
-              ),
 
-              const SizedBox(height: 40),
+                  const SizedBox(height: 40),
                 ],
               ),
             ),
@@ -446,6 +453,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 if (value != null) {
                   setState(() => _preMinutes = value);
                   await _notificationService.setPreNotificationMinutes(value);
+                  await _rescheduleNotifications();
                   widget.onLocationChanged();
                 }
               },
@@ -505,7 +513,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     await _notificationService.sendTestNotification();
 
     // Play the selected sound
-    final soundId = await _audioService.getCandleLightingSound();
+    final soundId = _audioService.getCandleLightingSound();
     if (soundId != 'default' && soundId != 'silent') {
       await _audioService.playSound(soundId);
     }
@@ -538,7 +546,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                isHebrew ? '🕯️ בדיקת זרימת הדלקת נרות' : '🕯️ Testing Candle Lighting Flow',
+                isHebrew
+                    ? '🕯️ בדיקת זרימת הדלקת נרות'
+                    : '🕯️ Testing Candle Lighting Flow',
                 style: const TextStyle(fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 4),
@@ -628,6 +638,52 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ),
       ),
     );
+  }
+
+  /// Reschedule all notifications with current settings
+  Future<void> _rescheduleNotifications() async {
+    try {
+      debugPrint('SettingsScreen: Rescheduling notifications...');
+
+      // Get current location
+      final location = await _locationService.getSavedLocation();
+      if (location == null) {
+        debugPrint('SettingsScreen: No location saved, skipping reschedule');
+        return;
+      }
+
+      // Calculate date range (today + 30 days)
+      final now = DateTime.now();
+      final startDate = DateTime(now.year, now.month, now.day);
+      final endDate = startDate.add(const Duration(days: 30));
+
+      // Fetch candle lighting times
+      final times = await _hebcalService.getExtendedCandleLightingTimes(
+        latitude: location.latitude,
+        longitude: location.longitude,
+        startDate: startDate,
+        endDate: endDate,
+        locale: widget.locale,
+      );
+
+      final futureTimes = times
+          .where((t) => t.candleLightingTime.isAfter(now))
+          .toList();
+
+      if (futureTimes.isEmpty) {
+        debugPrint('SettingsScreen: No future times, skipping reschedule');
+        return;
+      }
+
+      // Reschedule with new settings
+      await _notificationService.rescheduleAllNotifications(
+        futureTimes.take(10).toList(),
+      );
+
+      debugPrint('SettingsScreen: Notifications rescheduled successfully');
+    } catch (e) {
+      debugPrint('SettingsScreen: Error rescheduling: $e');
+    }
   }
 }
 

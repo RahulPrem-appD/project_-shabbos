@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
 import '../services/audio_service.dart';
+import '../services/notification_service.dart';
+import '../services/hebcal_service.dart';
+import '../services/location_service.dart';
 
 class SoundScreen extends StatefulWidget {
   final String locale;
+  final VoidCallback? onSoundChanged;
 
-  const SoundScreen({super.key, required this.locale});
+  const SoundScreen({super.key, required this.locale, this.onSoundChanged});
 
   @override
   State<SoundScreen> createState() => _SoundScreenState();
@@ -12,7 +16,10 @@ class SoundScreen extends StatefulWidget {
 
 class _SoundScreenState extends State<SoundScreen> {
   final AudioService _audioService = AudioService();
-  
+  final NotificationService _notificationService = NotificationService();
+  final HebcalService _hebcalService = HebcalService();
+  final LocationService _locationService = LocationService();
+
   String _earlyReminderSound = AudioService.defaultEarlyReminderSound;
   String _yomTovSound = AudioService.defaultYomTovSound;
   String? _playingId;
@@ -28,10 +35,10 @@ class _SoundScreenState extends State<SoundScreen> {
 
   Future<void> _loadSettings() async {
     setState(() => _isLoading = true);
-    
+
     final earlySound = await _audioService.getEarlyReminderSound();
     final yomTovSound = await _audioService.getYomTovSound();
-    
+
     setState(() {
       _earlyReminderSound = earlySound;
       _yomTovSound = yomTovSound;
@@ -70,36 +77,44 @@ class _SoundScreenState extends State<SoundScreen> {
             Padding(
               padding: const EdgeInsets.only(right: 16),
               child: Center(
-                child: Text('בס״ד', style: TextStyle(fontSize: 14, color: Colors.grey[400])),
+                child: Text(
+                  'בס״ד',
+                  style: TextStyle(fontSize: 14, color: Colors.grey[400]),
+                ),
               ),
             ),
           ],
         ),
         body: _isLoading
-            ? const Center(child: CircularProgressIndicator(color: Color(0xFFE8B923)))
+            ? const Center(
+                child: CircularProgressIndicator(color: Color(0xFFE8B923)),
+              )
             : ListView(
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 8,
+                ),
                 children: [
                   const SizedBox(height: 8),
-                  
+
                   // Early Reminder Section (Music only - selectable)
                   _buildEarlyReminderSection(),
-                  
+
                   const SizedBox(height: 24),
-                  
+
                   // Candle Lighting Section (FIXED - Rav Shalom Shofar)
                   _buildCandleLightingSection(),
-                  
+
                   const SizedBox(height: 24),
-                  
+
                   // Yom Tov Section (selectable)
                   _buildYomTovSection(),
-                  
+
                   const SizedBox(height: 32),
-                  
+
                   // Info text
                   _buildInfoBox(),
-                  
+
                   const SizedBox(height: 40),
                 ],
               ),
@@ -115,11 +130,13 @@ class _SoundScreenState extends State<SoundScreen> {
       children: [
         _buildSectionHeader(
           title: isHebrew ? 'תזכורת מוקדמת' : 'Early Reminder',
-          subtitle: isHebrew ? 'מוזיקה בלבד • לפני הדלקת נרות' : 'Music only • Before candle lighting',
+          subtitle: isHebrew
+              ? 'מוזיקה בלבד • לפני הדלקת נרות'
+              : 'Music only • Before candle lighting',
           icon: Icons.music_note,
         ),
         const SizedBox(height: 8),
-        
+
         Container(
           decoration: BoxDecoration(
             color: const Color(0xFFF8F8F8),
@@ -134,6 +151,7 @@ class _SoundScreenState extends State<SoundScreen> {
                   onTap: () async {
                     setState(() => _earlyReminderSound = sounds[i].id);
                     await _audioService.setEarlyReminderSound(sounds[i].id);
+                    await _rescheduleNotifications();
                   },
                 ),
                 if (i < sounds.length - 1)
@@ -154,29 +172,37 @@ class _SoundScreenState extends State<SoundScreen> {
       children: [
         _buildSectionHeader(
           title: isHebrew ? 'הדלקת נרות' : 'Candle Lighting',
-          subtitle: isHebrew ? 'שופר רב שלום • קבוע' : 'Rav Shalom Shofar • Fixed',
+          subtitle: isHebrew
+              ? 'שופר רב שלום • קבוע'
+              : 'Rav Shalom Shofar • Fixed',
           icon: Icons.campaign,
           isFixed: true,
         ),
         const SizedBox(height: 8),
-        
+
         Container(
           decoration: BoxDecoration(
             color: const Color(0xFFFFFBEB),
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: const Color(0xFFE8B923).withValues(alpha: 0.5)),
+            border: Border.all(
+              color: const Color(0xFFE8B923).withValues(alpha: 0.5),
+            ),
           ),
           child: _buildFixedSoundTile(sound: fixedSound),
         ),
-        
+
         const SizedBox(height: 8),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 4),
           child: Text(
-            isHebrew 
+            isHebrew
                 ? '🔒 צליל זה קבוע כדי להבדיל בין התזכורת להדלקה'
                 : '🔒 This sound is fixed to distinguish from early reminder',
-            style: TextStyle(fontSize: 12, color: Colors.grey[500], fontStyle: FontStyle.italic),
+            style: TextStyle(
+              fontSize: 12,
+              color: Colors.grey[500],
+              fontStyle: FontStyle.italic,
+            ),
           ),
         ),
       ],
@@ -195,7 +221,7 @@ class _SoundScreenState extends State<SoundScreen> {
           icon: Icons.celebration,
         ),
         const SizedBox(height: 8),
-        
+
         Container(
           decoration: BoxDecoration(
             color: const Color(0xFFF8F8F8),
@@ -210,6 +236,7 @@ class _SoundScreenState extends State<SoundScreen> {
                   onTap: () async {
                     setState(() => _yomTovSound = sounds[i].id);
                     await _audioService.setYomTovSound(sounds[i].id);
+                    await _rescheduleNotifications();
                   },
                 ),
                 if (i < sounds.length - 1)
@@ -235,16 +262,12 @@ class _SoundScreenState extends State<SoundScreen> {
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: isFixed 
+              color: isFixed
                   ? const Color(0xFFE8B923).withValues(alpha: 0.2)
                   : const Color(0xFFE8B923).withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(8),
             ),
-            child: Icon(
-              icon,
-              size: 20,
-              color: const Color(0xFFE8B923),
-            ),
+            child: Icon(icon, size: 20, color: const Color(0xFFE8B923)),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -264,7 +287,10 @@ class _SoundScreenState extends State<SoundScreen> {
                     if (isFixed) ...[
                       const SizedBox(width: 8),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 2,
+                        ),
                         decoration: BoxDecoration(
                           color: const Color(0xFFE8B923),
                           borderRadius: BorderRadius.circular(4),
@@ -301,7 +327,7 @@ class _SoundScreenState extends State<SoundScreen> {
   }) {
     final isPlaying = _playingId == sound.id;
     final hasPlayableSound = sound.assetPath != null;
-    
+
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(16),
@@ -313,17 +339,13 @@ class _SoundScreenState extends State<SoundScreen> {
               width: 40,
               height: 40,
               decoration: BoxDecoration(
-                color: isSelected 
-                    ? const Color(0xFFE8B923) 
-                    : Colors.white,
+                color: isSelected ? const Color(0xFFE8B923) : Colors.white,
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Icon(
                 _getIconForSound(sound),
                 size: 20,
-                color: isSelected 
-                    ? Colors.white 
-                    : const Color(0xFF1A1A1A),
+                color: isSelected ? Colors.white : const Color(0xFF1A1A1A),
               ),
             ),
             const SizedBox(width: 12),
@@ -349,7 +371,11 @@ class _SoundScreenState extends State<SoundScreen> {
               ),
             ],
             if (isSelected)
-              const Icon(Icons.check_circle, color: Color(0xFFE8B923), size: 24),
+              const Icon(
+                Icons.check_circle,
+                color: Color(0xFFE8B923),
+                size: 24,
+              ),
           ],
         ),
       ),
@@ -358,7 +384,7 @@ class _SoundScreenState extends State<SoundScreen> {
 
   Widget _buildFixedSoundTile({required SoundOption sound}) {
     final isPlaying = _playingId == sound.id;
-    
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       child: Row(
@@ -370,11 +396,7 @@ class _SoundScreenState extends State<SoundScreen> {
               color: const Color(0xFFE8B923),
               borderRadius: BorderRadius.circular(10),
             ),
-            child: const Icon(
-              Icons.campaign,
-              size: 20,
-              color: Colors.white,
-            ),
+            child: const Icon(Icons.campaign, size: 20, color: Colors.white),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -391,10 +413,7 @@ class _SoundScreenState extends State<SoundScreen> {
                 ),
                 Text(
                   isHebrew ? 'צליל ברירת מחדל' : 'Default sound',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey[500],
-                  ),
+                  style: TextStyle(fontSize: 12, color: Colors.grey[500]),
                 ),
               ],
             ),
@@ -418,7 +437,9 @@ class _SoundScreenState extends State<SoundScreen> {
       decoration: BoxDecoration(
         color: const Color(0xFFFFFBEB),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFE8B923).withValues(alpha: 0.3)),
+        border: Border.all(
+          color: const Color(0xFFE8B923).withValues(alpha: 0.3),
+        ),
       ),
       child: Column(
         children: [
@@ -429,7 +450,7 @@ class _SoundScreenState extends State<SoundScreen> {
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
-                  isHebrew 
+                  isHebrew
                       ? 'התזכורת המוקדמת משמיעה מוזיקה כדי להבדיל מהשופר בזמן הדלקת הנרות.'
                       : 'Early reminder plays music to distinguish from the shofar at candle lighting time.',
                   style: TextStyle(fontSize: 13, color: Colors.grey[600]),
@@ -473,6 +494,55 @@ class _SoundScreenState extends State<SoundScreen> {
       if (mounted) {
         setState(() => _playingId = null);
       }
+    }
+  }
+
+  /// Reschedule all notifications with the new sound settings
+  Future<void> _rescheduleNotifications() async {
+    try {
+      debugPrint('SoundScreen: Rescheduling notifications with new sound...');
+
+      // Get current location
+      final location = await _locationService.getSavedLocation();
+      if (location == null) {
+        debugPrint('SoundScreen: No location saved, skipping reschedule');
+        return;
+      }
+
+      // Calculate date range (today + 30 days)
+      final now = DateTime.now();
+      final startDate = DateTime(now.year, now.month, now.day);
+      final endDate = startDate.add(const Duration(days: 30));
+
+      // Fetch candle lighting times
+      final times = await _hebcalService.getExtendedCandleLightingTimes(
+        latitude: location.latitude,
+        longitude: location.longitude,
+        startDate: startDate,
+        endDate: endDate,
+        locale: widget.locale,
+      );
+
+      final futureTimes = times
+          .where((t) => t.candleLightingTime.isAfter(now))
+          .toList();
+
+      if (futureTimes.isEmpty) {
+        debugPrint('SoundScreen: No future times, skipping reschedule');
+        return;
+      }
+
+      // Reschedule with new sound settings
+      await _notificationService.rescheduleAllNotifications(
+        futureTimes.take(10).toList(),
+      );
+
+      debugPrint('SoundScreen: Notifications rescheduled successfully');
+
+      // Notify parent if callback provided
+      widget.onSoundChanged?.call();
+    } catch (e) {
+      debugPrint('SoundScreen: Error rescheduling: $e');
     }
   }
 }

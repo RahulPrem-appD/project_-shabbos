@@ -700,6 +700,14 @@ class NotificationService {
         false, // If true, no alarm sound (for candle lighting notifications)
   }) async {
     try {
+      debugPrint('NotificationService: ---- SCHEDULING NOTIFICATION ----');
+      debugPrint('NotificationService: ID: $id');
+      debugPrint('NotificationService: Title: $title');
+      debugPrint('NotificationService: Scheduled time: $scheduledTime');
+      debugPrint('NotificationService: isPreNotification: $isPreNotification');
+      debugPrint('NotificationService: isYomTov: $isYomTov');
+      debugPrint('NotificationService: isSilent: $isSilent');
+      
       // Get the appropriate sound for this notification type
       // If silent, use 'silent' sound ID
       final soundId = isSilent
@@ -708,6 +716,8 @@ class NotificationService {
               isPreNotification: isPreNotification,
               isYomTov: isYomTov,
             );
+      
+      debugPrint('NotificationService: Sound ID selected: $soundId');
 
       if (Platform.isAndroid) {
         // Use native alarm scheduler for maximum reliability on Android
@@ -1014,6 +1024,24 @@ class NotificationService {
   Future<void> setPreNotificationMinutes(int minutes) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt(_preNotificationMinutesKey, minutes);
+    debugPrint('NotificationService: Pre-notification minutes set to $minutes');
+  }
+
+  /// Force reschedule all notifications with current settings
+  /// Call this after changing pre-notification minutes or sound settings
+  Future<void> rescheduleAllNotifications(List<CandleLighting> candleLightings) async {
+    debugPrint('NotificationService: ===== RESCHEDULING ALL NOTIFICATIONS =====');
+    debugPrint('NotificationService: Cancelling existing notifications...');
+    
+    // Cancel all existing notifications
+    await _notifications.cancelAll();
+    if (Platform.isAndroid) {
+      await NativeAlarmService.cancelAllAlarms();
+    }
+    
+    // Reschedule with new settings
+    await scheduleNotifications(candleLightings);
+    debugPrint('NotificationService: ===== RESCHEDULE COMPLETE =====');
   }
 
   Future<bool> getCandleNotificationEnabled() async {
