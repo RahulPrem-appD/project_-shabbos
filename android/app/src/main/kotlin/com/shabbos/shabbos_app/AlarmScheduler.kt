@@ -4,16 +4,22 @@ import android.app.AlarmManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.content.SharedPreferences
 import android.os.Build
 import android.util.Log
+import org.json.JSONArray
+import org.json.JSONObject
 import java.text.SimpleDateFormat
 import java.util.*
 
 class AlarmScheduler(private val context: Context) {
     private val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+    private val prefs: SharedPreferences = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
     
     companion object {
         private const val TAG = "ShabbosAlarmScheduler"
+        private const val PREFS_NAME = "shabbos_alarms"
+        private const val KEY_SCHEDULED_ALARMS = "scheduled_alarms"
     }
     
     fun scheduleAlarm(
@@ -75,6 +81,9 @@ class AlarmScheduler(private val context: Context) {
                 scheduleAlarmInternal(timestampMillis, pendingIntent, id)
             }
             
+            // Save alarm data for persistence (survives device restart)
+            saveAlarmData(id, timestampMillis, title, body, isPreNotification, candleLightingTime, soundId)
+            
             Log.d(TAG, "Alarm #$id scheduled successfully")
             Log.d(TAG, "========================================")
             return true
@@ -83,6 +92,171 @@ class AlarmScheduler(private val context: Context) {
             Log.d(TAG, "========================================")
             return false
         }
+    }
+    
+    /**
+     * Save alarm data to SharedPreferences for persistence across device restarts
+     */
+    private fun saveAlarmData(
+        id: Int,
+        timestampMillis: Long,
+        title: String,
+        body: String,
+        isPreNotification: Boolean,
+        candleLightingTime: Long,
+        soundId: String
+    ) {
+        try {
+            val alarmsJson = prefs.getString(KEY_SCHEDULED_ALARMS, "[]")
+            val alarmsArray = JSONArray(alarmsJson)
+            
+            // Remove any existing alarm with the same ID
+            val newArray = JSONArray()
+            for (i in 0 until alarmsArray.length()) {
+                val alarm = alarmsArray.getJSONObject(i)
+                if (alarm.getInt("id") != id) {
+                    newArray.put(alarm)
+                }
+            }
+            
+            // Add the new alarm
+            val alarmObject = JSONObject().apply {
+                put("id", id)
+                put("timestampMillis", timestampMillis)
+                put("title", title)
+                put("body", body)
+                put("isPreNotification", isPreNotification)
+                put("candleLightingTime", candleLightingTime)
+                put("soundId", soundId)
+            }
+            newArray.put(alarmObject)
+            
+            prefs.edit().putString(KEY_SCHEDULED_ALARMS, newArray.toString()).apply()
+            Log.d(TAG, "Saved alarm #$id to SharedPreferences (total: ${newArray.length()} alarms)")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to save alarm data: ${e.message}", e)
+        }
+    }
+    
+    /**
+     * Remove alarm data from SharedPreferences
+     */
+    private fun removeAlarmData(id: Int) {
+        try {
+            val alarmsJson = prefs.getString(KEY_SCHEDULED_ALARMS, "[]")
+            val alarmsArray = JSONArray(alarmsJson)
+            
+            val newArray = JSONArray()
+            for (i in 0 until alarmsArray.length()) {
+                val alarm = alarmsArray.getJSONObject(i)
+                if (alarm.getInt("id") != id) {
+                    newArray.put(alarm)
+                }
+            }
+            
+            prefs.edit().putString(KEY_SCHEDULED_ALARMS, newArray.toString()).apply()
+            Log.d(TAG, "Removed alarm #$id from SharedPreferences")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to remove alarm data: ${e.message}", e)
+        }
+    }
+    
+    /**
+     * Reschedule all saved alarms (called after device boot)
+     */
+    fun rescheduleAllSavedAlarms() {
+        try {
+            Log.d(TAG, "========================================")
+            Log.d(TAG, "Rescheduling saved alarms after boot...")
+            
+            val alarmsJson = prefs.getString(KEY_SCHEDULED_ALARMS, "[]")
+            val alarmsArray = JSONArray(alarmsJson)
+            val now = System.currentTimeMillis()
+            var rescheduledCount = 0
+            var expiredCount = 0
+            
+            for (i in 0 until alarmsArray.length()) {
+                val alarm = alarmsArray.getJSONObject(i)
+                val id = alarm.getInt("id")
+                val timestampMillis = alarm.getLong("timestampMillis")
+                val title = alarm.getString("title")
+                val body = alarm.getString("body")
+                val isPreNotification = alarm.getBoolean("isPreNotification")
+                val candleLightingTime = alarm.optLong("candleLightingTime", 0L)
+                val soundId = alarm.optString("soundId", "rav_shalom_shofar")
+                
+                // Only reschedule alarms that are still in the future
+                if (timestampMillis > now) {
+                    Log.d(TAG, "Rescheduling alarm #$id for ${Date(timestampMillis)}")
+                    
+                    val intent = Intent(context, AlarmReceiver::class.java).apply {
+                        putExtra("notification_id", id)
+                        putExtra("notification_title", title)
+                        putExtra("notification_body", body)
+                        putExtra("is_pre_notification", isPreNotification)
+                        putExtra("candle_lighting_time", candleLightingTime)
+                        putExtra("sound_id", soundId)
+                        action = "com.shabbos.shabbos_app.ALARM_$id"
+                    }
+                    
+                    val pendingIntentFlags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                        PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+                    } else {
+                        PendingIntent.FLAG_UPDATE_CURRENT
+                    }
+                    
+                    val pendingIntent = PendingIntent.getBroadcast(context, id, intent, pendingIntentFlags)
+                    scheduleAlarmInternal(timestampMillis, pendingIntent, id)
+                    rescheduledCount++
+                } else {
+                    Log.d(TAG, "Skipping expired alarm #$id (was scheduled for ${Date(timestampMillis)})")
+                    expiredCount++
+                }
+            }
+            
+            // Clean up expired alarms from storage
+            if (expiredCount > 0) {
+                cleanupExpiredAlarms()
+            }
+            
+            Log.d(TAG, "Rescheduled $rescheduledCount alarms, skipped $expiredCount expired alarms")
+            Log.d(TAG, "========================================")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to reschedule alarms: ${e.message}", e)
+        }
+    }
+    
+    /**
+     * Remove expired alarms from storage
+     */
+    private fun cleanupExpiredAlarms() {
+        try {
+            val alarmsJson = prefs.getString(KEY_SCHEDULED_ALARMS, "[]")
+            val alarmsArray = JSONArray(alarmsJson)
+            val now = System.currentTimeMillis()
+            
+            val newArray = JSONArray()
+            for (i in 0 until alarmsArray.length()) {
+                val alarm = alarmsArray.getJSONObject(i)
+                val timestampMillis = alarm.getLong("timestampMillis")
+                if (timestampMillis > now) {
+                    newArray.put(alarm)
+                }
+            }
+            
+            prefs.edit().putString(KEY_SCHEDULED_ALARMS, newArray.toString()).apply()
+            Log.d(TAG, "Cleaned up expired alarms. Remaining: ${newArray.length()}")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to cleanup expired alarms: ${e.message}", e)
+        }
+    }
+    
+    /**
+     * Clear all saved alarm data
+     */
+    fun clearAllSavedAlarms() {
+        prefs.edit().putString(KEY_SCHEDULED_ALARMS, "[]").apply()
+        Log.d(TAG, "Cleared all saved alarm data")
     }
     
     private fun scheduleAlarmInternal(timestampMillis: Long, pendingIntent: PendingIntent, id: Int) {
@@ -163,6 +337,9 @@ class AlarmScheduler(private val context: Context) {
                 Log.d(TAG, "Alarm #$id was not scheduled")
             }
             
+            // Remove from saved data
+            removeAlarmData(id)
+            
             return true
         } catch (e: Exception) {
             Log.e(TAG, "Failed to cancel alarm #$id: ${e.message}", e)
@@ -178,6 +355,8 @@ class AlarmScheduler(private val context: Context) {
                 cancelledCount++
             }
         }
-        Log.d(TAG, "Cancelled $cancelledCount alarms")
+        // Clear all saved alarm data
+        clearAllSavedAlarms()
+        Log.d(TAG, "Cancelled $cancelledCount alarms and cleared saved data")
     }
 }

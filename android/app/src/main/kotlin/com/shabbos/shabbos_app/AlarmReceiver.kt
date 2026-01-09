@@ -94,7 +94,8 @@ class AlarmReceiver : BroadcastReceiver() {
             playCustomSound(context, soundId)
             
             // Create and show notification (without system sound since we play our own)
-            showNotification(context, notificationId, title, body, isPreNotification, candleLightingTime)
+            // Pass soundId to determine if this is an Issur Melacha notification (soundId == "default")
+            showNotification(context, notificationId, title, body, isPreNotification, candleLightingTime, soundId)
             
             Log.d(TAG, "Notification shown successfully")
         } catch (e: Exception) {
@@ -121,6 +122,13 @@ class AlarmReceiver : BroadcastReceiver() {
                 return
             }
             
+            // Check for default system notification sound
+            if (soundId == "default") {
+                Log.d(TAG, "Default sound mode - using system notification sound")
+                playDefaultNotificationSound(context)
+                return
+            }
+            
             // Get the asset path for the sound
             val assetPath = SOUND_FILES[soundId]
             if (assetPath == null) {
@@ -134,6 +142,27 @@ class AlarmReceiver : BroadcastReceiver() {
             
         } catch (e: Exception) {
             Log.e(TAG, "Error playing custom sound: ${e.message}", e)
+        }
+    }
+    
+    private fun playDefaultNotificationSound(context: Context) {
+        try {
+            Log.d(TAG, "Playing default system notification sound")
+            
+            // Get the default notification sound URI
+            val defaultSoundUri = android.media.RingtoneManager.getDefaultUri(
+                android.media.RingtoneManager.TYPE_NOTIFICATION
+            )
+            
+            if (defaultSoundUri != null) {
+                val ringtone = android.media.RingtoneManager.getRingtone(context, defaultSoundUri)
+                ringtone?.play()
+                Log.d(TAG, "✓ Default notification sound played")
+            } else {
+                Log.w(TAG, "No default notification sound available")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error playing default notification sound: ${e.message}", e)
         }
     }
     
@@ -214,11 +243,12 @@ class AlarmReceiver : BroadcastReceiver() {
                 enableLights(true)
                 setShowBadge(true)
                 setSound(null, null) // Disable channel sound - we play custom sounds
-                lockscreenVisibility = NotificationCompat.VISIBILITY_PUBLIC
+                lockscreenVisibility = android.app.Notification.VISIBILITY_PUBLIC
+                setBypassDnd(true) // Bypass Do Not Disturb mode - critical for religious reminders
             }
             
             notificationManager.createNotificationChannel(channel)
-            Log.d(TAG, "Notification channel created/updated (without sound)")
+            Log.d(TAG, "Notification channel created/updated (without sound, bypass DND enabled)")
         }
     }
     
@@ -228,9 +258,13 @@ class AlarmReceiver : BroadcastReceiver() {
         title: String, 
         body: String,
         isPreNotification: Boolean = false,
-        candleLightingTime: Long = 0L
+        candleLightingTime: Long = 0L,
+        soundId: String = "rav_shalom_shofar"
     ) {
         try {
+            // Check if this is an Issur Melacha notification (uses default sound)
+            val isIssurMelacha = soundId == "default"
+            
             val intent = Intent(context, MainActivity::class.java).apply {
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
                 action = "android.intent.action.MAIN"
@@ -250,16 +284,16 @@ class AlarmReceiver : BroadcastReceiver() {
                 pendingIntentFlags
             )
             
-            // Build notification
+            // Build notification - adjust priority and category based on notification type
             val builder = NotificationCompat.Builder(context, CHANNEL_ID)
                 .setSmallIcon(R.drawable.ic_notification)
                 .setContentTitle(title)
                 .setContentText(body)
-                .setPriority(NotificationCompat.PRIORITY_MAX)
-                .setCategory(NotificationCompat.CATEGORY_ALARM)
+                .setPriority(if (isIssurMelacha) NotificationCompat.PRIORITY_HIGH else NotificationCompat.PRIORITY_MAX)
+                .setCategory(if (isIssurMelacha) NotificationCompat.CATEGORY_REMINDER else NotificationCompat.CATEGORY_ALARM)
                 .setSound(null) // No system sound - we play our own
                 .setVibrate(longArrayOf(0, 500, 250, 500))
-                .setAutoCancel(false) // Keep notification until candle lighting
+                .setAutoCancel(isIssurMelacha) // Issur Melacha can be dismissed, others stay
                 .setOngoing(isPreNotification && candleLightingTime > 0) // Make it sticky for countdown
                 .setContentIntent(pendingIntent)
                 .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
@@ -319,7 +353,11 @@ class AlarmReceiver : BroadcastReceiver() {
                 builder.setStyle(NotificationCompat.BigTextStyle().bigText(body))
                     .setWhen(System.currentTimeMillis())
                     .setShowWhen(true)
-                    .setFullScreenIntent(pendingIntent, false)
+                
+                // Only show full screen intent for candle lighting (shofar), not for Issur Melacha reminder
+                if (!isIssurMelacha) {
+                    builder.setFullScreenIntent(pendingIntent, false)
+                }
             }
             
             val notification = builder.build()

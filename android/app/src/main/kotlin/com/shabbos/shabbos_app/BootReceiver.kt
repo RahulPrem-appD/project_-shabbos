@@ -3,17 +3,15 @@ package com.shabbos.shabbos_app
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.os.PowerManager
 import android.util.Log
 
 /**
  * Receives BOOT_COMPLETED broadcast to reschedule alarms after device restart.
  * 
- * Note: This receiver logs that the device has rebooted. The actual rescheduling
- * happens when the user opens the app next time, as we need the Flutter engine
- * to fetch the updated candle lighting times.
- * 
- * For a more robust solution, we could store scheduled alarm data in SharedPreferences
- * and reschedule them here, but that would require duplicating the scheduling logic.
+ * This receiver reads saved alarm data from SharedPreferences and reschedules
+ * all alarms that are still in the future. This ensures notifications work
+ * even after device restart without requiring the user to open the app.
  */
 class BootReceiver : BroadcastReceiver() {
     companion object {
@@ -27,16 +25,32 @@ class BootReceiver : BroadcastReceiver() {
             
             Log.d(TAG, "========================================")
             Log.d(TAG, "Device boot completed!")
-            Log.d(TAG, "Alarms will be rescheduled when the app is opened.")
+            Log.d(TAG, "Rescheduling saved alarms...")
             Log.d(TAG, "========================================")
             
-            // Note: In a production app, you might want to:
-            // 1. Read saved alarm data from SharedPreferences
-            // 2. Reschedule alarms using AlarmScheduler
-            // 3. Or start a foreground service to handle this
+            // Acquire a wake lock to ensure we complete the rescheduling
+            val powerManager = context.getSystemService(Context.POWER_SERVICE) as PowerManager
+            val wakeLock = powerManager.newWakeLock(
+                PowerManager.PARTIAL_WAKE_LOCK,
+                "ShabbosApp::BootRescheduleWakeLock"
+            )
+            wakeLock.acquire(60000) // Hold for 60 seconds max
             
-            // For now, we just log that boot completed.
-            // The app will reschedule notifications when opened.
+            try {
+                // Reschedule all saved alarms
+                val alarmScheduler = AlarmScheduler(context)
+                alarmScheduler.rescheduleAllSavedAlarms()
+                
+                Log.d(TAG, "========================================")
+                Log.d(TAG, "Boot rescheduling complete!")
+                Log.d(TAG, "========================================")
+            } catch (e: Exception) {
+                Log.e(TAG, "Error rescheduling alarms on boot: ${e.message}", e)
+            } finally {
+                if (wakeLock.isHeld) {
+                    wakeLock.release()
+                }
+            }
         }
     }
 }

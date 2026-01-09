@@ -339,6 +339,13 @@ class NotificationService {
           await NativeAlarmService.requestExactAlarmPermission();
         }
 
+        // Check battery optimization
+        final isIgnoringBattery =
+            await NativeAlarmService.isIgnoringBatteryOptimizations();
+        debugPrint(
+          'NotificationService: Ignoring battery optimizations: $isIgnoringBattery',
+        );
+
         return notifPermission;
       }
     } else if (Platform.isIOS) {
@@ -374,29 +381,95 @@ class NotificationService {
     return false;
   }
 
-  NotificationDetails _getNotificationDetails({String? iosSoundFile}) {
-    const androidDetails = AndroidNotificationDetails(
-      _channelId,
-      _channelName,
-      channelDescription: _channelDesc,
-      importance: Importance.max,
-      priority: Priority.max,
-      playSound: true,
-      enableVibration: true,
-      enableLights: true,
-      icon: '@drawable/ic_notification',
-      category: AndroidNotificationCategory.alarm,
-      visibility: NotificationVisibility.public,
-      fullScreenIntent: true,
-    );
+  /// Check all critical permissions for reliable notifications
+  /// Returns a map with permission statuses for Android
+  Future<Map<String, bool>> checkAllPermissions() async {
+    final status = <String, bool>{
+      'notifications': false,
+      'exactAlarms': true, // Default true for non-Android or older versions
+      'batteryOptimization': true, // Default true (ignored)
+    };
 
+    if (Platform.isAndroid) {
+      final android = _notifications
+          .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin
+          >();
+
+      if (android != null) {
+        status['notifications'] =
+            await android.areNotificationsEnabled() ?? false;
+      }
+
+      status['exactAlarms'] = await NativeAlarmService.canScheduleExactAlarms();
+      status['batteryOptimization'] =
+          await NativeAlarmService.isIgnoringBatteryOptimizations();
+    } else if (Platform.isIOS) {
+      final ios = _notifications
+          .resolvePlatformSpecificImplementation<
+            IOSFlutterLocalNotificationsPlugin
+          >();
+
+      if (ios != null) {
+        final currentStatus = await ios.checkPermissions();
+        status['notifications'] = currentStatus?.isEnabled ?? false;
+      }
+    }
+
+    debugPrint('NotificationService: Permission status: $status');
+    return status;
+  }
+
+  /// Request battery optimization exemption (Android only)
+  Future<void> requestBatteryOptimizationExemption() async {
+    if (Platform.isAndroid) {
+      await NativeAlarmService.requestDisableBatteryOptimization();
+    }
+  }
+
+  NotificationDetails _getNotificationDetails({
+    String? iosSoundFile,
+    bool useDefaultSound = false,
+  }) {
+    // For default sound notifications, use a simpler Android notification
+    final androidDetails = useDefaultSound
+        ? const AndroidNotificationDetails(
+            _channelId,
+            _channelName,
+            channelDescription: _channelDesc,
+            importance: Importance.high,
+            priority: Priority.high,
+            playSound: true,
+            enableVibration: true,
+            enableLights: true,
+            icon: '@drawable/ic_notification',
+            category: AndroidNotificationCategory.reminder,
+            visibility: NotificationVisibility.public,
+          )
+        : const AndroidNotificationDetails(
+            _channelId,
+            _channelName,
+            channelDescription: _channelDesc,
+            importance: Importance.max,
+            priority: Priority.max,
+            playSound: true,
+            enableVibration: true,
+            enableLights: true,
+            icon: '@drawable/ic_notification',
+            category: AndroidNotificationCategory.alarm,
+            visibility: NotificationVisibility.public,
+            fullScreenIntent: true,
+          );
+
+    // For iOS: if useDefaultSound is true, don't pass a custom sound file
+    // This will use the system default notification sound
     final iosDetails = DarwinNotificationDetails(
       presentAlert: true,
       presentBadge: true,
       presentSound: true,
       badgeNumber: 1,
       interruptionLevel: InterruptionLevel.timeSensitive,
-      sound: iosSoundFile, // Custom sound file from app bundle
+      sound: useDefaultSound ? null : iosSoundFile, // null = default system sound
     );
 
     return NotificationDetails(android: androidDetails, iOS: iosDetails);
@@ -495,11 +568,11 @@ class NotificationService {
               '${lighting.candleLightingTime.hour}:${lighting.candleLightingTime.minute.toString().padLeft(2, '0')}';
 
           final title = lighting.isYomTov
-              ? '⏱️ $preMinutes min to Yom Tov!'
-              : '⏱️ $preMinutes min to Shabbos!';
+              ? '⏱️ עוד $preMinutes דקות ליום טוב!'
+              : '⏱️ עוד $preMinutes דקות לשבת!';
           final body = lighting.isYomTov
-              ? '🕯️ Light candles at $candleTimeFormatted\nיום טוב מגיע • Yom Tov is coming!'
-              : '🕯️ Light candles at $candleTimeFormatted\nשבת מגיעה • Shabbos is coming!';
+              ? 'יום טוב מגיע! 🕯️ הדלקת נרות ב-$candleTimeFormatted\nYom Tov is coming! Light candles at $candleTimeFormatted'
+              : 'שבת מגיעה! 🕯️ הדלקת נרות ב-$candleTimeFormatted\nShabbos is coming! Light candles at $candleTimeFormatted';
 
           final notificationId = id++;
           final success = await _scheduleNotification(
@@ -535,8 +608,8 @@ class NotificationService {
       if (candleEnabled && lighting.candleLightingTime.isAfter(now)) {
         final title = lighting.isYomTov ? 'יום טוב שמח!' : 'שבת שלום!';
         final body = lighting.isYomTov
-            ? 'Good Yom Tov! Time to light candles 🕯️🕯️'
-            : 'Good Shabbos! Time to light candles 🕯️🕯️';
+            ? 'זמן הדלקת נרות 🕯️🕯️\nGood Yom Tov! Time to light candles'
+            : 'זמן הדלקת נרות 🕯️🕯️\nGood Shabbos! Time to light candles';
 
         final notificationId = id++;
         // Schedule with SHOFAR SOUND at candle lighting time
@@ -560,30 +633,29 @@ class NotificationService {
           );
         }
 
-        // Issur Melacha notification - 18 minutes after candle lighting
-        // Fixed time notification that always plays shofar sound (full sound, not silent)
-        final issurMelachaTime = lighting.candleLightingTime.add(
-          const Duration(minutes: 18),
+        // Issur Melacha reminder notification - shows right after the candle lighting shofar completes
+        // Scheduled 35 seconds after candle lighting to ensure the shofar sound has finished
+        // Uses default notification sound (not shofar) to remind user that Issur Melacha is in 18 minutes
+        final issurReminderTime = lighting.candleLightingTime.add(
+          const Duration(seconds: 35),
         );
-        if (issurMelachaTime.isAfter(now)) {
-          final issurTitle = lighting.isYomTov
-              ? 'איסור מלאכה • Issur Melacha'
-              : 'איסור מלאכה • Issur Melacha';
-          final issurBody = lighting.isYomTov
-              ? 'Work is now prohibited 🕯️'
-              : 'Work is now prohibited 🕯️';
+        if (issurReminderTime.isAfter(now)) {
+          const issurTitle = '⏰ איסור מלאכה • Issur Melacha';
+          const issurBody =
+              'איסור מלאכה בעוד 18 דקות 🕯️\nWork will be prohibited in 18 minutes';
 
           final issurNotificationId = id++;
-          // Schedule Issur Melacha notification with SHOFAR (full sound, not silent)
-          // This is a fixed time notification that bypasses alarm rules
+          // Schedule Issur Melacha reminder with DEFAULT notification sound (not shofar)
+          // This appears right after the candle lighting shofar to remind the user
           final issurSuccess = await _scheduleNotification(
             id: issurNotificationId,
             title: issurTitle,
             body: issurBody,
-            scheduledTime: issurMelachaTime,
+            scheduledTime: issurReminderTime,
             isPreNotification: false,
             isYomTov: lighting.isYomTov,
-            isSilent: false, // FULL SHOFAR SOUND - fixed time for Issur Melacha
+            isSilent: false,
+            useDefaultSound: true, // Use normal notification sound, not shofar
           );
           if (issurSuccess) {
             scheduled++;
@@ -594,7 +666,7 @@ class NotificationService {
             );
             await _storeNotificationType(issurNotificationId, 'issur');
             debugPrint(
-              'NotificationService: ✓ Scheduled Issur Melacha notification (18 min after candle lighting) with SHOFAR for ${lighting.displayName}',
+              'NotificationService: ✓ Scheduled Issur Melacha reminder (35 sec after candle lighting) with DEFAULT sound for ${lighting.displayName}',
             );
           }
         }
@@ -698,6 +770,8 @@ class NotificationService {
     DateTime? candleLightingTime,
     bool isSilent =
         false, // If true, no alarm sound (for candle lighting notifications)
+    bool useDefaultSound =
+        false, // If true, use system default notification sound
   }) async {
     try {
       debugPrint('NotificationService: ---- SCHEDULING NOTIFICATION ----');
@@ -707,15 +781,19 @@ class NotificationService {
       debugPrint('NotificationService: isPreNotification: $isPreNotification');
       debugPrint('NotificationService: isYomTov: $isYomTov');
       debugPrint('NotificationService: isSilent: $isSilent');
+      debugPrint('NotificationService: useDefaultSound: $useDefaultSound');
       
       // Get the appropriate sound for this notification type
       // If silent, use 'silent' sound ID
+      // If useDefaultSound, use 'default' sound ID
       final soundId = isSilent
           ? 'silent'
-          : await _getSoundIdForNotification(
-              isPreNotification: isPreNotification,
-              isYomTov: isYomTov,
-            );
+          : useDefaultSound
+              ? 'default'
+              : await _getSoundIdForNotification(
+                  isPreNotification: isPreNotification,
+                  isYomTov: isYomTov,
+                );
       
       debugPrint('NotificationService: Sound ID selected: $soundId');
 
@@ -748,32 +826,38 @@ class NotificationService {
           scheduledTime.second,
         );
 
-        // If silent, don't include a sound file
-        final iosSoundFile = isSilent ? null : _getIosSoundFile(soundId);
+        // If silent or useDefaultSound, don't include a custom sound file
+        // null = system default sound for iOS
+        final iosSoundFile = (isSilent || useDefaultSound)
+            ? null
+            : _getIosSoundFile(soundId);
 
         debugPrint('NotificationService: Scheduling iOS notification #$id');
         debugPrint('NotificationService: Local timezone: ${tz.local.name}');
         debugPrint('NotificationService: Scheduled time: $scheduledTime');
         debugPrint('NotificationService: TZ time: $tzTime');
         debugPrint(
-          'NotificationService: Sound ID: $soundId (silent=$isSilent)',
+          'NotificationService: Sound ID: $soundId (silent=$isSilent, useDefault=$useDefaultSound)',
         );
         debugPrint(
           'NotificationService: iOS sound file: $iosSoundFile (isPre=$isPreNotification, isYomTov=$isYomTov)',
         );
 
-        // Schedule the notification with custom sound (or silent)
+        // Schedule the notification with custom sound, default sound, or silent
         await _notifications.zonedSchedule(
           id,
           title,
           body,
           tzTime,
-          _getNotificationDetails(iosSoundFile: iosSoundFile),
+          _getNotificationDetails(
+            iosSoundFile: iosSoundFile,
+            useDefaultSound: useDefaultSound,
+          ),
           androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
         );
 
         debugPrint(
-          'NotificationService: iOS notification #$id scheduled with sound: ${iosSoundFile ?? 'SILENT'}',
+          'NotificationService: iOS notification #$id scheduled with sound: ${iosSoundFile ?? (useDefaultSound ? 'DEFAULT' : 'SILENT')}',
         );
         return true;
       }
@@ -812,7 +896,7 @@ class NotificationService {
       await _notifications.show(
         999,
         'שבת שלום! Good Shabbos!',
-        'Test notification 🕯️🕯️',
+        'התראת בדיקה 🕯️🕯️\nTest notification',
         _getNotificationDetails(
           iosSoundFile: null,
         ), // No notification sound - we play via AudioService
@@ -877,8 +961,8 @@ class NotificationService {
       final preSuccess = await NativeAlarmService.scheduleAlarm(
         id: 996,
         scheduledTime: preNotificationTime,
-        title: '🕯️ Candle Lighting Soon!',
-        body: 'Time to prepare for Shabbos!',
+        title: '🕯️ הדלקת נרות בקרוב!',
+        body: 'הכנה לשבת!\nTime to prepare for Shabbos!',
         isPreNotification: true,
         candleLightingTime: candleLightingTime,
         soundId: earlyReminderSoundId,
@@ -892,7 +976,7 @@ class NotificationService {
         id: 997,
         scheduledTime: candleLightingTime,
         title: 'שבת שלום! Good Shabbos!',
-        body: 'Time to light candles 🕯️🕯️',
+        body: 'זמן הדלקת נרות 🕯️🕯️\nTime to light candles',
         isPreNotification: false,
         soundId: candleLightingSoundId,
       );
@@ -935,8 +1019,8 @@ class NotificationService {
         // Schedule with custom sound (trimmed to 30s)
         await _notifications.zonedSchedule(
           996,
-          '⏱️ $remainingMinutes min until Candle Lighting',
-          '🕯️ Light candles at $candleTimeFormatted\nTime to prepare for Shabbos!',
+          '⏱️ עוד $remainingMinutes דקות להדלקת נרות',
+          'הכנה לשבת! 🕯️ הדלקת נרות ב-$candleTimeFormatted\nTime to prepare for Shabbos! Light candles at $candleTimeFormatted',
           preTzTime,
           _getNotificationDetails(iosSoundFile: preIosSoundFile),
           androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
@@ -970,7 +1054,7 @@ class NotificationService {
         await _notifications.zonedSchedule(
           997,
           'שבת שלום! Good Shabbos!',
-          '🕯️🕯️ Time to light candles!',
+          'זמן הדלקת נרות 🕯️🕯️\nTime to light candles!',
           candleTzTime,
           _getNotificationDetails(iosSoundFile: candleIosSoundFile),
           androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
