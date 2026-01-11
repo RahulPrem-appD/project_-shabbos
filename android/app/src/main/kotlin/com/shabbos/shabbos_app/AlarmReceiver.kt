@@ -8,6 +8,8 @@ import android.content.Context
 import android.content.Intent
 import android.content.res.AssetFileDescriptor
 import android.media.AudioAttributes
+import android.media.AudioFocusRequest
+import android.media.AudioManager
 import android.media.MediaPlayer
 import android.os.Build
 import android.os.PowerManager
@@ -35,10 +37,34 @@ class AlarmReceiver : BroadcastReceiver() {
     }
     
     private var mediaPlayer: MediaPlayer? = null
+    private var audioFocusRequest: AudioFocusRequest? = null
+    private var audioManager: AudioManager? = null
     
     override fun onReceive(context: Context, intent: Intent) {
+        // #region agent log
+        try {
+            val logData = org.json.JSONObject().apply {
+                put("timestamp", System.currentTimeMillis())
+                put("location", "AlarmReceiver.kt:39")
+                put("message", "onReceive called")
+                put("sessionId", "debug-session")
+                put("runId", "run1")
+                put("hypothesisId", "A")
+                put("data", org.json.JSONObject().apply {
+                    put("intentAction", intent.action ?: "null")
+                    put("intentExtras", intent.extras?.keySet()?.joinToString() ?: "none")
+                })
+            }
+            java.io.File(context.getExternalFilesDir(null), "debug_logs.txt").appendText("${logData.toString()}\n")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to write debug log: ${e.message}")
+        }
+        // #endregion
+        
         Log.d(TAG, "========================================")
         Log.d(TAG, "AlarmReceiver: onReceive() called!")
+        Log.d(TAG, "Intent action: ${intent.action}")
+        Log.d(TAG, "Intent extras: ${intent.extras?.keySet()?.joinToString()}")
         Log.d(TAG, "========================================")
         
         // Acquire a WakeLock to ensure the device stays awake long enough
@@ -48,6 +74,25 @@ class AlarmReceiver : BroadcastReceiver() {
             "ShabbosApp::AlarmWakeLock"
         )
         wakeLock.acquire(120000) // Hold for 2 minutes max (for audio playback)
+        
+        // #region agent log
+        try {
+            val logData = org.json.JSONObject().apply {
+                put("timestamp", System.currentTimeMillis())
+                put("location", "AlarmReceiver.kt:50")
+                put("message", "WakeLock acquired")
+                put("sessionId", "debug-session")
+                put("runId", "run1")
+                put("hypothesisId", "F")
+                put("data", org.json.JSONObject().apply {
+                    put("wakeLockHeld", wakeLock.isHeld)
+                })
+            }
+            java.io.File(context.getExternalFilesDir(null), "debug_logs.txt").appendText("${logData.toString()}\n")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to write debug log: ${e.message}")
+        }
+        // #endregion
         
         try {
             val notificationId = intent.getIntExtra("notification_id", 0)
@@ -66,23 +111,61 @@ class AlarmReceiver : BroadcastReceiver() {
             
             // Check if notifications are enabled
             val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            var notificationsEnabled = true
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-                if (!notificationManager.areNotificationsEnabled()) {
+                notificationsEnabled = notificationManager.areNotificationsEnabled()
+                if (!notificationsEnabled) {
                     Log.e(TAG, "Notifications are disabled by user!")
+                    // #region agent log
+                    try {
+                        val logData = org.json.JSONObject().apply {
+                            put("timestamp", System.currentTimeMillis())
+                            put("location", "AlarmReceiver.kt:70")
+                            put("message", "Notifications disabled - returning early")
+                            put("sessionId", "debug-session")
+                            put("runId", "run1")
+                            put("hypothesisId", "D")
+                        }
+                        java.io.File(context.getExternalFilesDir(null), "debug_logs.txt").appendText("${logData.toString()}\n")
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Failed to write debug log: ${e.message}")
+                    }
+                    // #endregion
                     return
                 }
             }
+            
+            // #region agent log
+            try {
+                val logData = org.json.JSONObject().apply {
+                    put("timestamp", System.currentTimeMillis())
+                    put("location", "AlarmReceiver.kt:75")
+                    put("message", "Notifications enabled check passed")
+                    put("sessionId", "debug-session")
+                    put("runId", "run1")
+                    put("hypothesisId", "D")
+                    put("data", org.json.JSONObject().apply {
+                        put("notificationsEnabled", notificationsEnabled)
+                    })
+                }
+                java.io.File(context.getExternalFilesDir(null), "debug_logs.txt").appendText("${logData.toString()}\n")
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to write debug log: ${e.message}")
+            }
+            // #endregion
             
             // Create notification channel (required for Android 8.0+)
             createNotificationChannel(context, notificationManager)
             
             // Verify channel exists and is enabled
+            var channelImportance = -1
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 val channel = notificationManager.getNotificationChannel(CHANNEL_ID)
                 if (channel == null) {
                     Log.e(TAG, "Notification channel is null!")
                     createNotificationChannel(context, notificationManager)
                 } else {
+                    channelImportance = channel.importance
                     Log.d(TAG, "Channel importance: ${channel.importance}")
                     if (channel.importance == NotificationManager.IMPORTANCE_NONE) {
                         Log.e(TAG, "Notification channel is disabled!")
@@ -90,13 +173,99 @@ class AlarmReceiver : BroadcastReceiver() {
                 }
             }
             
-            // Play custom sound using the sound ID passed from Flutter
-            playCustomSound(context, soundId)
+            // #region agent log
+            try {
+                val logData = org.json.JSONObject().apply {
+                    put("timestamp", System.currentTimeMillis())
+                    put("location", "AlarmReceiver.kt:91")
+                    put("message", "Channel verification complete")
+                    put("sessionId", "debug-session")
+                    put("runId", "run1")
+                    put("hypothesisId", "B")
+                    put("data", org.json.JSONObject().apply {
+                        put("channelImportance", channelImportance)
+                        put("channelExists", channelImportance != -1)
+                    })
+                }
+                java.io.File(context.getExternalFilesDir(null), "debug_logs.txt").appendText("${logData.toString()}\n")
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to write debug log: ${e.message}")
+            }
+            // #endregion
+            
+            // Play custom sound using foreground service (works when app is closed)
+            // #region agent log
+            try {
+                val logData = org.json.JSONObject().apply {
+                    put("timestamp", System.currentTimeMillis())
+                    put("location", "AlarmReceiver.kt:94")
+                    put("message", "About to start audio service")
+                    put("sessionId", "debug-session")
+                    put("runId", "run1")
+                    put("hypothesisId", "C")
+                    put("data", org.json.JSONObject().apply {
+                        put("soundId", soundId)
+                    })
+                }
+                java.io.File(context.getExternalFilesDir(null), "debug_logs.txt").appendText("${logData.toString()}\n")
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to write debug log: ${e.message}")
+            }
+            // #endregion
+            
+            // Start foreground service to play audio (ensures it works when app is closed)
+            val serviceIntent = Intent(context, AlarmAudioService::class.java).apply {
+                putExtra("sound_id", soundId)
+                putExtra("title", title)
+                putExtra("body", body)
+            }
+            
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                context.startForegroundService(serviceIntent)
+            } else {
+                context.startService(serviceIntent)
+            }
+            
+            Log.d(TAG, "Started AlarmAudioService for sound: $soundId")
             
             // Create and show notification (without system sound since we play our own)
             // Pass soundId to determine if this is an Issur Melacha notification (soundId == "default")
+            // #region agent log
+            try {
+                val logData = org.json.JSONObject().apply {
+                    put("timestamp", System.currentTimeMillis())
+                    put("location", "AlarmReceiver.kt:98")
+                    put("message", "About to show notification")
+                    put("sessionId", "debug-session")
+                    put("runId", "run1")
+                    put("hypothesisId", "D")
+                    put("data", org.json.JSONObject().apply {
+                        put("notificationId", notificationId)
+                        put("title", title)
+                    })
+                }
+                java.io.File(context.getExternalFilesDir(null), "debug_logs.txt").appendText("${logData.toString()}\n")
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to write debug log: ${e.message}")
+            }
+            // #endregion
             showNotification(context, notificationId, title, body, isPreNotification, candleLightingTime, soundId)
             
+            // #region agent log
+            try {
+                val logData = org.json.JSONObject().apply {
+                    put("timestamp", System.currentTimeMillis())
+                    put("location", "AlarmReceiver.kt:100")
+                    put("message", "Notification shown successfully")
+                    put("sessionId", "debug-session")
+                    put("runId", "run1")
+                    put("hypothesisId", "D")
+                }
+                java.io.File(context.getExternalFilesDir(null), "debug_logs.txt").appendText("${logData.toString()}\n")
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to write debug log: ${e.message}")
+            }
+            // #endregion
             Log.d(TAG, "Notification shown successfully")
         } catch (e: Exception) {
             Log.e(TAG, "Error in onReceive: ${e.message}", e)
@@ -185,6 +354,25 @@ class AlarmReceiver : BroadcastReceiver() {
         Log.d(TAG, "========================================")
         Log.d(TAG, "playAssetSound called with path: $assetPath")
         
+        // #region agent log
+        try {
+            val logData = org.json.JSONObject().apply {
+                put("timestamp", System.currentTimeMillis())
+                put("location", "AlarmReceiver.kt:184")
+                put("message", "playAssetSound called")
+                put("sessionId", "debug-session")
+                put("runId", "run1")
+                put("hypothesisId", "C")
+                put("data", org.json.JSONObject().apply {
+                    put("assetPath", assetPath)
+                })
+            }
+            java.io.File(context.getExternalFilesDir(null), "debug_logs.txt").appendText("${logData.toString()}\n")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to write debug log: ${e.message}")
+        }
+        // #endregion
+        
         try {
             // Release any existing player
             mediaPlayer?.release()
@@ -252,22 +440,155 @@ class AlarmReceiver : BroadcastReceiver() {
                 Log.d(TAG, "Audio attributes set to ALARM")
                 
                 setOnPreparedListener {
-                    Log.d(TAG, "✓ MediaPlayer prepared, starting playback NOW")
+                    Log.d(TAG, "✓ MediaPlayer prepared, requesting audio focus...")
+                    
+                    // Request audio focus before starting playback
+                    val audioMgr = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+                    audioManager = audioMgr
+                    val audioFocusResult = requestAudioFocus(context, audioMgr)
+                    
+                    // #region agent log
                     try {
-                        start()
-                        Log.d(TAG, "✓ MediaPlayer.start() called - isPlaying: ${isPlaying}")
+                        val logData = org.json.JSONObject().apply {
+                            put("timestamp", System.currentTimeMillis())
+                            put("location", "AlarmReceiver.kt:424")
+                            put("message", "Audio focus requested")
+                            put("sessionId", "debug-session")
+                            put("runId", "run1")
+                            put("hypothesisId", "C")
+                            put("data", org.json.JSONObject().apply {
+                                put("audioFocusResult", audioFocusResult)
+                            })
+                        }
+                        java.io.File(context.getExternalFilesDir(null), "debug_logs.txt").appendText("${logData.toString()}\n")
                     } catch (e: Exception) {
-                        Log.e(TAG, "✗ Error starting playback: ${e.message}")
+                        Log.e(TAG, "Failed to write debug log: ${e.message}")
+                    }
+                    // #endregion
+                    
+                    if (audioFocusResult == AudioManager.AUDIOFOCUS_REQUEST_GRANTED) {
+                        Log.d(TAG, "✓ Audio focus granted, starting playback NOW")
+                        try {
+                            start()
+                            // #region agent log
+                            try {
+                                val logData = org.json.JSONObject().apply {
+                                    put("timestamp", System.currentTimeMillis())
+                                    put("location", "AlarmReceiver.kt:440")
+                                    put("message", "MediaPlayer.start() called after audio focus")
+                                    put("sessionId", "debug-session")
+                                    put("runId", "run1")
+                                    put("hypothesisId", "C")
+                                    put("data", org.json.JSONObject().apply {
+                                        put("isPlaying", isPlaying)
+                                        put("currentPosition", currentPosition)
+                                    })
+                                }
+                                java.io.File(context.getExternalFilesDir(null), "debug_logs.txt").appendText("${logData.toString()}\n")
+                            } catch (e: Exception) {
+                                Log.e(TAG, "Failed to write debug log: ${e.message}")
+                            }
+                            // #endregion
+                            
+                            // Check state after a short delay to see if it's still playing
+                            android.os.Handler(context.mainLooper).postDelayed({
+                                val stillPlaying = isPlaying
+                                val position = currentPosition
+                                Log.d(TAG, "MediaPlayer state check: isPlaying=$stillPlaying, position=$position")
+                                // #region agent log
+                                try {
+                                    val logData = org.json.JSONObject().apply {
+                                        put("timestamp", System.currentTimeMillis())
+                                        put("location", "AlarmReceiver.kt:460")
+                                        put("message", "MediaPlayer state check after 500ms")
+                                        put("sessionId", "debug-session")
+                                        put("runId", "run1")
+                                        put("hypothesisId", "C")
+                                        put("data", org.json.JSONObject().apply {
+                                            put("isPlaying", stillPlaying)
+                                            put("currentPosition", position)
+                                        })
+                                    }
+                                    java.io.File(context.getExternalFilesDir(null), "debug_logs.txt").appendText("${logData.toString()}\n")
+                                } catch (e: Exception) {
+                                    Log.e(TAG, "Failed to write debug log: ${e.message}")
+                                }
+                                // #endregion
+                            }, 500)
+                            
+                            Log.d(TAG, "✓ MediaPlayer.start() called - isPlaying: ${isPlaying}")
+                        } catch (e: Exception) {
+                            Log.e(TAG, "✗ Error starting playback: ${e.message}")
+                            // #region agent log
+                            try {
+                                val logData = org.json.JSONObject().apply {
+                                    put("timestamp", System.currentTimeMillis())
+                                    put("location", "AlarmReceiver.kt:475")
+                                    put("message", "Error starting playback")
+                                    put("sessionId", "debug-session")
+                                    put("runId", "run1")
+                                    put("hypothesisId", "C")
+                                    put("data", org.json.JSONObject().apply {
+                                        put("error", e.message ?: "unknown")
+                                    })
+                                }
+                                java.io.File(context.getExternalFilesDir(null), "debug_logs.txt").appendText("${logData.toString()}\n")
+                            } catch (e2: Exception) {
+                                Log.e(TAG, "Failed to write debug log: ${e2.message}")
+                            }
+                            // #endregion
+                        }
+                    } else {
+                        Log.e(TAG, "✗ Audio focus NOT granted! Result: $audioFocusResult")
+                        // #region agent log
+                        try {
+                            val logData = org.json.JSONObject().apply {
+                                put("timestamp", System.currentTimeMillis())
+                                put("location", "AlarmReceiver.kt:490")
+                                put("message", "Audio focus denied")
+                                put("sessionId", "debug-session")
+                                put("runId", "run1")
+                                put("hypothesisId", "C")
+                                put("data", org.json.JSONObject().apply {
+                                    put("audioFocusResult", audioFocusResult)
+                                })
+                            }
+                            java.io.File(context.getExternalFilesDir(null), "debug_logs.txt").appendText("${logData.toString()}\n")
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Failed to write debug log: ${e.message}")
+                        }
+                        // #endregion
                     }
                 }
                 
                 setOnCompletionListener {
                     Log.d(TAG, "✓ Sound playback completed")
+                    releaseAudioFocus(context, audioManager)
                     release()
                 }
                 
                 setOnErrorListener { _, what, extra ->
                     Log.e(TAG, "✗ MediaPlayer error: what=$what, extra=$extra")
+                    // #region agent log
+                    try {
+                        val logData = org.json.JSONObject().apply {
+                            put("timestamp", System.currentTimeMillis())
+                            put("location", "AlarmReceiver.kt:495")
+                            put("message", "MediaPlayer error occurred")
+                            put("sessionId", "debug-session")
+                            put("runId", "run1")
+                            put("hypothesisId", "C")
+                            put("data", org.json.JSONObject().apply {
+                                put("what", what)
+                                put("extra", extra)
+                            })
+                        }
+                        java.io.File(context.getExternalFilesDir(null), "debug_logs.txt").appendText("${logData.toString()}\n")
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Failed to write debug log: ${e.message}")
+                    }
+                    // #endregion
+                    releaseAudioFocus(context, audioManager)
                     release()
                     true
                 }
@@ -290,6 +611,65 @@ class AlarmReceiver : BroadcastReceiver() {
             } catch (e2: Exception) {
                 Log.e(TAG, "✗ Even system sound failed: ${e2.message}")
             }
+        }
+    }
+    
+    private fun requestAudioFocus(context: Context, audioManager: AudioManager): Int {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            // Android 8.0+ - use AudioFocusRequest
+            val audioAttributes = AudioAttributes.Builder()
+                .setUsage(AudioAttributes.USAGE_ALARM)
+                .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+                .build()
+            
+            val focusRequest = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
+                .setAudioAttributes(audioAttributes)
+                .setAcceptsDelayedFocusGain(false)
+                .setWillPauseWhenDucked(false)
+                .setOnAudioFocusChangeListener { focusChange ->
+                    Log.d(TAG, "Audio focus change: $focusChange")
+                    when (focusChange) {
+                        AudioManager.AUDIOFOCUS_LOSS, AudioManager.AUDIOFOCUS_LOSS_TRANSIENT -> {
+                            // Don't pause alarms - they should play regardless
+                            Log.w(TAG, "Audio focus lost but continuing alarm playback")
+                        }
+                        AudioManager.AUDIOFOCUS_GAIN -> {
+                            // Resume playback if focus is regained
+                            if (mediaPlayer != null && !mediaPlayer!!.isPlaying) {
+                                mediaPlayer!!.start()
+                            }
+                        }
+                    }
+                }
+                .build()
+            
+            audioFocusRequest = focusRequest
+            audioManager.requestAudioFocus(focusRequest)
+        } else {
+            // Android < 8.0 - use legacy method with STREAM_ALARM for alarms
+            audioManager.requestAudioFocus(
+                null,
+                AudioManager.STREAM_ALARM,
+                AudioManager.AUDIOFOCUS_GAIN
+            )
+        }
+    }
+    
+    private fun releaseAudioFocus(context: Context, audioManager: AudioManager?) {
+        if (audioManager == null) return
+        
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                audioFocusRequest?.let {
+                    audioManager.abandonAudioFocusRequest(it)
+                    audioFocusRequest = null
+                }
+            } else {
+                audioManager.abandonAudioFocus(null)
+            }
+            Log.d(TAG, "Audio focus released")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error releasing audio focus: ${e.message}")
         }
     }
     
@@ -426,28 +806,58 @@ class AlarmReceiver : BroadcastReceiver() {
             // Use NotificationManager directly for more reliability
             val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             
+            var notificationPosted = false
+            var notificationError: String? = null
             try {
                 notificationManager.notify(id, notification)
+                notificationPosted = true
                 Log.d(TAG, "Notification posted successfully with ID: $id using NotificationManager")
             } catch (e: SecurityException) {
+                notificationError = "SecurityException: ${e.message}"
                 Log.e(TAG, "SecurityException with NotificationManager: ${e.message}", e)
                 // Fallback to NotificationManagerCompat
                 try {
                     NotificationManagerCompat.from(context).notify(id, notification)
+                    notificationPosted = true
                     Log.d(TAG, "Notification posted successfully with ID: $id using NotificationManagerCompat (fallback)")
                 } catch (e2: Exception) {
+                    notificationError = "NotificationManagerCompat error: ${e2.message}"
                     Log.e(TAG, "Failed to post notification with NotificationManagerCompat: ${e2.message}", e2)
                 }
             } catch (e: Exception) {
+                notificationError = "Exception: ${e.message}"
                 Log.e(TAG, "Exception showing notification with NotificationManager: ${e.message}", e)
                 // Fallback to NotificationManagerCompat
                 try {
                     NotificationManagerCompat.from(context).notify(id, notification)
+                    notificationPosted = true
                     Log.d(TAG, "Notification posted successfully with ID: $id using NotificationManagerCompat (fallback)")
                 } catch (e2: Exception) {
+                    notificationError = "NotificationManagerCompat error: ${e2.message}"
                     Log.e(TAG, "Failed to post notification with NotificationManagerCompat: ${e2.message}", e2)
                 }
             }
+            
+            // #region agent log
+            try {
+                val logData = org.json.JSONObject().apply {
+                    put("timestamp", System.currentTimeMillis())
+                    put("location", "AlarmReceiver.kt:430")
+                    put("message", "Notification post attempt complete")
+                    put("sessionId", "debug-session")
+                    put("runId", "run1")
+                    put("hypothesisId", "D")
+                    put("data", org.json.JSONObject().apply {
+                        put("notificationPosted", notificationPosted)
+                        put("notificationId", id)
+                        put("error", notificationError ?: "none")
+                    })
+                }
+                java.io.File(context.getExternalFilesDir(null), "debug_logs.txt").appendText("${logData.toString()}\n")
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to write debug log: ${e.message}")
+            }
+            // #endregion
         } catch (e: Exception) {
             Log.e(TAG, "Critical error in showNotification: ${e.message}", e)
             e.printStackTrace()

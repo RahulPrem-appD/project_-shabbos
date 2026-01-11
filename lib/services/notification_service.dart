@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -804,6 +805,29 @@ class NotificationService {
       debugPrint('NotificationService: Sound ID selected: $soundId');
 
       if (Platform.isAndroid) {
+        // #region agent log
+        try {
+          final logData = {
+            'timestamp': DateTime.now().millisecondsSinceEpoch,
+            'location': 'notification_service.dart:808',
+            'message': 'About to schedule Android alarm',
+            'sessionId': 'debug-session',
+            'runId': 'run1',
+            'hypothesisId': 'E',
+            'data': {
+              'id': id,
+              'scheduledTime': scheduledTime.toIso8601String(),
+              'soundId': soundId,
+              'isPreNotification': isPreNotification,
+            },
+          };
+          final logFile = File('/Users/rahul/Development/project_ shabbos/.cursor/debug.log');
+          logFile.writeAsStringSync('${jsonEncode(logData)}\n', mode: FileMode.append);
+        } catch (e) {
+          debugPrint('Failed to write debug log: $e');
+        }
+        // #endregion
+        
         // Use native alarm scheduler for maximum reliability on Android
         final success = await NativeAlarmService.scheduleAlarm(
           id: id,
@@ -814,6 +838,27 @@ class NotificationService {
           candleLightingTime: candleLightingTime, // Pass for countdown display
           soundId: soundId, // Pass sound ID for Android playback (or 'silent')
         );
+
+        // #region agent log
+        try {
+          final logData = {
+            'timestamp': DateTime.now().millisecondsSinceEpoch,
+            'location': 'notification_service.dart:820',
+            'message': 'Android alarm scheduling result',
+            'sessionId': 'debug-session',
+            'runId': 'run1',
+            'hypothesisId': 'E',
+            'data': {
+              'id': id,
+              'success': success,
+            },
+          };
+          final logFile = File('/Users/rahul/Development/project_ shabbos/.cursor/debug.log');
+          logFile.writeAsStringSync('${jsonEncode(logData)}\n', mode: FileMode.append);
+        } catch (e) {
+          debugPrint('Failed to write debug log: $e');
+        }
+        // #endregion
 
         debugPrint(
           'NotificationService: Scheduled native alarm #$id for $scheduledTime (isPre=$isPreNotification, isYomTov=$isYomTov, sound=$soundId, silent=$isSilent): $success',

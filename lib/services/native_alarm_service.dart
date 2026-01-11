@@ -158,4 +158,19 @@ class NativeAlarmService {
       return false;
     }
   }
+
+  /// Read Android debug logs from device
+  static Future<String?> readDebugLogs() async {
+    if (!Platform.isAndroid) {
+      return null;
+    }
+
+    try {
+      final result = await _channel.invokeMethod('readDebugLogs');
+      return result as String?;
+    } catch (e) {
+      debugPrint('NativeAlarmService: Error reading debug logs: $e');
+      return null;
+    }
+  }
 }

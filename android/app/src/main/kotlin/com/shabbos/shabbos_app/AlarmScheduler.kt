@@ -81,6 +81,28 @@ class AlarmScheduler(private val context: Context) {
                 scheduleAlarmInternal(timestampMillis, pendingIntent, id)
             }
             
+            // #region agent log
+            try {
+                val logData = org.json.JSONObject().apply {
+                    put("timestamp", System.currentTimeMillis())
+                    put("location", "AlarmScheduler.kt:81")
+                    put("message", "Alarm scheduled internally")
+                    put("sessionId", "debug-session")
+                    put("runId", "run1")
+                    put("hypothesisId", "E")
+                    put("data", org.json.JSONObject().apply {
+                        put("alarmId", id)
+                        put("scheduledTime", timestampMillis)
+                        put("soundId", soundId)
+                        put("isPreNotification", isPreNotification)
+                    })
+                }
+                java.io.File(context.getExternalFilesDir(null), "debug_logs.txt").appendText("${logData.toString()}\n")
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to write debug log: ${e.message}")
+            }
+            // #endregion
+            
             // Save alarm data for persistence (survives device restart)
             saveAlarmData(id, timestampMillis, title, body, isPreNotification, candleLightingTime, soundId)
             
@@ -260,52 +282,90 @@ class AlarmScheduler(private val context: Context) {
     }
     
     private fun scheduleAlarmInternal(timestampMillis: Long, pendingIntent: PendingIntent, id: Int) {
+        var alarmScheduled = false
+        var schedulingMethod = "unknown"
+        var hasExactPermission = false
+        
         when {
             Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
                 // Android 12+ - check if we have exact alarm permission
-                if (alarmManager.canScheduleExactAlarms()) {
+                hasExactPermission = alarmManager.canScheduleExactAlarms()
+                if (hasExactPermission) {
                     Log.d(TAG, "Using setAlarmClock (Android 12+)")
+                    schedulingMethod = "setAlarmClock"
                     alarmManager.setAlarmClock(
                         AlarmManager.AlarmClockInfo(timestampMillis, pendingIntent),
                         pendingIntent
                     )
+                    alarmScheduled = true
                 } else {
                     Log.w(TAG, "No exact alarm permission! Using setAndAllowWhileIdle")
+                    schedulingMethod = "setAndAllowWhileIdle"
                     alarmManager.setAndAllowWhileIdle(
                         AlarmManager.RTC_WAKEUP,
                         timestampMillis,
                         pendingIntent
                     )
+                    alarmScheduled = true
                 }
             }
             Build.VERSION.SDK_INT >= Build.VERSION_CODES.M -> {
                 // Android 6.0 - 11: Use setExactAndAllowWhileIdle
                 Log.d(TAG, "Using setExactAndAllowWhileIdle (Android 6-11)")
+                schedulingMethod = "setExactAndAllowWhileIdle"
                 alarmManager.setExactAndAllowWhileIdle(
                     AlarmManager.RTC_WAKEUP,
                     timestampMillis,
                     pendingIntent
                 )
+                alarmScheduled = true
             }
             Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT -> {
                 // Android 4.4 - 5.1: Use setExact
                 Log.d(TAG, "Using setExact (Android 4.4-5.1)")
+                schedulingMethod = "setExact"
                 alarmManager.setExact(
                     AlarmManager.RTC_WAKEUP,
                     timestampMillis,
                     pendingIntent
                 )
+                alarmScheduled = true
             }
             else -> {
                 // Android < 4.4: Use set
                 Log.d(TAG, "Using set (Android <4.4)")
+                schedulingMethod = "set"
                 alarmManager.set(
                     AlarmManager.RTC_WAKEUP,
                     timestampMillis,
                     pendingIntent
                 )
+                alarmScheduled = true
             }
         }
+        
+        // #region agent log
+        try {
+            val logData = org.json.JSONObject().apply {
+                put("timestamp", System.currentTimeMillis())
+                put("location", "AlarmScheduler.kt:262")
+                put("message", "Alarm scheduling method called")
+                put("sessionId", "debug-session")
+                put("runId", "run1")
+                put("hypothesisId", "E")
+                put("data", org.json.JSONObject().apply {
+                    put("alarmId", id)
+                    put("schedulingMethod", schedulingMethod)
+                    put("hasExactPermission", hasExactPermission)
+                    put("alarmScheduled", alarmScheduled)
+                    put("androidVersion", Build.VERSION.SDK_INT)
+                })
+            }
+            java.io.File(context.getExternalFilesDir(null), "debug_logs.txt").appendText("${logData.toString()}\n")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to write debug log: ${e.message}")
+        }
+        // #endregion
     }
     
     fun cancelAlarm(id: Int): Boolean {

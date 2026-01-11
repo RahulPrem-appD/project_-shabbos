@@ -83,6 +83,10 @@ class MainActivity: FlutterActivity() {
                     requestDisableBatteryOptimization()
                     result.success(true)
                 }
+                "readDebugLogs" -> {
+                    val logs = readDebugLogs()
+                    result.success(logs)
+                }
                 else -> {
                     result.notImplemented()
                 }
@@ -290,5 +294,19 @@ class MainActivity: FlutterActivity() {
         }
         
         Log.d(TAG, "========================================")
+    }
+    
+    private fun readDebugLogs(): String? {
+        return try {
+            val logFile = java.io.File(getExternalFilesDir(null), "debug_logs.txt")
+            if (logFile.exists()) {
+                logFile.readText()
+            } else {
+                "No debug logs found"
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to read debug logs: ${e.message}", e)
+            "Error reading logs: ${e.message}"
+        }
     }
 }

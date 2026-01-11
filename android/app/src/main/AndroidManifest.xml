@@ -19,6 +19,7 @@
     
     <!-- Foreground service for reliability -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
     
     <!-- Internet for HebCal API -->
     <uses-permission android:name="android.permission.INTERNET" />
@@ -79,14 +80,11 @@
             android:enabled="true" />
         
         <!-- Custom Alarm Receiver for reliable background notifications -->
+        <!-- Note: No intent-filter needed - we use explicit intents with class name -->
         <receiver 
             android:name=".AlarmReceiver"
             android:exported="false"
             android:enabled="true">
-            <!-- Explicit intent filter for our alarm actions -->
-            <intent-filter>
-                <action android:name="com.shabbos.shabbos_app.ALARM_ACTION"/>
-            </intent-filter>
         </receiver>
         
         <!-- Boot receiver to reschedule alarms after device restart -->
@@ -101,6 +99,13 @@
                 <action android:name="com.htc.intent.action.QUICKBOOT_POWERON"/>
             </intent-filter>
         </receiver>
+        
+        <!-- Foreground service for playing alarm audio when app is closed -->
+        <service
+            android:name=".AlarmAudioService"
+            android:enabled="true"
+            android:exported="false"
+            android:foregroundServiceType="mediaPlayback" />
             
         <!-- Android Alarm Manager Plus service and receiver -->
         <service
