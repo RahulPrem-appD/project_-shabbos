@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import '../services/audio_service.dart';
 import '../services/notification_service.dart';
 import '../services/hebcal_service.dart';
@@ -151,6 +152,21 @@ class _SoundScreenState extends State<SoundScreen> {
                   onTap: () async {
                     setState(() => _earlyReminderSound = sounds[i].id);
                     await _audioService.setEarlyReminderSound(sounds[i].id);
+
+                    // Verify the sound was saved
+                    final savedSound = await _audioService
+                        .getEarlyReminderSound();
+                    debugPrint(
+                      'SoundScreen: Saved early reminder sound: $savedSound (expected: ${sounds[i].id})',
+                    );
+
+                    if (savedSound != sounds[i].id) {
+                      debugPrint(
+                        'SoundScreen: WARNING - Sound mismatch! Retrying save...',
+                      );
+                      await _audioService.setEarlyReminderSound(sounds[i].id);
+                    }
+
                     await _rescheduleNotifications();
                   },
                 ),
@@ -236,6 +252,20 @@ class _SoundScreenState extends State<SoundScreen> {
                   onTap: () async {
                     setState(() => _yomTovSound = sounds[i].id);
                     await _audioService.setYomTovSound(sounds[i].id);
+
+                    // Verify the sound was saved
+                    final savedSound = await _audioService.getYomTovSound();
+                    debugPrint(
+                      'SoundScreen: Saved Yom Tov sound: $savedSound (expected: ${sounds[i].id})',
+                    );
+
+                    if (savedSound != sounds[i].id) {
+                      debugPrint(
+                        'SoundScreen: WARNING - Sound mismatch! Retrying save...',
+                      );
+                      await _audioService.setYomTovSound(sounds[i].id);
+                    }
+
                     await _rescheduleNotifications();
                   },
                 ),

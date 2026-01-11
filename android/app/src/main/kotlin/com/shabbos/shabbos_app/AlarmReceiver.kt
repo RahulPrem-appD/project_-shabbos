@@ -114,7 +114,10 @@ class AlarmReceiver : BroadcastReceiver() {
     
     private fun playCustomSound(context: Context, soundId: String) {
         try {
-            Log.d(TAG, "Playing sound ID: $soundId")
+            Log.d(TAG, "========================================")
+            Log.d(TAG, "playCustomSound called")
+            Log.d(TAG, "Sound ID requested: '$soundId'")
+            Log.d(TAG, "Available sound IDs: ${SOUND_FILES.keys.joinToString()}")
             
             // Check for silent mode
             if (soundId == "silent") {
@@ -132,16 +135,28 @@ class AlarmReceiver : BroadcastReceiver() {
             // Get the asset path for the sound
             val assetPath = SOUND_FILES[soundId]
             if (assetPath == null) {
-                Log.e(TAG, "No asset path found for sound ID: $soundId, using default (rav_shalom_shofar)")
+                Log.e(TAG, "✗ No asset path found for sound ID: '$soundId'")
+                Log.e(TAG, "✗ This might mean the sound ID is misspelled or not registered")
+                Log.d(TAG, "Falling back to default shofar sound (rav_shalom_shofar)")
                 playAssetSound(context, SOUND_FILES["rav_shalom_shofar"]!!)
                 return
             }
             
-            Log.d(TAG, "Playing sound from asset: $assetPath")
+            Log.d(TAG, "✓ Found asset path: $assetPath")
+            Log.d(TAG, "Starting playback...")
             playAssetSound(context, assetPath)
             
         } catch (e: Exception) {
-            Log.e(TAG, "Error playing custom sound: ${e.message}", e)
+            Log.e(TAG, "✗ Error in playCustomSound: ${e.message}", e)
+            e.printStackTrace()
+            
+            // Try system sound as ultimate fallback
+            try {
+                Log.d(TAG, "Attempting system notification sound as fallback")
+                playDefaultNotificationSound(context)
+            } catch (e2: Exception) {
+                Log.e(TAG, "✗ Even fallback sound failed: ${e2.message}")
+            }
         }
     }
     
@@ -179,15 +194,49 @@ class AlarmReceiver : BroadcastReceiver() {
             try {
                 val assetList = context.assets.list("flutter_assets/assets/sounds")
                 Log.d(TAG, "Available sound assets: ${assetList?.joinToString()}")
+                
+                // Check if our file exists in the list
+                val fileName = assetPath.substringAfterLast("/")
+                val fileExists = assetList?.contains(fileName) == true
+                Log.d(TAG, "Looking for file: $fileName - exists: $fileExists")
+                
+                if (!fileExists) {
+                    Log.e(TAG, "✗ Sound file NOT found in assets! Available: ${assetList?.joinToString()}")
+                    // Try to play default shofar as fallback
+                    val defaultPath = SOUND_FILES["rav_shalom_shofar"]
+                    if (defaultPath != null && defaultPath != assetPath) {
+                        Log.d(TAG, "Falling back to default shofar sound")
+                        playAssetSound(context, defaultPath)
+                        return
+                    }
+                }
             } catch (e: Exception) {
                 Log.e(TAG, "Could not list assets: ${e.message}")
             }
             
             Log.d(TAG, "Creating MediaPlayer...")
             mediaPlayer = MediaPlayer().apply {
-                Log.d(TAG, "Opening asset file descriptor...")
+                Log.d(TAG, "Opening asset file descriptor for: $assetPath")
                 val assetManager = context.assets
-                val afd: AssetFileDescriptor = assetManager.openFd(assetPath)
+                
+                // Try to open the asset - this is where it might fail with special characters
+                val afd: AssetFileDescriptor
+                try {
+                    afd = assetManager.openFd(assetPath)
+                } catch (e: java.io.FileNotFoundException) {
+                    Log.e(TAG, "✗ File not found: $assetPath")
+                    Log.e(TAG, "✗ Exception: ${e.message}")
+                    // Try default sound as fallback
+                    val defaultPath = SOUND_FILES["rav_shalom_shofar"]
+                    if (defaultPath != null && defaultPath != assetPath) {
+                        Log.d(TAG, "Falling back to default shofar sound after file not found")
+                        release()
+                        playAssetSound(context, defaultPath)
+                        return
+                    }
+                    throw e
+                }
+                
                 Log.d(TAG, "Asset opened - length: ${afd.length}, startOffset: ${afd.startOffset}")
                 
                 setDataSource(afd.fileDescriptor, afd.startOffset, afd.length)
@@ -204,8 +253,12 @@ class AlarmReceiver : BroadcastReceiver() {
                 
                 setOnPreparedListener {
                     Log.d(TAG, "✓ MediaPlayer prepared, starting playback NOW")
-                    start()
-                    Log.d(TAG, "✓ MediaPlayer.start() called")
+                    try {
+                        start()
+                        Log.d(TAG, "✓ MediaPlayer.start() called - isPlaying: ${isPlaying}")
+                    } catch (e: Exception) {
+                        Log.e(TAG, "✗ Error starting playback: ${e.message}")
+                    }
                 }
                 
                 setOnCompletionListener {
@@ -229,6 +282,14 @@ class AlarmReceiver : BroadcastReceiver() {
         } catch (e: Exception) {
             Log.e(TAG, "✗ Error setting up MediaPlayer: ${e.message}", e)
             e.printStackTrace()
+            
+            // Last resort: try default notification sound
+            Log.d(TAG, "Attempting to play system notification sound as last resort")
+            try {
+                playDefaultNotificationSound(context)
+            } catch (e2: Exception) {
+                Log.e(TAG, "✗ Even system sound failed: ${e2.message}")
+            }
         }
     }
     

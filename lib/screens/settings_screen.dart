@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../models/city.dart';
 import '../models/candle_lighting.dart';
 import '../services/location_service.dart';
@@ -190,6 +191,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             : 'Candle Lighting Sound',
                         subtitle: _getSoundName(_candleSound),
                         onTap: () => _openSoundScreen(),
+                      ),
+                    ],
+                  ),
+
+                  _buildSection(
+                    title: isHebrew ? 'תמיכה' : 'Support',
+                    children: [
+                      _buildActionTile(
+                        icon: Icons.bug_report,
+                        title: isHebrew
+                            ? 'דו״ח אבחון'
+                            : 'Diagnostic Report',
+                        subtitle: isHebrew
+                            ? 'שתף מידע עם התמיכה'
+                            : 'Share info with support',
+                        onTap: _showDiagnosticReport,
                       ),
                     ],
                   ),
@@ -638,6 +655,87 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ),
       ),
     );
+  }
+
+  /// Show diagnostic report for debugging
+  Future<void> _showDiagnosticReport() async {
+    // Show loading indicator
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(
+        child: CircularProgressIndicator(color: Color(0xFFE8B923)),
+      ),
+    );
+
+    try {
+      final report = await _notificationService.generateDiagnosticReport();
+      
+      if (mounted) {
+        Navigator.pop(context); // Close loading
+        
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: Text(
+              isHebrew ? 'דו״ח אבחון' : 'Diagnostic Report',
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
+            content: SingleChildScrollView(
+              child: SelectableText(
+                report,
+                style: const TextStyle(
+                  fontFamily: 'monospace',
+                  fontSize: 11,
+                ),
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: Text(isHebrew ? 'סגור' : 'Close'),
+              ),
+              TextButton(
+                onPressed: () async {
+                  // Copy to clipboard
+                  await Clipboard.setData(ClipboardData(text: report));
+                  if (context.mounted) {
+                    Navigator.pop(context);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          isHebrew
+                              ? 'הדו״ח הועתק ללוח'
+                              : 'Report copied to clipboard',
+                        ),
+                        backgroundColor: const Color(0xFFE8B923),
+                      ),
+                    );
+                  }
+                },
+                child: Text(
+                  isHebrew ? 'העתק' : 'Copy',
+                  style: const TextStyle(
+                    color: Color(0xFFE8B923),
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        Navigator.pop(context); // Close loading
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   /// Reschedule all notifications with current settings

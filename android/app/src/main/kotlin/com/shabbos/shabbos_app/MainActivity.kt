@@ -35,6 +35,9 @@ class MainActivity: FlutterActivity() {
         // Check and log permissions status
         logPermissionsStatus()
         
+        // Verify sound assets are accessible
+        verifySoundAssets()
+        
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL).setMethodCallHandler { call, result ->
             Log.d(TAG, "Method call received: ${call.method}")
             
@@ -178,6 +181,49 @@ class MainActivity: FlutterActivity() {
         } catch (e: Exception) {
             Log.e(TAG, "Failed to open app settings", e)
         }
+    }
+    
+    private fun verifySoundAssets() {
+        Log.d(TAG, "========================================")
+        Log.d(TAG, "Verifying sound assets...")
+        
+        val soundFiles = mapOf(
+            "rav_shalom_shofar" to "flutter_assets/assets/sounds/RavShalomShofarDefaultlouder.mp3",
+            "shabbat_shalom_song" to "flutter_assets/assets/sounds/RYomTovShabbatShalomSong.mp3",
+            "yomtov_default" to "flutter_assets/assets/sounds/YomTov-Default.mp3",
+            "ata_bechartanu" to "flutter_assets/assets/sounds/Ata Bechartanu-YomTov.mp3",
+            "ata_bechartanu_2" to "flutter_assets/assets/sounds/Ata Bechartanu2-YomTov.mp3",
+            "hodu_lahashem" to "flutter_assets/assets/sounds/Hodu La'Hashem Ki Tov-YomTov.mp3"
+        )
+        
+        // List all available sounds
+        try {
+            val availableFiles = assets.list("flutter_assets/assets/sounds")
+            Log.d(TAG, "Available sound files in assets: ${availableFiles?.joinToString()}")
+        } catch (e: Exception) {
+            Log.e(TAG, "Could not list sound assets: ${e.message}")
+        }
+        
+        // Check each sound file
+        var allFound = true
+        for ((soundId, assetPath) in soundFiles) {
+            try {
+                val afd = assets.openFd(assetPath)
+                Log.d(TAG, "✓ $soundId: ${afd.length} bytes")
+                afd.close()
+            } catch (e: Exception) {
+                Log.e(TAG, "✗ $soundId: NOT FOUND - $assetPath")
+                Log.e(TAG, "  Error: ${e.message}")
+                allFound = false
+            }
+        }
+        
+        if (allFound) {
+            Log.d(TAG, "✓ All sound assets verified successfully")
+        } else {
+            Log.e(TAG, "⚠️ Some sound assets are missing!")
+        }
+        Log.d(TAG, "========================================")
     }
     
     private fun logPermissionsStatus() {

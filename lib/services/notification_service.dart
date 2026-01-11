@@ -497,16 +497,22 @@ class NotificationService {
   }) async {
     if (!isPreNotification) {
       // Candle lighting notification: ALWAYS use Rav Shalom Shofar
-      return _audioService.getCandleLightingSound();
+      final soundId = _audioService.getCandleLightingSound();
+      debugPrint('NotificationService: Selected candle lighting sound: $soundId');
+      return soundId;
     }
 
     // Pre-notification (early reminder)
     if (isYomTov) {
       // Yom Tov events use Yom Tov sound
-      return await _audioService.getYomTovSound();
+      final soundId = await _audioService.getYomTovSound();
+      debugPrint('NotificationService: Selected Yom Tov pre-notification sound: $soundId');
+      return soundId;
     } else {
       // Shabbos events use early reminder music
-      return await _audioService.getEarlyReminderSound();
+      final soundId = await _audioService.getEarlyReminderSound();
+      debugPrint('NotificationService: Selected early reminder sound: $soundId');
+      return soundId;
     }
   }
 
@@ -1123,6 +1129,27 @@ class NotificationService {
       await NativeAlarmService.cancelAllAlarms();
     }
     
+    // Verify current sound settings before rescheduling
+    final earlyReminderSound = await _audioService.getEarlyReminderSound();
+    final yomTovSound = await _audioService.getYomTovSound();
+    debugPrint('NotificationService: Current early reminder sound: $earlyReminderSound');
+    debugPrint('NotificationService: Current Yom Tov sound: $yomTovSound');
+    
+    // Longer delay to ensure all cancellations are processed, especially on iOS
+    // iOS may cache notification sounds, so we need to wait for the system to clear them
+    await Future.delayed(const Duration(milliseconds: 500));
+    
+    // Verify cancellations completed
+    final pendingBefore = await _notifications.pendingNotificationRequests();
+    if (pendingBefore.isNotEmpty) {
+      debugPrint('NotificationService: WARNING - ${pendingBefore.length} notifications still pending after cancellation');
+      // Force cancel individual notifications
+      for (final notification in pendingBefore) {
+        await _notifications.cancel(notification.id);
+      }
+      await Future.delayed(const Duration(milliseconds: 200));
+    }
+    
     // Reschedule with new settings
     await scheduleNotifications(candleLightings);
     debugPrint('NotificationService: ===== RESCHEDULE COMPLETE =====');
@@ -1215,5 +1242,80 @@ class NotificationService {
 
     // If we're not in any pre-notification window, end any existing activity
     await endLiveActivityCountdown();
+  }
+
+  /// Generate a diagnostic report for debugging notification issues
+  /// This can be shared by users experiencing problems
+  Future<String> generateDiagnosticReport() async {
+    final buffer = StringBuffer();
+    final now = DateTime.now();
+    
+    buffer.writeln('=== SHABBOS APP DIAGNOSTIC REPORT ===');
+    buffer.writeln('Generated: $now');
+    buffer.writeln('Platform: ${Platform.operatingSystem} ${Platform.operatingSystemVersion}');
+    buffer.writeln('');
+    
+    // Sound settings
+    buffer.writeln('--- SOUND SETTINGS ---');
+    final earlyReminderSound = await _audioService.getEarlyReminderSound();
+    final yomTovSound = await _audioService.getYomTovSound();
+    final candleLightingSound = _audioService.getCandleLightingSound();
+    buffer.writeln('Early Reminder Sound: $earlyReminderSound');
+    buffer.writeln('Yom Tov Sound: $yomTovSound');
+    buffer.writeln('Candle Lighting Sound: $candleLightingSound (fixed)');
+    buffer.writeln('');
+    
+    // Notification settings
+    buffer.writeln('--- NOTIFICATION SETTINGS ---');
+    final notificationsEnabled = await getNotificationsEnabled();
+    final preMinutes = await getPreNotificationMinutes();
+    final candleEnabled = await getCandleNotificationEnabled();
+    buffer.writeln('Notifications Enabled: $notificationsEnabled');
+    buffer.writeln('Pre-notification Minutes: $preMinutes');
+    buffer.writeln('Candle Notification Enabled: $candleEnabled');
+    buffer.writeln('');
+    
+    // Pending notifications
+    buffer.writeln('--- PENDING NOTIFICATIONS ---');
+    try {
+      final pending = await _notifications.pendingNotificationRequests();
+      buffer.writeln('Count: ${pending.length}');
+      for (final notification in pending.take(10)) {
+        buffer.writeln('  ID ${notification.id}: ${notification.title}');
+      }
+      if (pending.length > 10) {
+        buffer.writeln('  ... and ${pending.length - 10} more');
+      }
+    } catch (e) {
+      buffer.writeln('Error getting pending: $e');
+    }
+    buffer.writeln('');
+    
+    // Android-specific checks
+    if (Platform.isAndroid) {
+      buffer.writeln('--- ANDROID PERMISSIONS ---');
+      try {
+        final canScheduleExact = await NativeAlarmService.canScheduleExactAlarms();
+        final isIgnoringBattery = await NativeAlarmService.isIgnoringBatteryOptimizations();
+        buffer.writeln('Can Schedule Exact Alarms: $canScheduleExact');
+        buffer.writeln('Ignoring Battery Optimization: $isIgnoringBattery');
+        
+        if (!canScheduleExact) {
+          buffer.writeln('⚠️ WARNING: Exact alarm permission NOT granted!');
+        }
+        if (!isIgnoringBattery) {
+          buffer.writeln('⚠️ WARNING: Battery optimization may kill the app!');
+        }
+      } catch (e) {
+        buffer.writeln('Error checking permissions: $e');
+      }
+    }
+    
+    buffer.writeln('');
+    buffer.writeln('=== END REPORT ===');
+    
+    final report = buffer.toString();
+    debugPrint(report);
+    return report;
   }
 }
