@@ -259,6 +259,7 @@ class _HomeTabState extends State<HomeTab> {
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
+          textDirection: isHebrew ? TextDirection.rtl : TextDirection.ltr,
           children: [
             Text(
               isHebrew ? 'עב' : 'EN',
@@ -281,67 +282,72 @@ class _HomeTabState extends State<HomeTab> {
   }
 
   Widget _buildHeader() {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    final titleColumn = Expanded(
+      child: Column(
+        crossAxisAlignment: isHebrew ? CrossAxisAlignment.end : CrossAxisAlignment.start,
         children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  isHebrew ? 'שבת!!' : 'Shabbos!!',
-                  textDirection: isHebrew ? TextDirection.rtl : TextDirection.ltr,
-                  style: const TextStyle(
-                    fontSize: 28,
-                    fontWeight: FontWeight.w700,
-                    color: Color(0xFF1A1A1A),
-                  ),
-                ),
-                if (_location != null)
-                  GestureDetector(
-                    onTap: _isDetectingLocation ? null : _detectLocation,
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          Icons.location_on_outlined,
-                          size: 14,
-                          color: Colors.grey[500],
-                        ),
-                        const SizedBox(width: 4),
-                        Flexible(
-                          child: Text(
-                            _location!.displayName,
-                            style: TextStyle(fontSize: 13, color: Colors.grey[500]),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        const SizedBox(width: 4),
-                        if (_isDetectingLocation)
-                          SizedBox(
-                            width: 12,
-                            height: 12,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 1.5,
-                              color: Colors.grey[500],
-                            ),
-                          )
-                        else
-                          Icon(
-                            Icons.my_location,
-                            size: 14,
-                            color: Colors.grey[400],
-                          ),
-                      ],
-                    ),
-                  ),
-              ],
+          Text(
+            isHebrew ? 'שבת!!' : 'Shabbos!!',
+            textDirection: isHebrew ? TextDirection.rtl : TextDirection.ltr,
+            style: const TextStyle(
+              fontSize: 28,
+              fontWeight: FontWeight.w700,
+              color: Color(0xFF1A1A1A),
             ),
           ),
-          _buildLanguageToggle(),
+          if (_location != null)
+            GestureDetector(
+              onTap: _isDetectingLocation ? null : _detectLocation,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                textDirection: isHebrew ? TextDirection.rtl : TextDirection.ltr,
+                children: [
+                  Icon(
+                    Icons.location_on_outlined,
+                    size: 14,
+                    color: Colors.grey[500],
+                  ),
+                  const SizedBox(width: 4),
+                  Flexible(
+                    child: Text(
+                      _location!.displayName,
+                      style: TextStyle(fontSize: 13, color: Colors.grey[500]),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  if (_isDetectingLocation)
+                    SizedBox(
+                      width: 12,
+                      height: 12,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 1.5,
+                        color: Colors.grey[500],
+                      ),
+                    )
+                  else
+                    Icon(
+                      Icons.my_location,
+                      size: 14,
+                      color: Colors.grey[400],
+                    ),
+                ],
+              ),
+            ),
         ],
+      ),
+    );
+
+    final languageButton = _buildLanguageToggle();
+
+    return Container(
+      padding: EdgeInsetsDirectional.fromSTEB(24, 16, 24, 8),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        textDirection: isHebrew ? TextDirection.rtl : TextDirection.ltr,
+        children: isHebrew
+            ? [languageButton, titleColumn] // RTL: button on left, title on right
+            : [titleColumn, languageButton], // LTR: title on left, button on right
       ),
     );
   }
@@ -395,19 +401,25 @@ class _HomeTabState extends State<HomeTab> {
   }
 
   Widget _buildNextCandleLighting(CandleLighting lighting) {
-    final timeFormat = DateFormat('h:mm');
-    final amPm = DateFormat('a').format(lighting.candleLightingTime);
+    final timeFormat = DateFormat('HH:mm'); // 24-hour format
     final dateFormat = DateFormat('EEEE, MMM d');
 
     final now = DateTime.now();
     final diff = lighting.candleLightingTime.difference(now);
+    
+    // Calculate days, hours, and minutes correctly
     final days = diff.inDays;
+    // Hours remaining after subtracting full days (modulo 24)
     final hours = diff.inHours % 24;
+    // Minutes remaining after subtracting full hours (modulo 60)
     final minutes = diff.inMinutes % 60;
 
     String countdown;
     if (days > 0) {
-      countdown = isHebrew ? '$days ימים' : '$days days';
+      // Always show days, hours, and minutes when days > 0
+      countdown = isHebrew 
+          ? '$days ימים $hours שעות $minutes דק\''
+          : '$days d ${hours}h ${minutes}m';
     } else if (hours > 0) {
       countdown = isHebrew
           ? '$hours שעות $minutes דק\''
@@ -497,7 +509,6 @@ class _HomeTabState extends State<HomeTab> {
                 iconColor: const Color(0xFFE8B923),
                 label: isHebrew ? 'הדלקת נרות' : 'Candle Lighting',
                 time: timeFormat.format(lighting.candleLightingTime),
-                amPm: amPm,
               ),
               if (lighting.havdalahTime != null) ...[
                 const SizedBox(width: 32),
@@ -506,7 +517,6 @@ class _HomeTabState extends State<HomeTab> {
                   iconColor: Colors.white.withValues(alpha: 0.5),
                   label: isHebrew ? 'הבדלה' : 'Havdalah',
                   time: timeFormat.format(lighting.havdalahTime!),
-                  amPm: DateFormat('a').format(lighting.havdalahTime!),
                 ),
               ],
             ],
@@ -521,7 +531,6 @@ class _HomeTabState extends State<HomeTab> {
     required Color iconColor,
     required String label,
     required String time,
-    required String amPm,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -540,37 +549,21 @@ class _HomeTabState extends State<HomeTab> {
           ],
         ),
         const SizedBox(height: 6),
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            Text(
-              time,
-              style: const TextStyle(
-                fontSize: 32,
-                fontWeight: FontWeight.w700,
-                color: Colors.white,
-                height: 1,
-              ),
-            ),
-            const SizedBox(width: 4),
-            Padding(
-              padding: const EdgeInsets.only(bottom: 4),
-              child: Text(
-                amPm,
-                style: TextStyle(
-                  fontSize: 14,
-                  color: Colors.white.withValues(alpha: 0.5),
-                ),
-              ),
-            ),
-          ],
+        Text(
+          time,
+          style: const TextStyle(
+            fontSize: 32,
+            fontWeight: FontWeight.w700,
+            color: Colors.white,
+            height: 1,
+          ),
         ),
       ],
     );
   }
 
   Widget _buildUpcomingCard(CandleLighting lighting) {
-    final timeFormat = DateFormat('h:mm a');
+    final timeFormat = DateFormat('HH:mm'); // 24-hour format
     final dateFormat = DateFormat('EEE, MMM d');
 
     return Container(

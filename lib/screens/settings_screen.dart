@@ -229,7 +229,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(4, 24, 4, 12),
+          padding: EdgeInsetsDirectional.fromSTEB(4, 24, 4, 12),
           child: Text(
             title.toUpperCase(),
             style: TextStyle(
@@ -634,7 +634,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Widget _buildHeader() {
     return Builder(
       builder: (context) => Container(
-        padding: EdgeInsets.fromLTRB(
+        padding: EdgeInsetsDirectional.fromSTEB(
           24,
           MediaQuery.of(context).padding.top + 16,
           24,

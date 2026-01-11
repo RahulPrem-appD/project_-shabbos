@@ -463,6 +463,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Prepare for Yom Tov'**
   String get prepareForYomTov;
+
+  /// No description provided for @parshatShevua.
+  ///
+  /// In en, this message translates to:
+  /// **'Parshat Shevua'**
+  String get parshatShevua;
+
+  /// No description provided for @weeklyTorahPortion.
+  ///
+  /// In en, this message translates to:
+  /// **'Weekly Torah Portion'**
+  String get weeklyTorahPortion;
 }
 
 class _AppLocalizationsDelegate

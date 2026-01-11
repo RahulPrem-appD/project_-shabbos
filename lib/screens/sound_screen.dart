@@ -76,7 +76,7 @@ class _SoundScreenState extends State<SoundScreen> {
           ),
           actions: [
             Padding(
-              padding: const EdgeInsets.only(right: 16),
+              padding: EdgeInsetsDirectional.only(end: 16),
               child: Center(
                 child: Text(
                   'בס״ד',
@@ -286,7 +286,7 @@ class _SoundScreenState extends State<SoundScreen> {
     bool isFixed = false,
   }) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(4, 16, 4, 0),
+      padding: EdgeInsetsDirectional.fromSTEB(4, 16, 4, 0),
       child: Row(
         children: [
           Container(

@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'home_tab.dart';
-import 'calendar_tab.dart';
 import 'about_screen.dart';
 import 'settings_screen.dart';
 import '../services/notification_service.dart';
@@ -334,7 +333,6 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
                     locale: widget.locale,
                     onLocaleChanged: widget.onLocaleChanged,
                   ),
-                  CalendarTab(locale: widget.locale),
                   AboutScreen(locale: widget.locale, showAppBar: false),
                   SettingsScreen(
                     locale: widget.locale,
@@ -398,18 +396,12 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
               ),
               _buildNavItem(
                 index: 1,
-                icon: Icons.calendar_month_outlined,
-                activeIcon: Icons.calendar_month,
-                label: isHebrew ? 'לוח שנה' : 'Calendar',
-              ),
-              _buildNavItem(
-                index: 2,
                 icon: Icons.info_outline,
                 activeIcon: Icons.info,
                 label: isHebrew ? 'אודות' : 'About',
               ),
               _buildNavItem(
-                index: 3,
+                index: 2,
                 icon: Icons.settings_outlined,
                 activeIcon: Icons.settings,
                 label: isHebrew ? 'הגדרות' : 'Settings',

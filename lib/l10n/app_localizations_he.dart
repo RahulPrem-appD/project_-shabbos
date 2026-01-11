@@ -195,4 +195,10 @@ class AppLocalizationsHe extends AppLocalizations {
 
   @override
   String get prepareForYomTov => 'התכוננו ליום טוב';
+
+  @override
+  String get parshatShevua => 'פרשת השבוע';
+
+  @override
+  String get weeklyTorahPortion => 'פרשת השבוע';
 }

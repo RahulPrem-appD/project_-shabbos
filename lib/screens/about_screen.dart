@@ -159,7 +159,7 @@ Users are encouraged to always double-check candle-lighting times with reliable 
             if (!showAppBar) _buildHeader(),
             Expanded(
               child: SingleChildScrollView(
-                padding: EdgeInsets.fromLTRB(24, showAppBar ? 24 : 8, 24, 24),
+                padding: EdgeInsetsDirectional.fromSTEB(24, showAppBar ? 24 : 8, 24, 24),
                 child: Column(
                   children: [
                     // Logo
@@ -316,7 +316,7 @@ Users are encouraged to always double-check candle-lighting times with reliable 
   Widget _buildHeader() {
     return Builder(
       builder: (context) => Container(
-        padding: EdgeInsets.fromLTRB(
+        padding: EdgeInsetsDirectional.fromSTEB(
           24,
           MediaQuery.of(context).padding.top + 16,
           24,

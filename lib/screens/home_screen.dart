@@ -114,65 +114,72 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildHeader() {
+    final titleColumn = Column(
+      crossAxisAlignment: isHebrew ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+      children: [
+        Text(
+          isHebrew ? 'שבת!!' : 'Shabbos!!',
+          textDirection: isHebrew ? TextDirection.rtl : TextDirection.ltr,
+          style: const TextStyle(
+            fontSize: 28,
+            fontWeight: FontWeight.w700,
+            color: Color(0xFF1A1A1A),
+          ),
+        ),
+        if (_location != null)
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            textDirection: isHebrew ? TextDirection.rtl : TextDirection.ltr,
+            children: [
+              Icon(Icons.location_on_outlined, size: 14, color: Colors.grey[500]),
+              const SizedBox(width: 4),
+              Text(
+                _location!.displayName,
+                style: TextStyle(fontSize: 13, color: Colors.grey[500]),
+              ),
+            ],
+          ),
+      ],
+    );
+
+    final iconsRow = Row(
+      textDirection: isHebrew ? TextDirection.rtl : TextDirection.ltr,
+      children: [
+        Text(
+          'בס״ד',
+          style: TextStyle(fontSize: 14, color: Colors.grey[400]),
+        ),
+        const SizedBox(width: 16),
+        _buildIconButton(Icons.settings_outlined, () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => SettingsScreen(
+                locale: widget.locale,
+                onLocaleChanged: widget.onLocaleChanged,
+                onLocationChanged: _loadData,
+              ),
+            ),
+          );
+        }),
+        const SizedBox(width: 8),
+        _buildIconButton(Icons.info_outline, () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => AboutScreen(locale: widget.locale)),
+          );
+        }),
+      ],
+    );
+
     return Container(
-      padding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
+      padding: EdgeInsetsDirectional.fromSTEB(24, 16, 24, 8),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                isHebrew ? 'שבת!!' : 'Shabbos!!',
-                textDirection: isHebrew ? TextDirection.rtl : TextDirection.ltr,
-                style: const TextStyle(
-                  fontSize: 28,
-                  fontWeight: FontWeight.w700,
-                  color: Color(0xFF1A1A1A),
-                ),
-              ),
-              if (_location != null)
-                Row(
-                  children: [
-                    Icon(Icons.location_on_outlined, size: 14, color: Colors.grey[500]),
-                    const SizedBox(width: 4),
-                    Text(
-                      _location!.displayName,
-                      style: TextStyle(fontSize: 13, color: Colors.grey[500]),
-                    ),
-                  ],
-                ),
-            ],
-          ),
-          Row(
-            children: [
-              Text(
-                'בס״ד',
-                style: TextStyle(fontSize: 14, color: Colors.grey[400]),
-              ),
-              const SizedBox(width: 16),
-              _buildIconButton(Icons.settings_outlined, () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => SettingsScreen(
-                      locale: widget.locale,
-                      onLocaleChanged: widget.onLocaleChanged,
-                      onLocationChanged: _loadData,
-                    ),
-                  ),
-                );
-              }),
-              const SizedBox(width: 8),
-              _buildIconButton(Icons.info_outline, () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => AboutScreen(locale: widget.locale)),
-                );
-              }),
-            ],
-          ),
-        ],
+        textDirection: isHebrew ? TextDirection.rtl : TextDirection.ltr,
+        children: isHebrew
+            ? [iconsRow, titleColumn] // RTL: icons on left, title on right
+            : [titleColumn, iconsRow], // LTR: title on left, icons on right
       ),
     );
   }
@@ -237,19 +244,25 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildNextCandleLighting(CandleLighting lighting) {
-    final timeFormat = DateFormat('h:mm');
-    final amPm = DateFormat('a').format(lighting.candleLightingTime);
+    final timeFormat = DateFormat('HH:mm'); // 24-hour format
     final dateFormat = DateFormat('EEEE, MMM d');
     
     final now = DateTime.now();
     final diff = lighting.candleLightingTime.difference(now);
+    
+    // Calculate days, hours, and minutes correctly
     final days = diff.inDays;
+    // Hours remaining after subtracting full days (modulo 24)
     final hours = diff.inHours % 24;
+    // Minutes remaining after subtracting full hours (modulo 60)
     final minutes = diff.inMinutes % 60;
 
     String countdown;
     if (days > 0) {
-      countdown = isHebrew ? '$days ימים' : '$days days';
+      // Always show days, hours, and minutes when days > 0
+      countdown = isHebrew 
+          ? '$days ימים $hours שעות $minutes דק\''
+          : '$days d ${hours}h ${minutes}m';
     } else if (hours > 0) {
       countdown = isHebrew ? '$hours שעות $minutes דק\'' : '${hours}h ${minutes}m';
     } else {
@@ -321,6 +334,42 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
           
+          if (lighting.hebrewParasha != null && lighting.isShabbat) ...[
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                textDirection: isHebrew ? TextDirection.rtl : TextDirection.ltr,
+                children: [
+                  Icon(
+                    Icons.menu_book,
+                    size: 14,
+                    color: Colors.white.withValues(alpha: 0.7),
+                  ),
+                  const SizedBox(width: 6),
+                  Flexible(
+                    child: Text(
+                      isHebrew 
+                          ? 'פרשת השבוע: ${lighting.hebrewParasha}'
+                          : 'Parshat Shevua: ${lighting.parasha ?? lighting.hebrewParasha}',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Colors.white.withValues(alpha: 0.8),
+                        fontWeight: FontWeight.w500,
+                      ),
+                      textDirection: isHebrew ? TextDirection.rtl : TextDirection.ltr,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+          
           const SizedBox(height: 28),
           
           Row(
@@ -330,7 +379,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 iconColor: const Color(0xFFE8B923),
                 label: isHebrew ? 'הדלקת נרות' : 'Candle Lighting',
                 time: timeFormat.format(lighting.candleLightingTime),
-                amPm: amPm,
               ),
               if (lighting.havdalahTime != null) ...[
                 const SizedBox(width: 32),
@@ -339,7 +387,6 @@ class _HomeScreenState extends State<HomeScreen> {
                   iconColor: Colors.white.withValues(alpha: 0.5),
                   label: isHebrew ? 'הבדלה' : 'Havdalah',
                   time: timeFormat.format(lighting.havdalahTime!),
-                  amPm: DateFormat('a').format(lighting.havdalahTime!),
                 ),
               ],
             ],
@@ -354,7 +401,6 @@ class _HomeScreenState extends State<HomeScreen> {
     required Color iconColor,
     required String label,
     required String time,
-    required String amPm,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -373,37 +419,21 @@ class _HomeScreenState extends State<HomeScreen> {
           ],
         ),
         const SizedBox(height: 6),
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            Text(
-              time,
-              style: const TextStyle(
-                fontSize: 32,
-                fontWeight: FontWeight.w700,
-                color: Colors.white,
-                height: 1,
-              ),
-            ),
-            const SizedBox(width: 4),
-            Padding(
-              padding: const EdgeInsets.only(bottom: 4),
-              child: Text(
-                amPm,
-                style: TextStyle(
-                  fontSize: 14,
-                  color: Colors.white.withValues(alpha: 0.5),
-                ),
-              ),
-            ),
-          ],
+        Text(
+          time,
+          style: const TextStyle(
+            fontSize: 32,
+            fontWeight: FontWeight.w700,
+            color: Colors.white,
+            height: 1,
+          ),
         ),
       ],
     );
   }
 
   Widget _buildUpcomingCard(CandleLighting lighting) {
-    final timeFormat = DateFormat('h:mm a');
+    final timeFormat = DateFormat('HH:mm'); // 24-hour format
     final dateFormat = DateFormat('EEE, MMM d');
 
     return Container(

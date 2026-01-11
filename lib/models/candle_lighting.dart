@@ -7,6 +7,8 @@ class CandleLighting {
   final bool isShabbat;
   final bool isYomTov;
   final String? hebrewDate; // Hebrew date string (e.g., "כ״ב כסלו תשפ״ה")
+  final String? parasha; // Torah portion name (e.g., "Bereshit")
+  final String? hebrewParasha; // Torah portion name in Hebrew (e.g., "בראשית")
 
   CandleLighting({
     required this.date,
@@ -17,6 +19,8 @@ class CandleLighting {
     this.isShabbat = false,
     this.isYomTov = false,
     this.hebrewDate,
+    this.parasha,
+    this.hebrewParasha,
   });
 
   String get displayName {
