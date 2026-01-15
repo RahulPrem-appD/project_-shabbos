@@ -105,6 +105,7 @@ class HebcalService {
         'b': '18', // Minutes before sunset
         'M': 'on', // Havdalah
         'ue': 'off', // User events off
+        'd': 'on', // Include Gregorian dates with Hebrew dates
       };
 
       // Add timezone if available
@@ -360,6 +361,8 @@ class HebcalService {
     final List<Map<String, dynamic>> havdalahEvents = [];
     final List<Map<String, dynamic>> holidayEvents = [];
     final List<Map<String, dynamic>> parashaEvents = [];
+    // Map to store Hebrew dates by Gregorian date (YYYY-MM-DD format)
+    final Map<String, String> hebrewDatesByDate = {};
 
     for (final item in items) {
       final category = item['category'] as String?;
@@ -371,6 +374,13 @@ class HebcalService {
         holidayEvents.add(item);
       } else if (category == 'parashat' || category == 'roshchodesh') {
         parashaEvents.add(item);
+      } else if (category == 'gregdate') {
+        // Store Hebrew date from gregdate items
+        final dateStr = item['date'] as String?;
+        final hdate = item['hdate'] as String?;
+        if (dateStr != null && hdate != null) {
+          hebrewDatesByDate[dateStr] = hdate;
+        }
       }
     }
 
@@ -460,10 +470,17 @@ class HebcalService {
         }
       }
 
-      // Get Hebrew date
-      final hebrewDate = candleItem['heDateParts'] != null
-          ? _formatHebrewDate(candleItem['heDateParts'])
-          : formatHebrewDateProper(candleItem['hdate'] as String?);
+      // Get Hebrew date from the gregdate map
+      String? hebrewDate;
+      // Extract date part from the datetime string (YYYY-MM-DD)
+      final candleDateOnly = candleDateStr.substring(0, 10);
+      if (hebrewDatesByDate.containsKey(candleDateOnly)) {
+        final hdate = hebrewDatesByDate[candleDateOnly]!;
+        hebrewDate = formatHebrewDateProper(hdate);
+        debugPrint('HebcalService: Found Hebrew date for $candleDateOnly: $hebrewDate');
+      } else {
+        debugPrint('HebcalService: No Hebrew date found for $candleDateOnly');
+      }
 
       // Find associated parasha (Torah portion)
       String? parasha;
@@ -517,21 +534,5 @@ class HebcalService {
     );
 
     return results;
-  }
-
-  /// Format Hebrew date parts into a readable string
-  String? _formatHebrewDate(dynamic heDateParts) {
-    if (heDateParts == null) return null;
-    try {
-      final day = heDateParts['d'] as String?;
-      final month = heDateParts['m'] as String?;
-      final year = heDateParts['y'] as String?;
-      if (day != null && month != null) {
-        return year != null ? '$day $month $year' : '$day $month';
-      }
-    } catch (e) {
-      debugPrint('HebcalService: Error formatting Hebrew date: $e');
-    }
-    return null;
   }
 }

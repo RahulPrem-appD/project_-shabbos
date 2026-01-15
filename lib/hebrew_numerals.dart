@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart';
+
 /// Helper functions for Hebrew numerals (geresh/gershayim)
 
 /// Convert number to Hebrew numerals (geresh/gershayim)
@@ -126,31 +128,30 @@ String? formatHebrewDateProper(String? hebrewDate) {
   if (hebrewDate == null || hebrewDate!.isEmpty) return null;
 
   try {
-    // Parse the date format: "29 Elul 5785" or "29 Elul 5785"
+    // Parse date format: "29 Elul 5785" or "29 Elul 5785"
     final parts = hebrewDate!.split(' ');
     if (parts.length < 2) return hebrewDate;
 
     final dayStr = parts[0]; // e.g., "29"
     final monthStr = parts[1]; // e.g., "Elul"
-
-    // Get Hebrew month name
-    final hebrewMonth = hebrewMonthNames[monthStr] ?? monthStr;
-
-    // Get Hebrew year if available
-    final hebrewYear = parts.length > 2 ? parts[2] : null;
-
-    // Convert day to Hebrew numerals (geresh/gershayim)
+    
+    // Convert day to Hebrew numerals
     final hebrewDay = toHebrewNumerals(int.tryParse(dayStr) ?? 1);
-
-    // Format Hebrew date
-    if (hebrewYear != null) {
-      final hebrewYearNum = toHebrewNumerals(int.tryParse(hebrewYear!) ?? 5785);
-      return '$hebrewDay $hebrewMonth $hebrewYearNum';
-    } else {
-      return '$hebrewDay $hebrewMonth';
+    
+    // Get Hebrew year if available
+    if (parts.length > 2) {
+      // Full date with year: "29 Elul 5785"
+      final yearStr = parts[2];
+      final hebrewYear = toHebrewNumerals(int.tryParse(yearStr) ?? 5785);
+      final hebrewMonth = hebrewMonthNames[monthStr] ?? monthStr;
+      return '$hebrewDay $hebrewMonth $hebrewYear';
     }
+
+    // Date without year: "29 Elul" (likely Shabbat candle lighting)
+    final hebrewMonth = hebrewMonthNames[monthStr] ?? monthStr;
+    return '$hebrewDay $hebrewMonth';
   } catch (e) {
-    print('Error converting Hebrew date: $e');
+    debugPrint('Error converting Hebrew date: $e');
     return hebrewDate;
   }
 }
