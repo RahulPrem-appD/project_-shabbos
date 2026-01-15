@@ -209,22 +209,27 @@ class HebcalService {
   /// HebCal returns dates in ISO 8601 format with timezone offset
   /// e.g., "2024-12-20T16:23:00-05:00" or "2024-12-20T16:23:00+02:00"
   ///
-  /// IMPORTANT: The time returned by HebCal includes a timezone offset.
-  /// We parse the full ISO 8601 string and convert to the device's local time
-  /// for proper display regardless of the user's device timezone.
+  /// IMPORTANT: We extract just the datetime portion and ignore timezone
+  /// to preserve the event's local time in its location timezone.
+  /// This ensures date matching works correctly even when device timezone differs.
   DateTime _parseHebcalDate(String dateStr) {
     try {
-      // Parse the full ISO 8601 string with timezone offset
-      // This creates a DateTime object in UTC
-      final parsed = DateTime.parse(dateStr);
+      // Extract just the datetime portion (YYYY-MM-DDTHH:MM:SS)
+      // Ignore the timezone offset to preserve the event's local time
+      final match = RegExp(r'^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})').firstMatch(dateStr);
 
-      // Convert to local time for display
-      // This properly handles timezone conversion from the location's
-      // timezone to the device's local timezone
-      final localTime = parsed.toLocal();
+      if (match != null) {
+        final dateTimePart = match.group(1)!;
+        final parsed = DateTime.parse(dateTimePart);
+        debugPrint('HebcalService: Parsed "$dateStr" -> $parsed (event local time)');
+        return parsed;
+      }
 
-      debugPrint('HebcalService: Parsed "$dateStr" -> $localTime (local time)');
-      return localTime;
+      // Fallback for dates without time (gregdate items)
+      final dateOnly = dateStr.substring(0, 10);
+      final parsed = DateTime.parse(dateOnly);
+      debugPrint('HebcalService: Parsed date "$dateStr" -> $parsed');
+      return parsed;
     } catch (e) {
       debugPrint('HebcalService: Date parse error for "$dateStr": $e');
       return DateTime.now();
@@ -436,16 +441,13 @@ class HebcalService {
         }
       }
 
-      // If no holiday found, use memo field from candle item
+      // If no holiday found, check if memo has event info
+      // But only use it if we don't have a parasha (parasha takes precedence)
       if (holidayName == null) {
-        // For candle items, memo contains the event name (Shabbat, parasha, or Yom Tov)
-        if (locale == 'he') {
-          holidayName = candleItem['memo'] as String?;
-          hebrewHolidayName = candleItem['memo'] as String?;
-        } else {
-          holidayName = candleItem['memo'] as String?;
-          hebrewHolidayName = null; // No Hebrew translation for English candles (just "Candle lighting")
-        }
+        // Don't use memo here - we'll populate parasha separately below
+        // This prevents "Parashat Vaera" from being used as holidayName when
+        // it should be used as the parasha field for proper display
+        debugPrint('HebcalService: No Yom Tov holiday found for $candleDateKey, will use parasha if available');
       }
 
       // Get Hebrew date from the gregdate map
@@ -470,18 +472,26 @@ class HebcalService {
         final parashaDate = _parseHebcalDate(parashaDateStr);
         final parashaDateKey = _formatDate(parashaDate);
 
-        // Parasha is typically on the same day as candle lighting (Friday)
-        if (parashaDateKey == candleDateKey) {
+        // Parasha is typically on Saturday (day after candle lighting on Friday)
+        // Check if parasha date matches candle date OR is the next calendar day
+        final candleDateTime = DateTime(candleDate.year, candleDate.month, candleDate.day);
+        final parashaDateTime = DateTime(parashaDate.year, parashaDate.month, parashaDate.day);
+        final daysDiff = parashaDateTime.difference(candleDateTime).inDays;
+
+        if (parashaDateKey == candleDateKey || daysDiff == 1) {
           // For parasha items:
-          // Hebrew: title has Hebrew with nikud
-          // English: title_orig has English transliteration
+          // Hebrew locale (lg=h): title has Hebrew with nikud, hebrew has plain Hebrew
+          // English locale (lg=s): title has English name, hebrew has Hebrew without nikud
           if (locale == 'he') {
-            parasha = parashaItem['title'] as String?;
-            hebrewParasha = parashaItem['title'] as String?;
+            // For Hebrew UI, use plain Hebrew without nikud for better display
+            parasha = parashaItem['hebrew'] as String? ?? parashaItem['title'] as String?;
+            hebrewParasha = parashaItem['hebrew'] as String? ?? parashaItem['title'] as String?;
           } else {
-            parasha = parashaItem['title_orig'] as String? ?? parashaItem['title'] as String?;
-            hebrewParasha = parashaItem['hebrew'] as String?;
+            // For English UI
+            parasha = parashaItem['title'] as String?;
+            hebrewParasha = parashaItem['hebrew'] as String? ?? parashaItem['title'] as String?;
           }
+          debugPrint('HebcalService: Found parasha for $candleDateKey: $parasha ($hebrewParasha)');
           break;
         }
       }
@@ -510,6 +520,9 @@ class HebcalService {
     debugPrint(
       'HebcalService: Parsed ${results.length} extended candle lighting events',
     );
+    for (final r in results) {
+      debugPrint('  - ${r.displayName}: ${r.candleLightingTime} (parasha: ${r.parasha}, hebrewParasha: ${r.hebrewParasha})');
+    }
 
     return results;
   }
