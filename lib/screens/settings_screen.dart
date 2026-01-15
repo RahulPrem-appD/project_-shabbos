@@ -776,6 +776,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       // Reschedule with new settings
       await _notificationService.rescheduleAllNotifications(
         futureTimes.take(10).toList(),
+        locale: widget.locale,
       );
 
       debugPrint('SettingsScreen: Notifications rescheduled successfully');

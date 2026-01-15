@@ -517,6 +517,46 @@ class NotificationService {
     }
   }
 
+  /// Get localized notification strings based on locale and event type
+  Map<String, String> _getLocalizedNotificationStrings({
+    required String locale,
+    required bool isYomTov,
+    required int preMinutes,
+    required String candleTimeFormatted,
+  }) {
+    final isHebrew = locale == 'he';
+
+    if (isYomTov) {
+      // Yom Tov notifications
+      return {
+        'preTitle': isHebrew
+            ? '⏱️ עוד $preMinutes דקות ליום טוב!'
+            : '⏱️ $preMinutes minutes until Yom Tov!',
+        'preBody': isHebrew
+            ? 'יום טוב מגיע! 🕯️ הדלקת נרות ב-$candleTimeFormatted\nYom Tov is coming! Light candles at $candleTimeFormatted'
+            : 'Yom Tov is coming! 🕯️ Light candles at $candleTimeFormatted\nיום טוב מגיע! הדלקת נרות ב-$candleTimeFormatted',
+        'candleTitle': isHebrew ? 'יום טוב שמח!' : 'Good Yom Tov!',
+        'candleBody': isHebrew
+            ? 'זמן הדלקת נרות 🕯️🕯️\nGood Yom Tov! Time to light candles'
+            : 'Time to light candles 🕯️🕯️\nזמן הדלקת נרות',
+      };
+    } else {
+      // Shabbos notifications
+      return {
+        'preTitle': isHebrew
+            ? '⏱️ עוד $preMinutes דקות לשבת!'
+            : '⏱️ $preMinutes minutes until Shabbos!',
+        'preBody': isHebrew
+            ? 'שבת מגיעה! 🕯️ הדלקת נרות ב-$candleTimeFormatted\nShabbos is coming! Light candles at $candleTimeFormatted'
+            : 'Shabbos is coming! 🕯️ Light candles at $candleTimeFormatted\nשבת מגיעה! הדלקת נרות ב-$candleTimeFormatted',
+        'candleTitle': isHebrew ? 'שבת שלום!' : 'Good Shabbos!',
+        'candleBody': isHebrew
+            ? 'זמן הדלקת נרות 🕯️🕯️\nGood Shabbos! Time to light candles'
+            : 'Time to light candles 🕯️🕯️\nזמן הדלקת נרות',
+      };
+    }
+  }
+
   /// Schedule notifications for candle lighting times
   ///
   /// IMPORTANT ALARM RULES:
@@ -527,9 +567,10 @@ class NotificationService {
   /// - Candle lighting notification PLAYS SHOFAR - it marks the exact moment Shabbat/Yom Tov starts
   Future<void> scheduleNotifications(
     List<CandleLighting> candleLightings,
+    {String locale = 'en'}
   ) async {
     debugPrint(
-      'NotificationService: Scheduling ${candleLightings.length} events...',
+      'NotificationService: Scheduling ${candleLightings.length} events for locale: $locale',
     );
 
     await initialize();
@@ -574,12 +615,15 @@ class NotificationService {
           final candleTimeFormatted =
               '${lighting.candleLightingTime.hour}:${lighting.candleLightingTime.minute.toString().padLeft(2, '0')}';
 
-          final title = lighting.isYomTov
-              ? '⏱️ עוד $preMinutes דקות ליום טוב!'
-              : '⏱️ עוד $preMinutes דקות לשבת!';
-          final body = lighting.isYomTov
-              ? 'יום טוב מגיע! 🕯️ הדלקת נרות ב-$candleTimeFormatted\nYom Tov is coming! Light candles at $candleTimeFormatted'
-              : 'שבת מגיעה! 🕯️ הדלקת נרות ב-$candleTimeFormatted\nShabbos is coming! Light candles at $candleTimeFormatted';
+          // Get localized notification strings
+          final strings = _getLocalizedNotificationStrings(
+            locale: locale,
+            isYomTov: lighting.isYomTov,
+            preMinutes: preMinutes,
+            candleTimeFormatted: candleTimeFormatted,
+          );
+          final title = strings['preTitle']!;
+          final body = strings['preBody']!;
 
           final notificationId = id++;
           final success = await _scheduleNotification(
@@ -613,10 +657,17 @@ class NotificationService {
       // The shofar should play at the exact moment Shabbat/Yom Tov starts (candle lighting time)
       // This is the last moment before Shabbat begins, so the shofar is allowed
       if (candleEnabled && lighting.candleLightingTime.isAfter(now)) {
-        final title = lighting.isYomTov ? 'יום טוב שמח!' : 'שבת שלום!';
-        final body = lighting.isYomTov
-            ? 'זמן הדלקת נרות 🕯️🕯️\nGood Yom Tov! Time to light candles'
-            : 'זמן הדלקת נרות 🕯️🕯️\nGood Shabbos! Time to light candles';
+        // Get localized notification strings for candle lighting
+        final candleTimeFormatted =
+            '${lighting.candleLightingTime.hour}:${lighting.candleLightingTime.minute.toString().padLeft(2, '0')}';
+        final strings = _getLocalizedNotificationStrings(
+          locale: locale,
+          isYomTov: lighting.isYomTov,
+          preMinutes: preMinutes,
+          candleTimeFormatted: candleTimeFormatted,
+        );
+        final title = strings['candleTitle']!;
+        final body = strings['candleBody']!;
 
         final notificationId = id++;
         // Schedule with SHOFAR SOUND at candle lighting time
@@ -647,9 +698,13 @@ class NotificationService {
           const Duration(seconds: 35),
         );
         if (issurReminderTime.isAfter(now)) {
-          const issurTitle = '⏰ איסור מלאכה • Issur Melacha';
-          const issurBody =
-              'איסור מלאכה בעוד 18 דקות 🕯️\nWork will be prohibited in 18 minutes';
+          final isHebrew = locale == 'he';
+          final issurTitle = isHebrew
+              ? '⏰ איסור מלאכה • Issur Melacha'
+              : '⏰ Issur Melacha • איסור מלאכה';
+          final issurBody = isHebrew
+              ? 'איסור מלאכה בעוד 18 דקות 🕯️\nWork will be prohibited in 18 minutes'
+              : 'Work will be prohibited in 18 minutes 🕯️\nאיסור מלאכה בעוד 18 דקות';
 
           final issurNotificationId = id++;
           // Schedule Issur Melacha reminder with DEFAULT notification sound (not shofar)
@@ -966,6 +1021,7 @@ class NotificationService {
   Future<void> sendDelayedTestNotification({
     int preNotificationSeconds = 10,
     int candleLightingSeconds = 30,
+    String locale = 'en',
   }) async {
     debugPrint('==========================================');
     debugPrint('NotificationService: SCHEDULING CANDLE LIGHTING TEST FLOW');
@@ -1008,12 +1064,25 @@ class NotificationService {
     final candleLightingSoundId = _audioService.getCandleLightingSound();
 
     if (Platform.isAndroid) {
+      // Get localized notification strings for test
+      final remainingMinutes = (candleLightingSeconds - preNotificationSeconds) / 60;
+      final preMinutesInt = remainingMinutes.ceil();
+      final candleTimeFormatted =
+          '${candleLightingTime.hour}:${candleLightingTime.minute.toString().padLeft(2, '0')}';
+
+      final strings = _getLocalizedNotificationStrings(
+        locale: locale,
+        isYomTov: false, // Test uses Shabbos strings
+        preMinutes: preMinutesInt,
+        candleTimeFormatted: candleTimeFormatted,
+      );
+
       // Schedule pre-notification with countdown (ID 996)
       final preSuccess = await NativeAlarmService.scheduleAlarm(
         id: 996,
         scheduledTime: preNotificationTime,
-        title: '🕯️ הדלקת נרות בקרוב!',
-        body: 'הכנה לשבת!\nTime to prepare for Shabbos!',
+        title: strings['preTitle']!,
+        body: strings['preBody']!,
         isPreNotification: true,
         candleLightingTime: candleLightingTime,
         soundId: earlyReminderSoundId,
@@ -1026,8 +1095,8 @@ class NotificationService {
       final candleSuccess = await NativeAlarmService.scheduleAlarm(
         id: 997,
         scheduledTime: candleLightingTime,
-        title: 'שבת שלום! Good Shabbos!',
-        body: 'זמן הדלקת נרות 🕯️🕯️\nTime to light candles',
+        title: strings['candleTitle']!,
+        body: strings['candleBody']!,
         isPreNotification: false,
         soundId: candleLightingSoundId,
       );
@@ -1056,6 +1125,14 @@ class NotificationService {
         final candleTimeFormatted =
             '${candleLightingTime.hour}:${candleLightingTime.minute.toString().padLeft(2, '0')}';
 
+        // Get localized notification strings for test
+        final strings = _getLocalizedNotificationStrings(
+          locale: locale,
+          isYomTov: false, // Test uses Shabbos strings
+          preMinutes: remainingMinutes,
+          candleTimeFormatted: candleTimeFormatted,
+        );
+
         // Schedule pre-notification with countdown info in body
         final preTzTime = tz.TZDateTime(
           tz.local,
@@ -1070,8 +1147,8 @@ class NotificationService {
         // Schedule with custom sound (trimmed to 30s)
         await _notifications.zonedSchedule(
           996,
-          '⏱️ עוד $remainingMinutes דקות להדלקת נרות',
-          'הכנה לשבת! 🕯️ הדלקת נרות ב-$candleTimeFormatted\nTime to prepare for Shabbos! Light candles at $candleTimeFormatted',
+          strings['preTitle']!,
+          strings['preBody']!,
           preTzTime,
           _getNotificationDetails(iosSoundFile: preIosSoundFile),
           androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
@@ -1104,8 +1181,8 @@ class NotificationService {
         // Schedule with custom shofar sound
         await _notifications.zonedSchedule(
           997,
-          'שבת שלום! Good Shabbos!',
-          'זמן הדלקת נרות 🕯️🕯️\nTime to light candles!',
+          strings['candleTitle']!,
+          strings['candleBody']!,
           candleTzTime,
           _getNotificationDetails(iosSoundFile: candleIosSoundFile),
           androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
@@ -1164,26 +1241,30 @@ class NotificationService {
 
   /// Force reschedule all notifications with current settings
   /// Call this after changing pre-notification minutes or sound settings
-  Future<void> rescheduleAllNotifications(List<CandleLighting> candleLightings) async {
+  Future<void> rescheduleAllNotifications(
+    List<CandleLighting> candleLightings, {
+    String locale = 'en'
+  }) async {
     debugPrint('NotificationService: ===== RESCHEDULING ALL NOTIFICATIONS =====');
     debugPrint('NotificationService: Cancelling existing notifications...');
-    
+
     // Cancel all existing notifications
     await _notifications.cancelAll();
     if (Platform.isAndroid) {
       await NativeAlarmService.cancelAllAlarms();
     }
-    
+
     // Verify current sound settings before rescheduling
     final earlyReminderSound = await _audioService.getEarlyReminderSound();
     final yomTovSound = await _audioService.getYomTovSound();
     debugPrint('NotificationService: Current early reminder sound: $earlyReminderSound');
     debugPrint('NotificationService: Current Yom Tov sound: $yomTovSound');
-    
+    debugPrint('NotificationService: Using locale: $locale');
+
     // Longer delay to ensure all cancellations are processed, especially on iOS
     // iOS may cache notification sounds, so we need to wait for the system to clear them
     await Future.delayed(const Duration(milliseconds: 500));
-    
+
     // Verify cancellations completed
     final pendingBefore = await _notifications.pendingNotificationRequests();
     if (pendingBefore.isNotEmpty) {
@@ -1194,9 +1275,9 @@ class NotificationService {
       }
       await Future.delayed(const Duration(milliseconds: 200));
     }
-    
+
     // Reschedule with new settings
-    await scheduleNotifications(candleLightings);
+    await scheduleNotifications(candleLightings, locale: locale);
     debugPrint('NotificationService: ===== RESCHEDULE COMPLETE =====');
   }
 

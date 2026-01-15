@@ -564,6 +564,7 @@ class _SoundScreenState extends State<SoundScreen> {
       // Reschedule with new sound settings
       await _notificationService.rescheduleAllNotifications(
         futureTimes.take(10).toList(),
+        locale: widget.locale,
       );
 
       debugPrint('SoundScreen: Notifications rescheduled successfully');

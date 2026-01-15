@@ -74,13 +74,16 @@ class _HomeScreenState extends State<HomeScreen> {
         );
 
         final futureTimes = times.where((t) => t.candleLightingTime.isAfter(now)).toList();
-        
+
         setState(() {
           _candleLightings = futureTimes;
           _isLoading = false;
         });
 
-        await _notificationService.scheduleNotifications(futureTimes.take(10).toList());
+        await _notificationService.scheduleNotifications(
+          futureTimes.take(10).toList(),
+          locale: widget.locale,
+        );
       } else {
         setState(() {
           _isLoading = false;
