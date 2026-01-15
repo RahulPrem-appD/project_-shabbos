@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:intl/intl.dart' hide TextDirection;
+import 'package:url_launcher/url_launcher.dart';
 import '../models/candle_lighting.dart';
 import '../services/hebcal_service.dart';
 import '../services/location_service.dart';
@@ -378,6 +379,7 @@ class _HomeTabState extends State<HomeTab> {
           const SizedBox(height: 24),
           _buildNextCandleLighting(_candleLightings.first),
           const SizedBox(height: 32),
+          _buildPromotionalLink(),
           if (_candleLightings.length > 1) ...[
             Text(
               isHebrew ? 'בקרוב' : 'Upcoming',
@@ -709,6 +711,67 @@ class _HomeTabState extends State<HomeTab> {
             style: TextStyle(fontSize: 16, color: Colors.grey[600]),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildPromotionalLink() {
+    return GestureDetector(
+      onTap: () async {
+        final url = isHebrew
+            ? Uri.parse('https://shabbos.crd.co/#chasid')
+            : Uri.parse('https://shabbos.app/#chasid');
+
+        try {
+          if (await canLaunchUrl(url)) {
+            await launchUrl(
+              url,
+              mode: LaunchMode.externalApplication,
+            );
+            debugPrint('Promotional link opened: $url');
+          } else {
+            debugPrint('Could not launch URL: $url');
+          }
+        } catch (e) {
+          debugPrint('Error launching URL: $e');
+        }
+      },
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 24),
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF8F8F8),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: const Color(0xFFE8B923).withValues(alpha: 0.3),
+            width: 1,
+          ),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              Icons.card_giftcard_outlined,
+              color: const Color(0xFFE8B923),
+              size: 24,
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Text(
+                isHebrew ? 'עוד דברים מתנות' : 'More Free Stuff',
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w500,
+                  color: Color(0xFF1A1A1A),
+                ),
+              ),
+            ),
+            Icon(
+              Icons.chevron_right,
+              color: const Color(0xFFE8B923),
+              size: 24,
+            ),
+          ],
+        ),
       ),
     );
   }
