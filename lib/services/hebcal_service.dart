@@ -209,47 +209,25 @@ class HebcalService {
   /// HebCal returns dates in ISO 8601 format with timezone offset
   /// e.g., "2024-12-20T16:23:00-05:00" or "2024-12-20T16:23:00+02:00"
   ///
-  /// IMPORTANT: The time returned by HebCal is the LOCAL time at that location.
-  /// We should display it as-is without any timezone conversion.
+  /// IMPORTANT: The time returned by HebCal includes a timezone offset.
+  /// We parse the full ISO 8601 string and convert to the device's local time
+  /// for proper display regardless of the user's device timezone.
   DateTime _parseHebcalDate(String dateStr) {
     try {
-      // HebCal returns times that are already in the correct local time for that location
-      // e.g., "2025-12-19T16:15:00+02:00" means 4:15pm LOCAL time in Israel
-      // We need to extract just the date/time portion and treat it as local time
+      // Parse the full ISO 8601 string with timezone offset
+      // This creates a DateTime object in UTC
+      final parsed = DateTime.parse(dateStr);
 
-      // Extract the datetime portion without timezone offset
-      // Match pattern: YYYY-MM-DDTHH:MM:SS (ignore everything after)
-      final match = RegExp(
-        r'^(\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2})',
-      ).firstMatch(dateStr);
+      // Convert to local time for display
+      // This properly handles timezone conversion from the location's
+      // timezone to the device's local timezone
+      final localTime = parsed.toLocal();
 
-      if (match != null) {
-        final dateTimePart = match.group(1)!;
-        // Parse as local time (no timezone conversion)
-        final parsed = DateTime.parse(dateTimePart);
-        debugPrint('HebcalService: Parsed "$dateStr" -> $parsed (local time)');
-        return parsed;
-      }
-
-      // Fallback: try DateTime.parse but strip timezone
-      final cleanDate = dateStr
-          .replaceAll(RegExp(r'[+-]\\d{2}:\\d{2}$'), '')
-          .replaceAll('Z', '');
-      final parsed = DateTime.parse(cleanDate);
-      debugPrint('HebcalService: Fallback parsed "$dateStr" -> $parsed');
-      return parsed;
+      debugPrint('HebcalService: Parsed "$dateStr" -> $localTime (local time)');
+      return localTime;
     } catch (e) {
       debugPrint('HebcalService: Date parse error for "$dateStr": $e');
-      // Last resort fallback
-      try {
-        final cleanDate = dateStr
-            .replaceAll(RegExp(r'[+-]\\d{2}:\\d{2}$'), '')
-            .replaceAll('Z', '');
-        return DateTime.parse(cleanDate);
-      } catch (e2) {
-        debugPrint('HebcalService: All date parsing failed: $e2');
-        return DateTime.now();
-      }
+      return DateTime.now();
     }
   }
 
