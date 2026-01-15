@@ -24,16 +24,28 @@ class CandleLighting {
   });
 
   String get displayName {
-    if (holidayName != null && holidayName!.isNotEmpty) {
+    // If it's Yom Tov, show holiday name
+    if (isYomTov && holidayName != null && holidayName!.isNotEmpty) {
       return holidayName!;
     }
+    // If it's Shabbat with a parasha, show the parasha name
+    if (isShabbat && parasha != null && parasha!.isNotEmpty) {
+      return parasha!;
+    }
+    // Default
     return isShabbat ? 'Shabbat' : 'Yom Tov';
   }
 
   String get hebrewDisplayName {
-    if (hebrewHolidayName != null && hebrewHolidayName!.isNotEmpty) {
+    // If it's Yom Tov, show Hebrew holiday name
+    if (isYomTov && hebrewHolidayName != null && hebrewHolidayName!.isNotEmpty) {
       return hebrewHolidayName!;
     }
+    // If it's Shabbat with a parasha, show the Hebrew parasha name
+    if (isShabbat && hebrewParasha != null && hebrewParasha!.isNotEmpty) {
+      return hebrewParasha!;
+    }
+    // Default
     return isShabbat ? 'שבת' : 'יום טוב';
   }
 

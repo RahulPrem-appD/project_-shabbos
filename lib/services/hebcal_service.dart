@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import '../models/candle_lighting.dart';
+import '../hebrew_numerals.dart';
 
 class HebcalService {
   static const String _baseUrl = 'https://www.hebcal.com/shabbat';
@@ -10,15 +11,21 @@ class HebcalService {
   /// Returns a list of upcoming candle lighting events
   ///
   /// [timezone] is REQUIRED for correct local times (e.g., 'America/New_York', 'Asia/Jerusalem')
+  /// [locale] is locale for response: 'he' for Hebrew, 'en' for English
   Future<List<CandleLighting>> getCandleLightingTimes({
     required double latitude,
     required double longitude,
     String? timezone,
     int weeks = 4,
+    String locale = 'en',
   }) async {
     try {
       // Determine timezone - use provided or detect from coordinates
       final tz = timezone ?? await _detectTimezone(latitude, longitude);
+
+      // Set language parameter based on locale
+      // From Hebcal API: use 'h' for Hebrew, 's' for Sephardic transliteration (English)
+      final language = locale == 'he' ? 'h' : 's';
 
       final queryParams = {
         'cfg': 'json',
@@ -27,6 +34,7 @@ class HebcalService {
         'longitude': longitude.toStringAsFixed(4),
         'M': 'on', // Include Havdalah
         'b': '18', // Candle lighting minutes before sunset (standard 18)
+        'lg': language, // Language parameter
       };
 
       // Add timezone if available
@@ -48,13 +56,13 @@ class HebcalService {
 
       final data = json.decode(response.body);
 
-      // Log the response for debugging
+      // Log response for debugging
       debugPrint('HebcalService: Response location: ${data['location']}');
       debugPrint(
         'HebcalService: Response timezone: ${data['location']?['tzid']}',
       );
 
-      return _parseHebcalResponse(data);
+      return _parseHebcalResponse(data, locale: locale);
     } catch (e) {
       debugPrint('HebcalService: Error: $e');
       throw Exception('Error fetching candle lighting times: $e');
@@ -75,8 +83,8 @@ class HebcalService {
       final tz = timezone ?? await _detectTimezone(latitude, longitude);
 
       // Set language parameter based on locale
-      // Hebrew: he-x-NoNikud, English: sh (Sephardic transliteration)
-      final language = locale == 'he' ? 'he-x-NoNikud' : 'sh';
+      // From Hebcal API: use 'h' for Hebrew, 's' for Sephardic transliteration (English)
+      final language = locale == 'he' ? 'h' : 's';
 
       final queryParams = {
         'cfg': 'json',
@@ -90,13 +98,12 @@ class HebcalService {
         'i': 'on', // Yom Tov info
         'maj': 'on', // Major holidays
         's': 'on', // Parasha (Torah portion)
+        'ss': 'on', // Special Shabbatot
         'mm': '2', // Month mode
-        'lg': language, // Language: he-x-NoNikud for Hebrew, sh for English
-        'd': 'on', // Add Hebrew date to each item
+        'lg': language, // Language: h for Hebrew, s for Sephardic (English)
         'c': 'on', // Candle lighting
         'b': '18', // Minutes before sunset
         'M': 'on', // Havdalah
-        'm': '', // Empty month parameter
         'ue': 'off', // User events off
       };
 
@@ -120,7 +127,7 @@ class HebcalService {
       }
 
       final data = json.decode(response.body);
-      return _parseExtendedResponse(data);
+      return _parseExtendedResponse(data, locale: locale);
     } catch (e) {
       debugPrint('HebcalService: Extended error: $e');
       throw Exception('Error fetching extended times: $e');
@@ -172,8 +179,8 @@ class HebcalService {
       -6: 'America/Chicago',
       -5: 'America/New_York',
       -4: 'America/Halifax',
-      -3: 'America/Sao_Paulo',
-      -2: 'Atlantic/South_Georgia',
+      -3: 'Atlantic/South_Georgia',
+      -2: 'Atlantic/Azores',
       -1: 'Atlantic/Azores',
       0: 'Europe/London',
       1: 'Europe/Paris',
@@ -212,7 +219,7 @@ class HebcalService {
       // Extract the datetime portion without timezone offset
       // Match pattern: YYYY-MM-DDTHH:MM:SS (ignore everything after)
       final match = RegExp(
-        r'^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})',
+        r'^(\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2})',
       ).firstMatch(dateStr);
 
       if (match != null) {
@@ -225,7 +232,7 @@ class HebcalService {
 
       // Fallback: try DateTime.parse but strip timezone
       final cleanDate = dateStr
-          .replaceAll(RegExp(r'[+-]\d{2}:\d{2}$'), '')
+          .replaceAll(RegExp(r'[+-]\\d{2}:\\d{2}$'), '')
           .replaceAll('Z', '');
       final parsed = DateTime.parse(cleanDate);
       debugPrint('HebcalService: Fallback parsed "$dateStr" -> $parsed');
@@ -235,7 +242,7 @@ class HebcalService {
       // Last resort fallback
       try {
         final cleanDate = dateStr
-            .replaceAll(RegExp(r'[+-]\d{2}:\d{2}$'), '')
+            .replaceAll(RegExp(r'[+-]\\d{2}:\\d{2}$'), '')
             .replaceAll('Z', '');
         return DateTime.parse(cleanDate);
       } catch (e2) {
@@ -245,7 +252,7 @@ class HebcalService {
     }
   }
 
-  List<CandleLighting> _parseHebcalResponse(Map<String, dynamic> data) {
+  List<CandleLighting> _parseHebcalResponse(Map<String, dynamic> data, {required String locale}) {
     final List<CandleLighting> results = [];
     final items = data['items'] as List<dynamic>? ?? [];
 
@@ -287,16 +294,33 @@ class HebcalService {
         currentCandleLighting = date;
         eventDate = date;
         currentHavdalah = null;
-        currentHoliday = item['memo'] as String?;
-        currentHebrewHoliday = item['hebrew'] as String?;
+
+        // For candle lighting events:
+        // Hebrew locale (lg=h): memo has Hebrew name, title_orig has transliteration
+        // English locale (lg=s): memo has English name, hebrew has Hebrew
+        if (locale == 'he') {
+          currentHoliday = item['memo'] as String?;
+          currentHebrewHoliday = item['memo'] as String?;
+        } else {
+          currentHoliday = item['memo'] as String?;
+          currentHebrewHoliday = item['hebrew'] as String?;
+        }
         isYomTov = item['yomtov'] == true;
       } else if (category == 'havdalah') {
         currentHavdalah = date;
       } else if (category == 'holiday') {
         final yomtov = item['yomtov'] as bool? ?? false;
         if (yomtov) {
-          currentHoliday = item['title'] as String?;
-          currentHebrewHoliday = item['hebrew'] as String?;
+          // For Yom Tov holidays:
+          // Hebrew: title has Hebrew with nikud
+          // English: title_orig has English name
+          if (locale == 'he') {
+            currentHoliday = item['title'] as String?;
+            currentHebrewHoliday = item['title'] as String?;
+          } else {
+            currentHoliday = item['title_orig'] as String? ?? item['title'] as String?;
+            currentHebrewHoliday = item['hebrew'] as String?;
+          }
           isYomTov = true;
         }
       }
@@ -327,7 +351,7 @@ class HebcalService {
     return results;
   }
 
-  List<CandleLighting> _parseExtendedResponse(Map<String, dynamic> data) {
+  List<CandleLighting> _parseExtendedResponse(Map<String, dynamic> data, {required String locale}) {
     final List<CandleLighting> results = [];
     final items = data['items'] as List<dynamic>? ?? [];
 
@@ -343,10 +367,9 @@ class HebcalService {
         candleEvents.add(item);
       } else if (category == 'havdalah') {
         havdalahEvents.add(item);
-      } else if (category == 'holiday') {
+      } else if (category == 'holiday' && item['yomtov'] == true) {
         holidayEvents.add(item);
       } else if (category == 'parashat' || category == 'roshchodesh') {
-        // Parashat is the Torah portion, roshchodesh might also have parasha info
         parashaEvents.add(item);
       }
     }
@@ -359,7 +382,6 @@ class HebcalService {
       final candleDate = _parseHebcalDate(candleDateStr);
 
       // Find the corresponding Havdalah
-      // Havdalah is typically 1-2 days after candle lighting (1 for regular Shabbat, 2+ for holidays)
       DateTime? havdalahDate;
       for (final havdalahItem in havdalahEvents) {
         final havdalahDateStr = havdalahItem['date'] as String?;
@@ -374,10 +396,11 @@ class HebcalService {
           bool hasIntermediateCandles = false;
           for (final otherCandle in candleEvents) {
             if (otherCandle == candleItem) continue;
-            final otherDateStr = otherCandle['date'] as String?;
-            if (otherDateStr == null) continue;
-            final otherDate = _parseHebcalDate(otherDateStr);
-            if (otherDate.isAfter(candleDate) && otherDate.isBefore(hDate)) {
+            final otherCandleDateStr = otherCandle['date'] as String?;
+            if (otherCandleDateStr == null) continue;
+            final otherCandleDate = _parseHebcalDate(otherCandleDateStr);
+            if (otherCandleDate.isAfter(candleDate) &&
+                otherCandleDate.isBefore(hDate)) {
               hasIntermediateCandles = true;
               break;
             }
@@ -390,13 +413,14 @@ class HebcalService {
         }
       }
 
-      // Find associated holiday
-      String? holidayName = candleItem['memo'] as String?;
-      String? hebrewHolidayName = candleItem['hebrew'] as String?;
+      // Get holiday/parasha info associated with this candle lighting
+      String? holidayName;
+      String? hebrewHolidayName;
       bool isYomTov = candleItem['yomtov'] == true;
 
-      // Check if there's a holiday on the same date
       final candleDateKey = _formatDate(candleDate);
+
+      // Check for holiday on same day or next day
       for (final holidayItem in holidayEvents) {
         final holidayDateStr = holidayItem['date'] as String?;
         if (holidayDateStr == null) continue;
@@ -404,28 +428,46 @@ class HebcalService {
         final holidayDate = _parseHebcalDate(holidayDateStr);
         final holidayDateKey = _formatDate(holidayDate);
 
-        // Holiday can be on the same day or the next day (since Shabbat starts Friday evening)
+        // Holiday can be on same day or next day (since Shabbat starts Friday evening)
         if (holidayDateKey == candleDateKey ||
             holidayDate.difference(candleDate).inDays == 1) {
           if (holidayItem['yomtov'] == true) {
-            holidayName = holidayItem['title'] as String?;
-            hebrewHolidayName = holidayItem['hebrew'] as String?;
+            // For Yom Tov:
+            // Hebrew: title has Hebrew with nikud
+            // English: title_orig has English name
+            if (locale == 'he') {
+              holidayName = holidayItem['title'] as String?;
+              hebrewHolidayName = holidayItem['title'] as String?;
+            } else {
+              holidayName = holidayItem['title_orig'] as String? ?? holidayItem['title'] as String?;
+              hebrewHolidayName = holidayItem['hebrew'] as String?;
+            }
             isYomTov = true;
             break;
           }
         }
       }
 
-      // Get Hebrew date from the candle item
+      // If no holiday found, use memo field from candle item
+      if (holidayName == null) {
+        // For candle items, memo contains the event name (Shabbat, parasha, or Yom Tov)
+        if (locale == 'he') {
+          holidayName = candleItem['memo'] as String?;
+          hebrewHolidayName = candleItem['memo'] as String?;
+        } else {
+          holidayName = candleItem['memo'] as String?;
+          hebrewHolidayName = null; // No Hebrew translation for English candles (just "Candle lighting")
+        }
+      }
+
+      // Get Hebrew date
       final hebrewDate = candleItem['heDateParts'] != null
           ? _formatHebrewDate(candleItem['heDateParts'])
-          : candleItem['hdate'] as String?;
+          : formatHebrewDateProper(candleItem['hdate'] as String?);
 
       // Find associated parasha (Torah portion)
-      // Parasha is typically on the same date as the candle lighting (Friday)
       String? parasha;
       String? hebrewParasha;
-      final candleDateKeyForParasha = _formatDate(candleDate);
       for (final parashaItem in parashaEvents) {
         final parashaDateStr = parashaItem['date'] as String?;
         if (parashaDateStr == null) continue;
@@ -434,9 +476,17 @@ class HebcalService {
         final parashaDateKey = _formatDate(parashaDate);
 
         // Parasha is typically on the same day as candle lighting (Friday)
-        if (parashaDateKey == candleDateKeyForParasha) {
-          parasha = parashaItem['title'] as String?;
-          hebrewParasha = parashaItem['hebrew'] as String?;
+        if (parashaDateKey == candleDateKey) {
+          // For parasha items:
+          // Hebrew: title has Hebrew with nikud
+          // English: title_orig has English transliteration
+          if (locale == 'he') {
+            parasha = parashaItem['title'] as String?;
+            hebrewParasha = parashaItem['title'] as String?;
+          } else {
+            parasha = parashaItem['title_orig'] as String? ?? parashaItem['title'] as String?;
+            hebrewParasha = parashaItem['hebrew'] as String?;
+          }
           break;
         }
       }
@@ -484,6 +534,4 @@ class HebcalService {
     }
     return null;
   }
-
 }
-

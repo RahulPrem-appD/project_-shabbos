@@ -402,7 +402,11 @@ class _HomeTabState extends State<HomeTab> {
 
   Widget _buildNextCandleLighting(CandleLighting lighting) {
     final timeFormat = DateFormat('HH:mm'); // 24-hour format
-    final dateFormat = DateFormat('EEEE, MMM d');
+
+    // Use Hebrew date when in Hebrew mode, otherwise use English date format
+    final dateString = (isHebrew && lighting.hebrewDate != null && lighting.hebrewDate!.isNotEmpty)
+        ? lighting.hebrewDate!
+        : DateFormat('EEEE, MMM d').format(lighting.date);
 
     final now = DateTime.now();
     final diff = lighting.candleLightingTime.difference(now);
@@ -493,7 +497,7 @@ class _HomeTabState extends State<HomeTab> {
           const SizedBox(height: 4),
 
           Text(
-            dateFormat.format(lighting.date),
+            dateString,
             style: TextStyle(
               fontSize: 14,
               color: Colors.white.withValues(alpha: 0.5),
@@ -564,7 +568,11 @@ class _HomeTabState extends State<HomeTab> {
 
   Widget _buildUpcomingCard(CandleLighting lighting) {
     final timeFormat = DateFormat('HH:mm'); // 24-hour format
-    final dateFormat = DateFormat('EEE, MMM d');
+
+    // Use Hebrew date when in Hebrew mode
+    final dateString = (isHebrew && lighting.hebrewDate != null && lighting.hebrewDate!.isNotEmpty)
+        ? lighting.hebrewDate!
+        : DateFormat('EEE, MMM d').format(lighting.date);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -605,7 +613,7 @@ class _HomeTabState extends State<HomeTab> {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  dateFormat.format(lighting.date),
+                  dateString,
                   style: TextStyle(fontSize: 13, color: Colors.grey[500]),
                 ),
               ],
