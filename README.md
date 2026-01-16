@@ -41,9 +41,12 @@ A simple, clean Flutter app designed to help you prepare for Shabbat and Yom Tov
 
 ## Technical Details
 
+### Platforms
+- **iOS** 12.0+
+- **Android** API 21+ (Android 5.0 Lollipop)
+
 ### Requirements
 - Flutter 3.8.0 or higher
-- iOS 12.0+ / Android API 21+
 
 ### Dependencies
 - `flutter_local_notifications` - Local notification scheduling
