@@ -489,7 +489,7 @@ class NotificationService {
         presentBadge: true,
         presentSound: true,
         badgeNumber: 1,
-        interruptionLevel: InterruptionLevel.timeSensitive,
+        interruptionLevel: InterruptionLevel.critical, // Use critical to match critical permissions requested
         sound: null, // Use default sound as fallback
       );
       return NotificationDetails(android: androidDetails, iOS: iosDetails);
@@ -500,7 +500,7 @@ class NotificationService {
       presentBadge: true,
       presentSound: true,
       badgeNumber: 1,
-      interruptionLevel: InterruptionLevel.timeSensitive,
+      interruptionLevel: InterruptionLevel.critical, // Use critical to match critical permissions requested, ensures alarms work in DND mode
       sound: useDefaultSound ? null : iosSoundFile, // Include extension (.caf, .wav, or .aiff)
     );
 
