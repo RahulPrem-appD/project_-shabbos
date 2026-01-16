@@ -22,6 +22,12 @@
 		SHAB0030000000000004 /* Ata Bechartanu-YomTov.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = SHAB0020000000000004 /* Ata Bechartanu-YomTov.mp3 */; };
 		SHAB0030000000000005 /* Ata Bechartanu2-YomTov.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = SHAB0020000000000005 /* Ata Bechartanu2-YomTov.mp3 */; };
 		SHAB0030000000000006 /* HoduLaHashem-YomTov.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = SHAB0020000000000006 /* HoduLaHashem-YomTov.mp3 */; };
+		SHAB0070000000000001 /* RavShalomShofarDefaultlouder.caf in Resources */ = {isa = PBXBuildFile; fileRef = SHAB0060000000000001 /* RavShalomShofarDefaultlouder.caf */; };
+		SHAB0070000000000002 /* RYomTovShabbatShalomSong.caf in Resources */ = {isa = PBXBuildFile; fileRef = SHAB0060000000000002 /* RYomTovShabbatShalomSong.caf */; };
+		SHAB0070000000000003 /* YomTov-Default.caf in Resources */ = {isa = PBXBuildFile; fileRef = SHAB0060000000000003 /* YomTov-Default.caf */; };
+		SHAB0070000000000004 /* Ata Bechartanu-YomTov.caf in Resources */ = {isa = PBXBuildFile; fileRef = SHAB0060000000000004 /* Ata Bechartanu-YomTov.caf */; };
+		SHAB0070000000000005 /* Ata Bechartanu2-YomTov.caf in Resources */ = {isa = PBXBuildFile; fileRef = SHAB0060000000000005 /* Ata Bechartanu2-YomTov.caf */; };
+		SHAB0070000000000006 /* HoduLaHashem-YomTov.caf in Resources */ = {isa = PBXBuildFile; fileRef = SHAB0060000000000006 /* HoduLaHashem-YomTov.caf */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -77,6 +83,12 @@
 		SHAB0020000000000004 /* Ata Bechartanu-YomTov.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = "Ata Bechartanu-YomTov.mp3"; sourceTree = "<group>"; };
 		SHAB0020000000000005 /* Ata Bechartanu2-YomTov.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = "Ata Bechartanu2-YomTov.mp3"; sourceTree = "<group>"; };
 		SHAB0020000000000006 /* HoduLaHashem-YomTov.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = "HoduLaHashem-YomTov.mp3"; sourceTree = "<group>"; };
+		SHAB0060000000000001 /* RavShalomShofarDefaultlouder.caf */ = {isa = PBXFileReference; lastKnownFileType = audio.caf; path = RavShalomShofarDefaultlouder.caf; sourceTree = "<group>"; };
+		SHAB0060000000000002 /* RYomTovShabbatShalomSong.caf */ = {isa = PBXFileReference; lastKnownFileType = audio.caf; path = RYomTovShabbatShalomSong.caf; sourceTree = "<group>"; };
+		SHAB0060000000000003 /* YomTov-Default.caf */ = {isa = PBXFileReference; lastKnownFileType = audio.caf; path = "YomTov-Default.caf"; sourceTree = "<group>"; };
+		SHAB0060000000000004 /* Ata Bechartanu-YomTov.caf */ = {isa = PBXFileReference; lastKnownFileType = audio.caf; path = "Ata Bechartanu-YomTov.caf"; sourceTree = "<group>"; };
+		SHAB0060000000000005 /* Ata Bechartanu2-YomTov.caf */ = {isa = PBXFileReference; lastKnownFileType = audio.caf; path = "Ata Bechartanu2-YomTov.caf"; sourceTree = "<group>"; };
+		SHAB0060000000000006 /* HoduLaHashem-YomTov.caf */ = {isa = PBXFileReference; lastKnownFileType = audio.caf; path = "HoduLaHashem-YomTov.caf"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -187,6 +199,12 @@
 				SHAB0020000000000004 /* Ata Bechartanu-YomTov.mp3 */,
 				SHAB0020000000000005 /* Ata Bechartanu2-YomTov.mp3 */,
 				SHAB0020000000000006 /* HoduLaHashem-YomTov.mp3 */,
+				SHAB0060000000000001 /* RavShalomShofarDefaultlouder.caf */,
+				SHAB0060000000000002 /* RYomTovShabbatShalomSong.caf */,
+				SHAB0060000000000003 /* YomTov-Default.caf */,
+				SHAB0060000000000004 /* Ata Bechartanu-YomTov.caf */,
+				SHAB0060000000000005 /* Ata Bechartanu2-YomTov.caf */,
+				SHAB0060000000000006 /* HoduLaHashem-YomTov.caf */,
 			);
 			path = Sounds;
 			sourceTree = "<group>";
@@ -297,6 +315,12 @@
 				SHAB0030000000000004 /* Ata Bechartanu-YomTov.mp3 in Resources */,
 				SHAB0030000000000005 /* Ata Bechartanu2-YomTov.mp3 in Resources */,
 				SHAB0030000000000006 /* HoduLaHashem-YomTov.mp3 in Resources */,
+				SHAB0070000000000001 /* RavShalomShofarDefaultlouder.caf in Resources */,
+				SHAB0070000000000002 /* RYomTovShabbatShalomSong.caf in Resources */,
+				SHAB0070000000000003 /* YomTov-Default.caf in Resources */,
+				SHAB0070000000000004 /* Ata Bechartanu-YomTov.caf in Resources */,
+				SHAB0070000000000005 /* Ata Bechartanu2-YomTov.caf in Resources */,
+				SHAB0070000000000006 /* HoduLaHashem-YomTov.caf in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

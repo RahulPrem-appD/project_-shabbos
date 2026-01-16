@@ -50,11 +50,18 @@ class AlarmAudioService : Service() {
     }
     
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        Log.d(TAG, "========================================")
         Log.d(TAG, "onStartCommand called")
+        Log.d(TAG, "Intent: ${intent?.action}")
+        Log.d(TAG, "Flags: $flags, StartId: $startId")
         
         val soundId = intent?.getStringExtra(EXTRA_SOUND_ID) ?: "rav_shalom_shofar"
         val title = intent?.getStringExtra(EXTRA_TITLE) ?: "שבת שלום!"
         val body = intent?.getStringExtra(EXTRA_BODY) ?: "Time to light candles 🕯️🕯️"
+        
+        Log.d(TAG, "Sound ID: $soundId")
+        Log.d(TAG, "Title: $title")
+        Log.d(TAG, "Body: $body")
         
         // #region agent log
         try {
@@ -67,6 +74,7 @@ class AlarmAudioService : Service() {
                 put("hypothesisId", "C")
                 put("data", org.json.JSONObject().apply {
                     put("soundId", soundId)
+                    put("title", title)
                 })
             }
             java.io.File(getExternalFilesDir(null), "debug_logs.txt").appendText("${logData.toString()}\n")
@@ -75,75 +83,100 @@ class AlarmAudioService : Service() {
         }
         // #endregion
         
-        // Acquire wake lock
+        // Acquire wake lock to keep device awake during playback
         val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
         wakeLock = powerManager.newWakeLock(
             PowerManager.PARTIAL_WAKE_LOCK,
             "ShabbosApp::AlarmAudioWakeLock"
         )
-        wakeLock?.acquire(120000) // 2 minutes
+        wakeLock?.acquire(120000) // 2 minutes - enough for full audio playback
+        Log.d(TAG, "Wake lock acquired: ${wakeLock?.isHeld}")
         
-        // Start foreground service
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            startForeground(
-                NOTIFICATION_ID,
-                createNotification(title, body),
-                android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
-            )
-        } else {
-            startForeground(NOTIFICATION_ID, createNotification(title, body))
+        // Start foreground service (required for background audio playback)
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                startForeground(
+                    NOTIFICATION_ID,
+                    createNotification(title, body),
+                    android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
+                )
+                Log.d(TAG, "Foreground service started (Android 10+)")
+            } else {
+                startForeground(NOTIFICATION_ID, createNotification(title, body))
+                Log.d(TAG, "Foreground service started (Android < 10)")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error starting foreground service: ${e.message}", e)
         }
         
         // Play the sound
+        Log.d(TAG, "Calling playSound($soundId)...")
         playSound(soundId)
         
-        return START_NOT_STICKY
+        Log.d(TAG, "========================================")
+        // Return START_STICKY to ensure service restarts if killed
+        return START_STICKY
     }
     
     override fun onBind(intent: Intent?): IBinder? = null
     
     override fun onDestroy() {
-        Log.d(TAG, "AlarmAudioService destroyed")
+        Log.d(TAG, "========================================")
+        Log.d(TAG, "AlarmAudioService.onDestroy() called")
+        Log.d(TAG, "Cleaning up resources...")
         releaseMediaPlayer()
         releaseWakeLock()
+        Log.d(TAG, "✓ Cleanup complete")
+        Log.d(TAG, "========================================")
         super.onDestroy()
     }
     
     private fun playSound(soundId: String) {
+        Log.d(TAG, "playSound called with soundId: '$soundId'")
+        
         if (soundId == "silent") {
-            Log.d(TAG, "Silent mode - stopping service")
+            Log.d(TAG, "Silent mode - stopping service (no sound to play)")
             stopSelf()
             return
         }
         
         if (soundId == "default") {
-            Log.d(TAG, "Default sound - stopping service (notification sound already played)")
+            Log.d(TAG, "Default sound mode - stopping service (notification sound already played by system)")
             stopSelf()
             return
         }
         
         val assetPath = SOUND_FILES[soundId]
         if (assetPath == null) {
-            Log.e(TAG, "Sound ID not found: $soundId, using default")
+            Log.e(TAG, "✗ Sound ID not found in map: '$soundId'")
+            Log.e(TAG, "Available sound IDs: ${SOUND_FILES.keys.joinToString()}")
+            Log.w(TAG, "Falling back to default shofar sound")
             val defaultPath = SOUND_FILES["rav_shalom_shofar"]
             if (defaultPath != null) {
+                Log.d(TAG, "Using default path: $defaultPath")
                 playSoundFromAsset(defaultPath)
             } else {
+                Log.e(TAG, "✗ CRITICAL: Even default sound path is null!")
                 stopSelf()
             }
             return
         }
         
+        Log.d(TAG, "✓ Found asset path for '$soundId': $assetPath")
         playSoundFromAsset(assetPath)
     }
     
     private fun playSoundFromAsset(assetPath: String) {
         try {
-            Log.d(TAG, "Playing sound from asset: $assetPath")
+            Log.d(TAG, "========================================")
+            Log.d(TAG, "playSoundFromAsset: Starting playback")
+            Log.d(TAG, "Asset path: $assetPath")
             
-            // Request audio focus
+            // Request audio focus FIRST
             audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
             val audioFocusResult = requestAudioFocus()
+            
+            Log.d(TAG, "Audio focus result: $audioFocusResult")
             
             // #region agent log
             try {
@@ -156,6 +189,7 @@ class AlarmAudioService : Service() {
                     put("hypothesisId", "C")
                     put("data", org.json.JSONObject().apply {
                         put("audioFocusResult", audioFocusResult)
+                        put("assetPath", assetPath)
                     })
                 }
                 java.io.File(getExternalFilesDir(null), "debug_logs.txt").appendText("${logData.toString()}\n")
@@ -165,27 +199,98 @@ class AlarmAudioService : Service() {
             // #endregion
             
             if (audioFocusResult != AudioManager.AUDIOFOCUS_REQUEST_GRANTED) {
-                Log.e(TAG, "Audio focus denied: $audioFocusResult")
-                stopSelf()
-                return
+                Log.e(TAG, "✗ Audio focus DENIED: $audioFocusResult")
+                Log.e(TAG, "✗ Expected: ${AudioManager.AUDIOFOCUS_REQUEST_GRANTED}")
+                // For alarms, we should still try to play - alarms are critical
+                Log.w(TAG, "⚠️ Attempting to play anyway (alarm sounds should work even without focus)")
+            } else {
+                Log.d(TAG, "✓ Audio focus GRANTED")
             }
             
+            // Release any existing player first
+            releaseMediaPlayer()
+            
+            Log.d(TAG, "Creating new MediaPlayer...")
             mediaPlayer = MediaPlayer().apply {
-                val afd: AssetFileDescriptor = assets.openFd(assetPath)
-                setDataSource(afd.fileDescriptor, afd.startOffset, afd.length)
-                afd.close()
+                Log.d(TAG, "Opening asset file descriptor...")
+                var afd: AssetFileDescriptor? = null
+                try {
+                    afd = assets.openFd(assetPath)
+                    Log.d(TAG, "Asset opened - length: ${afd.length}, startOffset: ${afd.startOffset}")
+                    
+                    setDataSource(afd.fileDescriptor, afd.startOffset, afd.length)
+                    afd.close()
+                    afd = null
+                    Log.d(TAG, "✓ Data source set successfully")
+                } catch (e: Exception) {
+                    Log.e(TAG, "✗ Error opening asset: ${e.message}", e)
+                    afd?.close()
+                    throw e
+                }
                 
+                Log.d(TAG, "Setting audio attributes (USAGE_ALARM)...")
                 setAudioAttributes(
                     AudioAttributes.Builder()
                         .setUsage(AudioAttributes.USAGE_ALARM)
                         .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
                         .build()
                 )
+                Log.d(TAG, "✓ Audio attributes set")
                 
                 setOnPreparedListener {
-                    Log.d(TAG, "MediaPlayer prepared, starting playback")
+                    Log.d(TAG, "========================================")
+                    Log.d(TAG, "✓ MediaPlayer PREPARED callback received")
                     try {
+                        // Verify MediaPlayer is in prepared state
+                        val duration = duration
+                        Log.d(TAG, "MediaPlayer state: PREPARED")
+                        Log.d(TAG, "Audio duration: $duration ms")
+                        
+                        val wasPlaying = isPlaying
+                        Log.d(TAG, "Calling MediaPlayer.start()...")
                         start()
+                        val nowPlaying = isPlaying
+                        val position = currentPosition
+                        
+                        Log.d(TAG, "MediaPlayer.start() called")
+                        Log.d(TAG, "Was playing: $wasPlaying, Now playing: $nowPlaying")
+                        Log.d(TAG, "Current position: $position ms")
+                        
+                        if (!nowPlaying) {
+                            Log.e(TAG, "✗ CRITICAL: MediaPlayer.start() called but isPlaying is FALSE!")
+                            Log.e(TAG, "✗ This means playback did NOT start")
+                            // Try to get more info about the error
+                            try {
+                                Log.e(TAG, "MediaPlayer state after start: ${if (isPlaying) "PLAYING" else "NOT PLAYING"}")
+                            } catch (e: Exception) {
+                                Log.e(TAG, "Could not check MediaPlayer state: ${e.message}")
+                            }
+                        } else {
+                            Log.d(TAG, "✓ MediaPlayer is playing!")
+                        }
+                        
+                        // Verify it's actually playing after a short delay
+                        android.os.Handler(mainLooper).postDelayed({
+                            val stillPlaying = isPlaying
+                            val currentPos = currentPosition
+                            Log.d(TAG, "Playback verification (500ms later):")
+                            Log.d(TAG, "  Still playing: $stillPlaying")
+                            Log.d(TAG, "  Position: $currentPos ms")
+                            
+                            if (!stillPlaying && currentPos == 0) {
+                                Log.e(TAG, "✗ ERROR: MediaPlayer is NOT playing after 500ms!")
+                                Log.e(TAG, "✗ Position is still 0 - playback never started")
+                                Log.e(TAG, "✗ Possible causes:")
+                                Log.e(TAG, "  - Audio focus was lost")
+                                Log.e(TAG, "  - MediaPlayer error occurred")
+                                Log.e(TAG, "  - Audio system issue")
+                            } else if (stillPlaying) {
+                                Log.d(TAG, "✓ Playback confirmed - audio is playing at position $currentPos ms")
+                            } else {
+                                Log.w(TAG, "⚠️ Playback stopped but position is $currentPos ms (might have completed quickly)")
+                            }
+                        }, 500)
+                        
                         // #region agent log
                         try {
                             val logData = org.json.JSONObject().apply {
@@ -196,7 +301,8 @@ class AlarmAudioService : Service() {
                                 put("runId", "run1")
                                 put("hypothesisId", "C")
                                 put("data", org.json.JSONObject().apply {
-                                    put("isPlaying", isPlaying)
+                                    put("isPlaying", nowPlaying)
+                                    put("position", position)
                                 })
                             }
                             java.io.File(getExternalFilesDir(null), "debug_logs.txt").appendText("${logData.toString()}\n")
@@ -205,26 +311,35 @@ class AlarmAudioService : Service() {
                         }
                         // #endregion
                     } catch (e: Exception) {
-                        Log.e(TAG, "Error starting playback: ${e.message}", e)
+                        Log.e(TAG, "✗ CRITICAL ERROR starting playback: ${e.message}", e)
+                        e.printStackTrace()
                         stopSelf()
                     }
+                    Log.d(TAG, "========================================")
                 }
                 
                 setOnCompletionListener {
-                    Log.d(TAG, "Playback completed")
+                    Log.d(TAG, "✓ Sound playback COMPLETED")
                     stopSelf()
                 }
                 
                 setOnErrorListener { _, what, extra ->
-                    Log.e(TAG, "MediaPlayer error: what=$what, extra=$extra")
+                    Log.e(TAG, "✗ MediaPlayer ERROR:")
+                    Log.e(TAG, "  what=$what, extra=$extra")
+                    Log.e(TAG, "  This usually means the audio file is corrupted or unsupported")
                     stopSelf()
                     true
                 }
                 
+                Log.d(TAG, "Calling prepareAsync()...")
                 prepareAsync()
+                Log.d(TAG, "prepareAsync() called - waiting for onPrepared callback...")
             }
+            
+            Log.d(TAG, "========================================")
         } catch (e: Exception) {
-            Log.e(TAG, "Error setting up MediaPlayer: ${e.message}", e)
+            Log.e(TAG, "✗ CRITICAL ERROR setting up MediaPlayer: ${e.message}", e)
+            e.printStackTrace()
             stopSelf()
         }
     }
@@ -256,14 +371,17 @@ class AlarmAudioService : Service() {
     }
     
     private fun releaseMediaPlayer() {
-        mediaPlayer?.let {
+        mediaPlayer?.let { player ->
             try {
-                if (it.isPlaying) {
-                    it.stop()
+                Log.d(TAG, "Releasing MediaPlayer...")
+                if (player.isPlaying) {
+                    Log.d(TAG, "Stopping playback before release")
+                    player.stop()
                 }
-                it.release()
+                player.release()
+                Log.d(TAG, "✓ MediaPlayer released")
             } catch (e: Exception) {
-                Log.e(TAG, "Error releasing MediaPlayer: ${e.message}")
+                Log.e(TAG, "Error releasing MediaPlayer: ${e.message}", e)
             }
             mediaPlayer = null
         }

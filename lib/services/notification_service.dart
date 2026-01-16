@@ -177,8 +177,10 @@ class NotificationService {
   }
 
   void _onNotificationResponse(NotificationResponse response) {
-    debugPrint('NotificationService: Notification tapped - ID: ${response.id}');
-    // Play custom sound when notification is tapped (iOS foreground scenario)
+    debugPrint('NotificationService: Notification response received - ID: ${response.id}');
+    debugPrint('NotificationService: Platform: ${Platform.operatingSystem}');
+    // Play custom sound when notification is tapped or received
+    // This is especially important for iOS where notification sounds may not play automatically
     _playNotificationSound(response.id);
   }
 
@@ -187,6 +189,8 @@ class NotificationService {
     debugPrint(
       'NotificationService: Background notification - ID: ${response.id}',
     );
+    // Note: We can't play sounds directly in background handler,
+    // but iOS AppDelegate will handle it via AVAudioPlayer
   }
 
   /// Play custom sound based on notification type
@@ -464,29 +468,72 @@ class NotificationService {
 
     // For iOS: if useDefaultSound is true, don't pass a custom sound file
     // This will use the system default notification sound
+    // IMPORTANT: iOS sound files must be:
+    // 1. Format: .caf, .wav, or .aiff (NOT .mp3!)
+    // 2. In the app bundle (ios/Runner/Sounds/)
+    // 3. Added to Xcode project with correct target membership
+    // 4. Referenced by filename WITH extension (e.g., 'sound.caf')
+    // 5. Less than 30 seconds duration
+    
+    debugPrint('NotificationService: iOS sound configuration:');
+    debugPrint('  Sound file: $iosSoundFile');
+    debugPrint('  Use default: $useDefaultSound');
+    
+    if (iosSoundFile != null && iosSoundFile.endsWith('.mp3')) {
+      debugPrint('NotificationService: ⚠️ WARNING: iOS does not support .mp3 for notification sounds!');
+      debugPrint('NotificationService: ⚠️ Convert to .caf format: afconvert $iosSoundFile ${iosSoundFile.replaceAll('.mp3', '.caf')} -d ima4 -f caff -v');
+      debugPrint('NotificationService: ⚠️ Using default sound instead');
+      // Fall back to default sound if .mp3 is provided
+      final iosDetails = DarwinNotificationDetails(
+        presentAlert: true,
+        presentBadge: true,
+        presentSound: true,
+        badgeNumber: 1,
+        interruptionLevel: InterruptionLevel.timeSensitive,
+        sound: null, // Use default sound as fallback
+      );
+      return NotificationDetails(android: androidDetails, iOS: iosDetails);
+    }
+    
     final iosDetails = DarwinNotificationDetails(
       presentAlert: true,
       presentBadge: true,
       presentSound: true,
       badgeNumber: 1,
       interruptionLevel: InterruptionLevel.timeSensitive,
-      sound: useDefaultSound ? null : iosSoundFile, // null = default system sound
+      sound: useDefaultSound ? null : iosSoundFile, // Include extension (.caf, .wav, or .aiff)
     );
 
     return NotificationDetails(android: androidDetails, iOS: iosDetails);
   }
 
   /// Map sound ID to iOS sound filename
+  /// IMPORTANT: iOS notification sounds must be .caf, .wav, or .aiff format
+  /// .mp3 files will NOT work for iOS notifications!
+  /// The sound files must be converted to .caf format and added to ios/Runner/Sounds/
+  /// 
+  /// NOTE: flutter_local_notifications expects the filename WITH extension
+  /// iOS will look for the file in the app bundle
   String? _getIosSoundFile(String soundId) {
+    // iOS requires .caf, .wav, or .aiff - NOT .mp3!
+    // If you have .mp3 files, convert them to .caf using:
+    // afconvert input.mp3 output.caf -d ima4 -f caff -v
     const soundFiles = {
-      'rav_shalom_shofar': 'RavShalomShofarDefaultlouder.mp3',
-      'shabbat_shalom_song': 'RYomTovShabbatShalomSong.mp3',
-      'yomtov_default': 'YomTov-Default.mp3',
-      'ata_bechartanu': 'Ata Bechartanu-YomTov.mp3',
-      'ata_bechartanu_2': 'Ata Bechartanu2-YomTov.mp3',
-      'hodu_lahashem': 'HoduLaHashem-YomTov.mp3',
+      'rav_shalom_shofar': 'RavShalomShofarDefaultlouder.caf',
+      'shabbat_shalom_song': 'RYomTovShabbatShalomSong.caf',
+      'yomtov_default': 'YomTov-Default.caf',
+      'ata_bechartanu': 'Ata Bechartanu-YomTov.caf',
+      'ata_bechartanu_2': 'Ata Bechartanu2-YomTov.caf',
+      'hodu_lahashem': 'HoduLaHashem-YomTov.caf',
     };
-    return soundFiles[soundId];
+    final fileName = soundFiles[soundId];
+    if (fileName != null) {
+      debugPrint('NotificationService: iOS sound file for $soundId: $fileName');
+      debugPrint('NotificationService: ✓ .caf files have been created and added to Xcode project');
+      debugPrint('NotificationService: ⚠️ IMPORTANT: Rebuild the app for .caf files to be included in bundle!');
+      debugPrint('NotificationService:    Run: flutter clean && flutter build ios');
+    }
+    return fileName;
   }
 
   /// Get the appropriate sound ID for a notification type
@@ -811,14 +858,31 @@ class NotificationService {
   Future<void> _verifyPendingNotifications() async {
     try {
       final pending = await _notifications.pendingNotificationRequests();
-      debugPrint(
-        'NotificationService: Pending notifications count: ${pending.length}',
-      );
-      for (final n in pending.take(5)) {
-        debugPrint('  - ID ${n.id}: ${n.title}');
+      debugPrint('NotificationService: ========================================');
+      debugPrint('NotificationService: Pending notifications verification');
+      debugPrint('NotificationService: Total pending: ${pending.length}');
+      
+      if (pending.isEmpty) {
+        debugPrint('NotificationService: ⚠️ WARNING: No pending notifications found!');
+        debugPrint('NotificationService: This might indicate a scheduling issue.');
+      } else {
+        debugPrint('NotificationService: ✓ Notifications are scheduled:');
+        for (final n in pending.take(10)) {
+          final now = DateTime.now();
+          // Try to extract scheduled time if available
+          debugPrint('  - ID ${n.id}: ${n.title}');
+          if (Platform.isIOS) {
+            debugPrint('    Platform: iOS');
+            debugPrint('    Body: ${n.body}');
+          }
+        }
+        if (pending.length > 10) {
+          debugPrint('  ... and ${pending.length - 10} more notifications');
+        }
       }
+      debugPrint('NotificationService: ========================================');
     } catch (e) {
-      debugPrint('NotificationService: Error verifying pending: $e');
+      debugPrint('NotificationService: ✗ Error verifying pending: $e');
     }
   }
 
@@ -938,6 +1002,7 @@ class NotificationService {
             ? null
             : _getIosSoundFile(soundId);
 
+        debugPrint('NotificationService: ========================================');
         debugPrint('NotificationService: Scheduling iOS notification #$id');
         debugPrint('NotificationService: Local timezone: ${tz.local.name}');
         debugPrint('NotificationService: Scheduled time: $scheduledTime');
@@ -948,23 +1013,62 @@ class NotificationService {
         debugPrint(
           'NotificationService: iOS sound file: $iosSoundFile (isPre=$isPreNotification, isYomTov=$isYomTov)',
         );
+        
+        // Verify sound file exists for iOS
+        if (iosSoundFile != null) {
+          debugPrint('NotificationService: iOS sound file requirements:');
+          debugPrint('  File must be in: ios/Runner/Sounds/$iosSoundFile');
+          debugPrint('  Format: MUST be .caf, .wav, or .aiff (NOT .mp3!)');
+          debugPrint('  Duration: Must be less than 30 seconds');
+          debugPrint('  Xcode: Must be added to project with Target Membership');
+          debugPrint('  Bundle: Must be included in app bundle resources');
+          if (iosSoundFile.endsWith('.mp3')) {
+            debugPrint('  ⚠️ ERROR: .mp3 files do NOT work for iOS notifications!');
+            debugPrint('  ⚠️ Convert using: afconvert input.mp3 output.caf -d ima4 -f caff -v');
+          }
+        } else if (useDefaultSound) {
+          debugPrint('NotificationService: Using iOS default notification sound');
+        } else {
+          debugPrint('NotificationService: ⚠️ No sound file specified (silent notification)');
+        }
 
         // Schedule the notification with custom sound, default sound, or silent
-        await _notifications.zonedSchedule(
-          id,
-          title,
-          body,
-          tzTime,
-          _getNotificationDetails(
-            iosSoundFile: iosSoundFile,
-            useDefaultSound: useDefaultSound,
-          ),
-          androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-        );
+        try {
+          await _notifications.zonedSchedule(
+            id,
+            title,
+            body,
+            tzTime,
+            _getNotificationDetails(
+              iosSoundFile: iosSoundFile,
+              useDefaultSound: useDefaultSound,
+            ),
+            androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+          );
 
-        debugPrint(
-          'NotificationService: iOS notification #$id scheduled with sound: ${iosSoundFile ?? (useDefaultSound ? 'DEFAULT' : 'SILENT')}',
-        );
+          debugPrint(
+            'NotificationService: ✓ iOS notification #$id scheduled successfully',
+          );
+          debugPrint(
+            'NotificationService: Sound: ${iosSoundFile ?? (useDefaultSound ? 'DEFAULT' : 'SILENT')}',
+          );
+          
+          // Verify the notification was actually scheduled
+          final pending = await _notifications.pendingNotificationRequests();
+          final scheduledNotification = pending.firstWhere(
+            (n) => n.id == id,
+            orElse: () => throw Exception('Notification not found in pending list'),
+          );
+          debugPrint('NotificationService: ✓ Verified notification #$id is in pending list');
+          debugPrint('NotificationService: Total pending notifications: ${pending.length}');
+          
+        } catch (e) {
+          debugPrint('NotificationService: ✗ ERROR scheduling iOS notification #$id: $e');
+          debugPrint('NotificationService: Stack trace: ${StackTrace.current}');
+          return false;
+        }
+        
+        debugPrint('NotificationService: ========================================');
         return true;
       }
     } catch (e, stack) {
@@ -976,7 +1080,9 @@ class NotificationService {
 
   /// Send an immediate test notification
   Future<void> sendTestNotification() async {
+    debugPrint('NotificationService: ========================================');
     debugPrint('NotificationService: Sending immediate test notification...');
+    debugPrint('NotificationService: Platform: ${Platform.operatingSystem}');
 
     await initialize();
     await requestPermissions();
@@ -985,31 +1091,96 @@ class NotificationService {
     final soundId = _audioService.getCandleLightingSound();
     final iosSoundFile = _getIosSoundFile(soundId);
 
-    debugPrint('NotificationService: Using sound ID: $soundId');
+    debugPrint('NotificationService: Sound ID: $soundId');
     debugPrint('NotificationService: iOS sound file: $iosSoundFile');
 
-    // Play sound via Flutter AudioService (works for both platforms)
-    // iOS notification sounds have a 30-second limit, so we play via AudioService
+    // Play sound via Flutter AudioService FIRST (works for both platforms)
+    // This ensures sound plays even if notification sound doesn't work
     if (soundId != 'silent') {
-      debugPrint(
-        'NotificationService: Playing sound via Flutter AudioService...',
-      );
-      await _audioService.playSound(soundId);
+      debugPrint('NotificationService: Playing sound via Flutter AudioService...');
+      try {
+        await _audioService.playSound(soundId);
+        debugPrint('NotificationService: ✓ AudioService.playSound() called successfully');
+      } catch (e) {
+        debugPrint('NotificationService: ✗ Error playing sound via AudioService: $e');
+      }
     }
 
     try {
-      // Show notification without sound (we play our own)
+      // Show notification WITH sound for iOS (iOS will play it automatically)
+      // For Android, we already played via AudioService above
       await _notifications.show(
         999,
         'שבת שלום! Good Shabbos!',
         'התראת בדיקה 🕯️🕯️\nTest notification',
         _getNotificationDetails(
-          iosSoundFile: null,
-        ), // No notification sound - we play via AudioService
+          iosSoundFile: iosSoundFile, // Include sound for iOS
+          useDefaultSound: false,
+        ),
       );
-      debugPrint('NotificationService: Immediate test sent');
+      debugPrint('NotificationService: ✓ Immediate test notification sent');
+      debugPrint('NotificationService: ========================================');
     } catch (e) {
-      debugPrint('NotificationService: Failed to send: $e');
+      debugPrint('NotificationService: ✗ Failed to send notification: $e');
+      debugPrint('NotificationService: ========================================');
+    }
+  }
+  
+  /// Test sound playback directly (without notification)
+  /// This helps debug if the issue is with sound files or notification system
+  Future<void> testSoundPlayback() async {
+    debugPrint('NotificationService: ========================================');
+    debugPrint('NotificationService: Testing direct sound playback...');
+    debugPrint('NotificationService: Platform: ${Platform.operatingSystem}');
+    
+    final soundId = _audioService.getCandleLightingSound();
+    debugPrint('NotificationService: Testing sound: $soundId');
+    
+    // Get sound details
+    final sound = SoundOption.findById(soundId);
+    if (sound == null) {
+      debugPrint('NotificationService: ✗ Sound not found: $soundId');
+      debugPrint('NotificationService: ========================================');
+      return;
+    }
+    
+    debugPrint('NotificationService: Sound details:');
+    debugPrint('  ID: ${sound.id}');
+    debugPrint('  Name: ${sound.nameEn}');
+    debugPrint('  Asset path: ${sound.assetPath}');
+    
+    if (Platform.isIOS) {
+      final iosFile = _getIosSoundFile(soundId);
+      debugPrint('  iOS file: $iosFile');
+      if (iosFile == null) {
+        debugPrint('NotificationService: ⚠️ No iOS sound file configured!');
+      } else if (iosFile.endsWith('.mp3')) {
+        debugPrint('NotificationService: ⚠️ WARNING: iOS does not support .mp3!');
+        debugPrint('NotificationService: ⚠️ Convert to .caf format');
+      }
+    }
+    
+    try {
+      debugPrint('NotificationService: Calling AudioService.playSound($soundId)...');
+      await _audioService.playSound(soundId);
+      debugPrint('NotificationService: ✓ AudioService.playSound() completed');
+      debugPrint('NotificationService:');
+      debugPrint('NotificationService: DIAGNOSTIC CHECKLIST:');
+      debugPrint('  ✓ If you HEAR the sound: AudioService is working correctly');
+      debugPrint('  ✗ If you DON\'T hear the sound:');
+      debugPrint('    1. Check device volume (not muted)');
+      debugPrint('    2. Check sound file exists: ${sound.assetPath}');
+      debugPrint('    3. Check pubspec.yaml includes: assets/sounds/');
+      if (Platform.isIOS) {
+        debugPrint('    4. For iOS notifications: Convert .mp3 to .caf format');
+        debugPrint('    5. Add .caf files to Xcode project bundle');
+      }
+      debugPrint('NotificationService: ========================================');
+    } catch (e, stackTrace) {
+      debugPrint('NotificationService: ✗ Sound playback test FAILED');
+      debugPrint('NotificationService: Error: $e');
+      debugPrint('NotificationService: Stack trace: $stackTrace');
+      debugPrint('NotificationService: ========================================');
     }
   }
 
@@ -1368,6 +1539,58 @@ class NotificationService {
 
     // If we're not in any pre-notification window, end any existing activity
     await endLiveActivityCountdown();
+  }
+
+  /// Test if sound files are accessible and can be played
+  /// This helps identify if the issue is with sound files or notification system
+  Future<Map<String, dynamic>> testSoundFiles() async {
+    final results = <String, dynamic>{
+      'platform': Platform.operatingSystem,
+      'sounds': <String, dynamic>{},
+    };
+    
+    debugPrint('NotificationService: ========================================');
+    debugPrint('NotificationService: Testing sound file accessibility...');
+    
+    final testSounds = [
+      'rav_shalom_shofar',
+      'shabbat_shalom_song',
+      'yomtov_default',
+    ];
+    
+    for (final soundId in testSounds) {
+      final sound = SoundOption.findById(soundId);
+      final soundResult = <String, dynamic>{
+        'id': soundId,
+        'found': sound != null,
+        'hasAssetPath': sound?.assetPath != null,
+        'assetPath': sound?.assetPath,
+      };
+      
+      if (Platform.isIOS) {
+        final iosFile = _getIosSoundFile(soundId);
+        soundResult['iosFile'] = iosFile;
+        soundResult['iosFileExists'] = iosFile != null;
+      }
+      
+      // Try to play the sound
+      if (sound != null && sound.assetPath != null) {
+        try {
+          await _audioService.playSound(soundId);
+          await Future.delayed(const Duration(milliseconds: 100));
+          soundResult['playbackTest'] = 'attempted';
+        } catch (e) {
+          soundResult['playbackTest'] = 'failed';
+          soundResult['playbackError'] = e.toString();
+        }
+      }
+      
+      results['sounds'][soundId] = soundResult;
+      debugPrint('NotificationService: $soundId: ${soundResult.toString()}');
+    }
+    
+    debugPrint('NotificationService: ========================================');
+    return results;
   }
 
   /// Generate a diagnostic report for debugging notification issues

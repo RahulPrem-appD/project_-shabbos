@@ -526,20 +526,38 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   void _testNotification() async {
-    // Send the notification
+    // First test direct sound playback
+    debugPrint('SettingsScreen: Testing sound playback first...');
+    await _notificationService.testSoundPlayback();
+    
+    // Wait a moment for sound to start
+    await Future.delayed(const Duration(milliseconds: 500));
+    
+    // Then send the notification (which also tries to play sound)
     await _notificationService.sendTestNotification();
-
-    // Play the selected sound
-    final soundId = _audioService.getCandleLightingSound();
-    if (soundId != 'default' && soundId != 'silent') {
-      await _audioService.playSound(soundId);
-    }
 
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(isHebrew ? 'התראה נשלחה!' : 'Notification sent!'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                isHebrew ? 'התראה נשלחה!' : 'Notification sent!',
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                isHebrew
+                    ? 'אם לא שמעת צליל, בדוק:\n• עוצמת קול\n• קובצי צליל\n• הגדרות התראות'
+                    : 'If no sound, check:\n• Device volume\n• Sound files\n• Notification settings',
+                style: const TextStyle(fontSize: 12),
+              ),
+            ],
+          ),
           behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 4),
         ),
       );
     }
