@@ -425,6 +425,42 @@ class NotificationService {
     return status;
   }
 
+  /// Check if app can schedule exact alarms (Android 12+)
+  /// Returns true if permission is granted or not required (Android < 12)
+  Future<bool> canScheduleExactAlarms() async {
+    if (Platform.isAndroid) {
+      return await NativeAlarmService.canScheduleExactAlarms();
+    }
+    // iOS and older Android don't need this permission
+    return true;
+  }
+
+  /// Check if app is ignoring battery optimizations (Android)
+  /// Returns true if optimization is disabled (good), false if enabled (bad)
+  Future<bool> isIgnoringBatteryOptimizations() async {
+    if (Platform.isAndroid) {
+      return await NativeAlarmService.isIgnoringBatteryOptimizations();
+    }
+    // iOS doesn't have battery optimization in the same way
+    return true;
+  }
+
+  /// Request exact alarm permission (Android 12+)
+  /// Opens system settings where user can grant the permission
+  Future<void> requestExactAlarmPermission() async {
+    if (Platform.isAndroid) {
+      await NativeAlarmService.requestExactAlarmPermission();
+    }
+  }
+
+  /// Request to disable battery optimization (Android)
+  /// Opens system settings where user can disable optimization
+  Future<void> requestDisableBatteryOptimization() async {
+    if (Platform.isAndroid) {
+      await NativeAlarmService.requestDisableBatteryOptimization();
+    }
+  }
+
   /// Request battery optimization exemption (Android only)
   Future<void> requestBatteryOptimizationExemption() async {
     if (Platform.isAndroid) {
@@ -543,10 +579,14 @@ class NotificationService {
     required bool isPreNotification,
     required bool isYomTov,
   }) async {
+    debugPrint('🔊 NotificationService._getSoundIdForNotification called:');
+    debugPrint('   isPreNotification: $isPreNotification');
+    debugPrint('   isYomTov: $isYomTov');
+    
     if (!isPreNotification) {
       // Candle lighting notification: ALWAYS use Rav Shalom Shofar
       final soundId = _audioService.getCandleLightingSound();
-      debugPrint('NotificationService: Selected candle lighting sound: $soundId');
+      debugPrint('🔊 → Selected candle lighting sound: "$soundId"');
       return soundId;
     }
 
@@ -554,12 +594,23 @@ class NotificationService {
     if (isYomTov) {
       // Yom Tov events use Yom Tov sound
       final soundId = await _audioService.getYomTovSound();
-      debugPrint('NotificationService: Selected Yom Tov pre-notification sound: $soundId');
+      debugPrint('🔊 → Selected Yom Tov pre-notification sound: "$soundId"');
       return soundId;
     } else {
       // Shabbos events use early reminder music
+      debugPrint('🔊 → Fetching early reminder sound from AudioService...');
       final soundId = await _audioService.getEarlyReminderSound();
-      debugPrint('NotificationService: Selected early reminder sound: $soundId');
+      debugPrint('🔊 → Got early reminder sound: "$soundId"');
+      
+      // VERIFY: Check if this sound exists in the sound options
+      final sound = SoundOption.findById(soundId);
+      if (sound != null) {
+        debugPrint('🔊 ✓ Sound found: ${sound.nameEn} (${sound.nameHe})');
+        debugPrint('🔊 ✓ Asset path: ${sound.assetPath}');
+      } else {
+        debugPrint('🔊 ✗ WARNING: Sound ID "$soundId" not found in SoundOption list!');
+      }
+      
       return soundId;
     }
   }

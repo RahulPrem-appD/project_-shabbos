@@ -224,12 +224,27 @@ class AudioService {
   // ============================================
   
   Future<String> getEarlyReminderSound() async {
+    debugPrint('🔊 AudioService.getEarlyReminderSound() called');
     final prefs = await SharedPreferences.getInstance();
     final soundId = prefs.getString(_earlyReminderSoundKey);
+    debugPrint('🔊 → Raw value from SharedPreferences: "$soundId"');
+    
     // Default to Shabbat Shalom Song if not set
-    if (soundId == null || !SoundOption.earlyReminderSounds.any((s) => s.id == soundId)) {
+    if (soundId == null) {
+      debugPrint('🔊 → Sound ID is null, using default: "$defaultEarlyReminderSound"');
       return defaultEarlyReminderSound;
     }
+    
+    // Verify sound ID exists in early reminder sounds list
+    final soundExists = SoundOption.earlyReminderSounds.any((s) => s.id == soundId);
+    if (!soundExists) {
+      debugPrint('🔊 ✗ WARNING: Sound ID "$soundId" not found in earlyReminderSounds list!');
+      debugPrint('🔊 → Available IDs: ${SoundOption.earlyReminderSounds.map((s) => s.id).join(", ")}');
+      debugPrint('🔊 → Falling back to default: "$defaultEarlyReminderSound"');
+      return defaultEarlyReminderSound;
+    }
+    
+    debugPrint('🔊 ✓ Returning sound ID: "$soundId"');
     return soundId;
   }
 

@@ -196,6 +196,32 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
 
                   _buildSection(
+                    title: isHebrew ? 'הרשאות מערכת' : 'System Permissions',
+                    children: [
+                      _buildActionTile(
+                        icon: Icons.alarm,
+                        title: isHebrew
+                            ? 'הרשאות התראות מדויקות'
+                            : 'Exact Alarm Permission',
+                        subtitle: isHebrew
+                            ? 'נדרש להתראות אמינות'
+                            : 'Required for reliable alerts',
+                        onTap: _checkAndRequestExactAlarmPermission,
+                      ),
+                      _buildActionTile(
+                        icon: Icons.battery_saver,
+                        title: isHebrew
+                            ? 'חסימת חיסכון בסוללה'
+                            : 'Disable Battery Optimization',
+                        subtitle: isHebrew
+                            ? 'נדרש להתראות ברקע'
+                            : 'Required for background alerts',
+                        onTap: _checkAndDisableBatteryOptimization,
+                      ),
+                    ],
+                  ),
+
+                  _buildSection(
                     title: isHebrew ? 'תמיכה' : 'Support',
                     children: [
                       _buildActionTile(
@@ -756,6 +782,162 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
+  /// Check and request exact alarm permission (Android 12+)
+  Future<void> _checkAndRequestExactAlarmPermission() async {
+    final canSchedule = await _notificationService.canScheduleExactAlarms();
+    
+    if (canSchedule) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              isHebrew
+                  ? '✓ הרשאות התראות מדויקות מאושרות'
+                  : '✓ Exact alarm permission granted',
+            ),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    } else {
+      // Show explanation dialog
+      if (mounted) {
+        final result = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: Text(
+              isHebrew ? 'נדרשת הרשאת התראות מדויקות' : 'Exact Alarm Permission Required',
+            ),
+            content: Text(
+              isHebrew
+                  ? 'להתראות אמינות, האפליקציה צריכה הרשאת התראות מדויקות.\n\nבלי הרשאה זו, ההתראות עלולות שלא להגיע בזמן או בכלל.\n\nנא לאשר בהגדרות המערכת.'
+                  : 'For reliable alerts, this app needs exact alarm permission.\n\nWithout this permission, alerts may not arrive on time or at all.\n\nPlease approve in system settings.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: Text(isHebrew ? 'ביטול' : 'Cancel'),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(context, true),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFE8B923),
+                ),
+                child: Text(isHebrew ? 'אישור' : 'Approve'),
+              ),
+            ],
+          ),
+        );
+        
+        if (result == true) {
+          await _notificationService.requestExactAlarmPermission();
+          
+          // Wait a moment for user to grant permission
+          await Future.delayed(const Duration(seconds: 2));
+          
+          // Check again
+          final nowGranted = await _notificationService.canScheduleExactAlarms();
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  nowGranted
+                      ? (isHebrew
+                          ? '✓ הרשאה אושרה!'
+                          : '✓ Permission granted!')
+                      : (isHebrew
+                          ? '⚠️ נא לאשר את ההרשאה בהגדרות'
+                          : '⚠️ Please approve in settings'),
+                ),
+                backgroundColor: nowGranted ? Colors.green : Colors.orange,
+                duration: const Duration(seconds: 4),
+              ),
+            );
+          }
+        }
+      }
+    }
+  }
+
+  /// Check and request battery optimization exemption
+  Future<void> _checkAndDisableBatteryOptimization() async {
+    final isIgnoring = await _notificationService.isIgnoringBatteryOptimizations();
+    
+    if (isIgnoring) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              isHebrew
+                  ? '✓ חיסכון בסוללה כבר מושבת'
+                  : '✓ Battery optimization already disabled',
+            ),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    } else {
+      // Show explanation dialog
+      if (mounted) {
+        final result = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: Text(
+              isHebrew ? 'נדרש להשבית חיסכון בסוללה' : 'Disable Battery Optimization',
+            ),
+            content: Text(
+              isHebrew
+                  ? 'חיסכון בסוללה עלול להפסיק את האפליקציה ברקע ולמנוע התראות.\n\nלהתראות אמינות, יש להשבית את האופטימיזציה.\n\nזה לא תורים הרבה מהסוללה.'
+                  : 'Battery optimization may stop app in background and prevent notifications.\n\nFor reliable alerts, please disable optimization.\n\nThis doesn\'t drain battery significantly.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: Text(isHebrew ? 'ביטול' : 'Cancel'),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(context, true),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFE8B923),
+                ),
+                child: Text(isHebrew ? 'המשך' : 'Continue'),
+              ),
+            ],
+          ),
+        );
+        
+        if (result == true) {
+          await _notificationService.requestDisableBatteryOptimization();
+          
+          // Wait a moment for user to grant exemption
+          await Future.delayed(const Duration(seconds: 2));
+          
+          // Check again
+          final nowIgnoring = await _notificationService.isIgnoringBatteryOptimizations();
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  nowIgnoring
+                      ? (isHebrew
+                          ? '✓ אופטימיזציה הושבתה!'
+                          : '✓ Optimization disabled!')
+                      : (isHebrew
+                          ? '⚠️ נא להשבית בהגדרות'
+                          : '⚠️ Please disable in settings'),
+                ),
+                backgroundColor: nowIgnoring ? Colors.green : Colors.orange,
+                duration: const Duration(seconds: 4),
+              ),
+            );
+          }
+        }
+      }
+    }
+  }
+
   /// Reschedule all notifications with current settings
   Future<void> _rescheduleNotifications() async {
     try {
@@ -779,6 +961,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         longitude: location.longitude,
         startDate: startDate,
         endDate: endDate,
+        timezone: location.timezone,
         locale: widget.locale,
       );
 
@@ -791,15 +974,66 @@ class _SettingsScreenState extends State<SettingsScreen> {
         return;
       }
 
-      // Reschedule with new settings
+      // CRITICAL: Verify alarms were actually scheduled
+      debugPrint('SettingsScreen: Scheduling ${futureTimes.take(10).length} alarms...');
+      
       await _notificationService.rescheduleAllNotifications(
         futureTimes.take(10).toList(),
         locale: widget.locale,
       );
 
-      debugPrint('SettingsScreen: Notifications rescheduled successfully');
+      // Verify alarms were scheduled successfully
+      await Future.delayed(const Duration(milliseconds: 500));
+      final diagnostic = await _notificationService.generateDiagnosticReport();
+      
+      debugPrint('SettingsScreen: Notifications rescheduled');
+      debugPrint('SettingsScreen: Verification check:');
+      
+      // Check if alarms are scheduled
+      if (diagnostic.contains('PENDING NOTIFICATIONS:') && 
+          diagnostic.split('PENDING NOTIFICATIONS:')[1].split('\n')[0].trim() != 'None') {
+        debugPrint('SettingsScreen: ✓ Alarms verified as scheduled');
+      } else {
+        debugPrint('SettingsScreen: ⚠️ WARNING: No alarms detected after reschedule!');
+        debugPrint('SettingsScreen: This could indicate a permission or scheduling issue');
+        
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                isHebrew
+                    ? '⚠️ אזהרה: התראות לא תוזמנו. בדוק הרשאות.'
+                    : '⚠️ Warning: Alarms not scheduled. Check permissions.',
+              ),
+              backgroundColor: Colors.orange,
+              duration: const Duration(seconds: 5),
+              action: SnackBarAction(
+                label: isHebrew ? 'הרשאות' : 'Permissions',
+                textColor: Colors.white,
+                onPressed: () {
+                  // Scroll to permissions section
+                },
+              ),
+            ),
+          );
+        }
+      }
     } catch (e) {
       debugPrint('SettingsScreen: Error rescheduling: $e');
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              isHebrew
+                  ? 'שגיאה בתזמון התראות: $e'
+                  : 'Error scheduling notifications: $e',
+            ),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 5),
+          ),
+        );
+      }
     }
   }
 }
