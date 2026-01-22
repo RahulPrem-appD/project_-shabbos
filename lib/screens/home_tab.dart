@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:intl/intl.dart' hide TextDirection;
@@ -6,6 +7,7 @@ import '../models/candle_lighting.dart';
 import '../services/hebcal_service.dart';
 import '../services/location_service.dart';
 import '../services/notification_service.dart';
+import '../services/native_alarm_service.dart';
 
 class HomeTab extends StatefulWidget {
   final String locale;
@@ -21,7 +23,7 @@ class HomeTab extends StatefulWidget {
   State<HomeTab> createState() => _HomeTabState();
 }
 
-class _HomeTabState extends State<HomeTab> {
+class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
   final HebcalService _hebcalService = HebcalService();
   final LocationService _locationService = LocationService();
   final NotificationService _notificationService = NotificationService();
@@ -31,18 +33,85 @@ class _HomeTabState extends State<HomeTab> {
   bool _isLoading = true;
   bool _isDetectingLocation = false;
   String? _error;
+  
+  // Permission status
+  bool? _exactAlarmGranted;
+  bool? _batteryOptimizationDisabled;
+  DateTime? _lastPermissionCheck;
 
   bool get isHebrew => widget.locale == 'he';
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    // Check permissions immediately when widget is created
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkPermissions();
+    });
     _init();
   }
 
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Re-check permissions when app resumes (every time app is opened or brought to foreground)
+    if (state == AppLifecycleState.resumed) {
+      debugPrint('HomeTab: App resumed/opened, checking permissions');
+      // Use a small delay to ensure the app is fully active
+      Future.delayed(const Duration(milliseconds: 300), () {
+        if (mounted) {
+          _checkPermissions();
+        }
+      });
+    }
+  }
+
+
   Future<void> _init() async {
     await _notificationService.initialize();
+    await _checkPermissions();
     await _loadData();
+  }
+
+  Future<void> _checkPermissions() async {
+    // Avoid checking too frequently (max once per 2 seconds)
+    final now = DateTime.now();
+    if (_lastPermissionCheck != null && 
+        now.difference(_lastPermissionCheck!).inSeconds < 2) {
+      debugPrint('HomeTab: Skipping permission check (checked ${now.difference(_lastPermissionCheck!).inSeconds}s ago)');
+      return;
+    }
+    _lastPermissionCheck = now;
+
+    debugPrint('HomeTab: ===== Checking permissions =====');
+    
+    if (Platform.isAndroid) {
+      final exactAlarm = await NativeAlarmService.canScheduleExactAlarms();
+      final batteryOptimization = await NativeAlarmService.isIgnoringBatteryOptimizations();
+      
+      if (mounted) {
+        setState(() {
+          _exactAlarmGranted = exactAlarm;
+          _batteryOptimizationDisabled = batteryOptimization;
+        });
+      }
+      
+      debugPrint('HomeTab: Exact alarm permission: $exactAlarm');
+      debugPrint('HomeTab: Battery optimization disabled: $batteryOptimization');
+    } else {
+      if (mounted) {
+        setState(() {
+          _exactAlarmGranted = true; // iOS doesn't need this
+          _batteryOptimizationDisabled = true; // iOS doesn't have this
+        });
+      }
+    }
   }
 
   Future<void> _detectLocation() async {
@@ -233,10 +302,19 @@ class _HomeTabState extends State<HomeTab> {
 
   @override
   Widget build(BuildContext context) {
+    // Check permissions every time the widget is built (when tab becomes visible)
+    // This ensures permissions are checked every time the app opens or user navigates to home tab
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkPermissions();
+    });
+
     return SafeArea(
       child: Column(
         children: [
           _buildHeader(),
+          if (Platform.isAndroid && 
+              (_exactAlarmGranted != true || _batteryOptimizationDisabled != true))
+            _buildPermissionBanner(),
           Expanded(child: _buildBody()),
         ],
       ),
@@ -354,6 +432,131 @@ class _HomeTabState extends State<HomeTab> {
     );
   }
 
+  String _getPermissionMessage(List<String> missingPermissions) {
+    final hasBattery = missingPermissions.any((p) => 
+      p.contains('Battery') || p.contains('אופטימיזציית סוללה'));
+    final hasExactAlarm = missingPermissions.any((p) => 
+      p.contains('Exact Alarms') || p.contains('התראות מדויקות'));
+
+    if (hasBattery && hasExactAlarm) {
+      return isHebrew
+          ? 'הגדרות הסוללה והתראות מדויקות של האפליקציה מגבילות את ההתראות. אנא עזור לאפליקציה להציג התראות על ידי הסרת ההגבלות.'
+          : 'The Battery settings and Exact Alarm permission of this app are restricting the notifications. Kindly help this app to show notifications by removing the restrictions.';
+    } else if (hasBattery) {
+      return isHebrew
+          ? 'הגדרות הסוללה של האפליקציה מגבילות את ההתראות. אנא עזור לאפליקציה להציג התראות על ידי הסרת הגבלת הסוללה.'
+          : 'The Battery settings of this app are restricting the notifications. Kindly help this app to show notifications by removing the battery restrictions.';
+    } else if (hasExactAlarm) {
+      return isHebrew
+          ? 'הרשאת התראות מדויקות נדרשת להצגת התראות. אנא עזור לאפליקציה להציג התראות על ידי מתן הרשאת התראות מדויקות.'
+          : 'Exact Alarm permission is required to show notifications. Kindly help this app to show notifications by granting the Exact Alarm permission.';
+    } else {
+      return isHebrew
+          ? 'הרשאות נדרשות להצגת התראות. אנא עזור לאפליקציה להציג התראות על ידי מתן ההרשאות הנדרשות.'
+          : 'Permissions are required to show notifications. Kindly help this app to show notifications by granting the required permissions.';
+    }
+  }
+
+  Widget _buildPermissionBanner() {
+    if (!Platform.isAndroid) {
+      debugPrint('HomeTab: Not Android, skipping permission banner');
+      return const SizedBox.shrink();
+    }
+    
+    debugPrint('HomeTab: Permission status - exactAlarm: $_exactAlarmGranted, batteryOptimization: $_batteryOptimizationDisabled');
+    
+    // Show banner if permissions are null (not yet checked) or if either is false
+    // Only hide if both are explicitly true
+    if (_exactAlarmGranted == true && _batteryOptimizationDisabled == true) {
+      debugPrint('HomeTab: All permissions granted, hiding banner');
+      return const SizedBox.shrink();
+    }
+    
+    // If permissions haven't been checked yet, show banner
+    if (_exactAlarmGranted == null || _batteryOptimizationDisabled == null) {
+      debugPrint('HomeTab: Permissions not yet checked, showing banner');
+    }
+
+    final missingPermissions = <String>[];
+    if (_exactAlarmGranted != true) {
+      missingPermissions.add(isHebrew ? 'התראות מדויקות' : 'Exact Alarms');
+    }
+    if (_batteryOptimizationDisabled != true) {
+      missingPermissions.add(isHebrew ? 'אופטימיזציית סוללה' : 'Battery Optimization');
+    }
+
+    // If no specific permissions are missing but we're here, show generic message
+    if (missingPermissions.isEmpty) {
+      missingPermissions.add(isHebrew ? 'הרשאות נדרשות' : 'Permissions Required');
+    }
+
+    debugPrint('HomeTab: Showing permission banner for: ${missingPermissions.join(', ')}');
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF3CD),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE8B923).withValues(alpha: 0.3)),
+      ),
+      child: Row(
+        children: [
+          const Icon(
+            Icons.warning_amber_rounded,
+            color: Color(0xFFE8B923),
+            size: 24,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  isHebrew ? 'התראות מוגבלות' : 'Notifications Restricted',
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF1A1A1A),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  _getPermissionMessage(missingPermissions),
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey[700],
+                    height: 1.3,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          TextButton(
+            onPressed: () async {
+              if (_exactAlarmGranted != true) {
+                await NativeAlarmService.requestExactAlarmPermission();
+              }
+              if (_batteryOptimizationDisabled != true) {
+                await NativeAlarmService.requestDisableBatteryOptimization();
+              }
+              // Re-check permissions after a delay
+              await Future.delayed(const Duration(seconds: 1));
+              await _checkPermissions();
+            },
+            child: Text(
+              isHebrew ? 'פתח' : 'Open',
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF1A1A1A),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
   Widget _buildBody() {
     if (_isLoading) {

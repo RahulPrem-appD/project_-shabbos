@@ -1,9 +1,11 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart' hide TextDirection;
 import '../models/candle_lighting.dart';
 import '../services/hebcal_service.dart';
 import '../services/location_service.dart';
 import '../services/notification_service.dart';
+import '../services/native_alarm_service.dart';
 import 'settings_screen.dart';
 import 'about_screen.dart';
 
@@ -21,7 +23,7 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   final HebcalService _hebcalService = HebcalService();
   final LocationService _locationService = LocationService();
   final NotificationService _notificationService = NotificationService();
@@ -30,18 +32,58 @@ class _HomeScreenState extends State<HomeScreen> {
   LocationInfo? _location;
   bool _isLoading = true;
   String? _error;
+  
+  // Permission status
+  bool? _exactAlarmGranted;
+  bool? _batteryOptimizationDisabled;
 
   bool get isHebrew => widget.locale == 'he';
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _init();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Re-check permissions when app resumes (user might have granted them in settings)
+    if (state == AppLifecycleState.resumed) {
+      _checkPermissions();
+    }
   }
 
   Future<void> _init() async {
     await _notificationService.initialize();
+    await _checkPermissions();
     await _loadData();
+  }
+
+  Future<void> _checkPermissions() async {
+    if (Platform.isAndroid) {
+      final exactAlarm = await NativeAlarmService.canScheduleExactAlarms();
+      final batteryOptimization = await NativeAlarmService.isIgnoringBatteryOptimizations();
+      
+      setState(() {
+        _exactAlarmGranted = exactAlarm;
+        _batteryOptimizationDisabled = batteryOptimization;
+      });
+      
+      debugPrint('HomeScreen: Exact alarm permission: $exactAlarm');
+      debugPrint('HomeScreen: Battery optimization disabled: $batteryOptimization');
+    } else {
+      setState(() {
+        _exactAlarmGranted = true; // iOS doesn't need this
+        _batteryOptimizationDisabled = true; // iOS doesn't have this
+      });
+    }
   }
 
   Future<void> _loadData() async {
@@ -108,6 +150,8 @@ class _HomeScreenState extends State<HomeScreen> {
           child: Column(
             children: [
               _buildHeader(),
+              if (Platform.isAndroid && (_exactAlarmGranted == false || _batteryOptimizationDisabled == false))
+                _buildPermissionBanner(),
               Expanded(child: _buildBody()),
             ],
           ),
@@ -197,6 +241,87 @@ class _HomeScreenState extends State<HomeScreen> {
           borderRadius: BorderRadius.circular(12),
         ),
         child: Icon(icon, size: 20, color: const Color(0xFF1A1A1A)),
+      ),
+    );
+  }
+
+  Widget _buildPermissionBanner() {
+    if (!Platform.isAndroid) return const SizedBox.shrink();
+    if (_exactAlarmGranted == true && _batteryOptimizationDisabled == true) {
+      return const SizedBox.shrink();
+    }
+
+    final missingPermissions = <String>[];
+    if (_exactAlarmGranted == false) {
+      missingPermissions.add(isHebrew ? 'התראות מדויקות' : 'Exact Alarms');
+    }
+    if (_batteryOptimizationDisabled == false) {
+      missingPermissions.add(isHebrew ? 'אופטימיזציית סוללה' : 'Battery Optimization');
+    }
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF3CD),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE8B923).withValues(alpha: 0.3)),
+      ),
+      child: Row(
+        children: [
+          const Icon(
+            Icons.warning_amber_rounded,
+            color: Color(0xFFE8B923),
+            size: 24,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  isHebrew ? 'נדרשות הרשאות' : 'Permissions Required',
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF1A1A1A),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  isHebrew
+                      ? 'אנא אפשר: ${missingPermissions.join(', ')}'
+                      : 'Please enable: ${missingPermissions.join(', ')}',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey[700],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          TextButton(
+            onPressed: () async {
+              if (_exactAlarmGranted == false) {
+                await NativeAlarmService.requestExactAlarmPermission();
+              }
+              if (_batteryOptimizationDisabled == false) {
+                await NativeAlarmService.requestDisableBatteryOptimization();
+              }
+              // Re-check permissions after a delay
+              await Future.delayed(const Duration(seconds: 1));
+              await _checkPermissions();
+            },
+            child: Text(
+              isHebrew ? 'פתח' : 'Open',
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF1A1A1A),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
