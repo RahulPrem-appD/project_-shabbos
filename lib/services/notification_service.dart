@@ -993,12 +993,12 @@ class NotificationService {
       final candleLighting = event.candleLightingTime;
       final havdalah = event.havdalahTime;
 
-      // If alarm time is AFTER candle lighting (more than 60 seconds after) and BEFORE havdalah, it's during Shabbat/Yom Tov
+      // If alarm time is AFTER candle lighting (more than 20 minutes after) and BEFORE havdalah, it's during Shabbat/Yom Tov
       if (alarmTime.isAfter(candleLighting)) {
         final timeSinceCandleLighting = alarmTime.difference(candleLighting);
         
-        // Already checked <= 60 seconds in first pass, so this is > 60 seconds
-        if (timeSinceCandleLighting.inSeconds > 60) {
+        // Already checked <= 20 minutes in first pass, so this is > 20 minutes
+        if (timeSinceCandleLighting.inMinutes > 20) {
           if (havdalah != null) {
             // There's a havdalah time - check if alarm is before it
             if (alarmTime.isBefore(havdalah)) {
