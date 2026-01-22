@@ -704,7 +704,7 @@ class NotificationService {
   /// - NO alarms during Yom Tov (any holiday day)
   /// - NO alarms if Saturday night is start of a holiday
   /// - Alarms ONLY play BEFORE Shabbat/Yom Tov starts (pre-notification)
-  /// - Candle lighting notification PLAYS SHOFAR - it marks the exact moment Shabbat/Yom Tov starts
+  /// - ISSUR MELACHA notification PLAYS SHOFAR at candle lighting time - notification appears at candle lighting but message shows Issur Melacha time (18 minutes later)
   /// 
   /// [skipCancellation] - If true, skip cancelling existing alarms (used when rescheduling with protection)
   Future<void> scheduleNotifications(
@@ -738,7 +738,7 @@ class NotificationService {
       return;
     }
 
-    final preMinutes = prefs.getInt(_preNotificationMinutesKey) ?? 20;
+    final preMinutes = prefs.getInt(_preNotificationMinutesKey) ?? 40;
     final candleEnabled = prefs.getBool(_candleNotificationEnabledKey) ?? true;
 
     debugPrint('NotificationService: ========================================');
@@ -762,209 +762,153 @@ class NotificationService {
       debugPrint('NotificationService: Processing event: ${lighting.displayName}');
       debugPrint('NotificationService: Candle lighting time: ${lighting.candleLightingTime}');
       debugPrint('NotificationService: Is Yom Tov: ${lighting.isYomTov}');
-      
+
       _addDiagnosticLog('Processing: ${lighting.displayName} at ${lighting.candleLightingTime}');
-      // Pre-notification with countdown
-      final preTime = lighting.candleLightingTime.subtract(
-        Duration(minutes: preMinutes),
+
+      // Calculate pre-notification time (preMinutes before candle lighting)
+      final preTime = lighting.candleLightingTime.subtract(Duration(minutes: preMinutes));
+      final candleTime = lighting.candleLightingTime;
+
+      // Format candle lighting time for display
+      final candleHour = candleTime.hour;
+      final candleMinute = candleTime.minute.toString().padLeft(2, '0');
+      final candlePeriod = candleHour >= 12 ? 'PM' : 'AM';
+      final candleHour12 = candleHour == 0 ? 12 : (candleHour > 12 ? candleHour - 12 : candleHour);
+      final candleTimeFormatted = '$candleHour12:$candleMinute $candlePeriod';
+
+      // Get localized notification strings
+      final strings = _getLocalizedNotificationStrings(
+        locale: locale,
+        isYomTov: lighting.isYomTov,
+        preMinutes: preMinutes,
+        candleTimeFormatted: candleTimeFormatted,
       );
 
+      // 1. Schedule PRE-notification (early reminder)
       if (preTime.isAfter(now)) {
-        // Edge Case 15: Double-check Shabbat scheduling
-        // CHECK ALARM RULES: Can we play an alarm at this time?
-        final canPlayAlarm = _canPlayAlarmAt(preTime, candleLightings);
-        
-        // Edge Case 15: Additional explicit check - don't schedule during Shabbat
-        if (!canPlayAlarm) {
-          debugPrint(
-            'NotificationService: ✗ BLOCKED: Alarm at $preTime would fire during Shabbat/Yom Tov',
-          );
-        }
+        final canPlayPre = _canPlayAlarmAt(preTime, candleLightings);
+        debugPrint('NotificationService: Checking pre-notification');
+        debugPrint('NotificationService: preTime=$preTime, isAfter=${preTime.isAfter(now)}, canPlayPre=$canPlayPre');
 
-        if (canPlayAlarm) {
-          // Format candle lighting time
-          final candleTimeFormatted =
-              '${lighting.candleLightingTime.hour}:${lighting.candleLightingTime.minute.toString().padLeft(2, '0')}';
-
-          // Get localized notification strings
-          final strings = _getLocalizedNotificationStrings(
-            locale: locale,
-            isYomTov: lighting.isYomTov,
-            preMinutes: preMinutes,
-            candleTimeFormatted: candleTimeFormatted,
-          );
-          final title = strings['preTitle']!;
-          final body = strings['preBody']!;
-
-          final notificationId = id++;
-          final success = await _scheduleNotification(
-            id: notificationId,
-            title: title,
-            body: body,
+        if (canPlayPre) {
+          final preNotificationId = id++;
+          debugPrint('NotificationService: Attempting to schedule pre-notification #$preNotificationId');
+          final preSuccess = await _scheduleNotification(
+            id: preNotificationId,
+            title: strings['preTitle']!,
+            body: strings['preBody']!,
             scheduledTime: preTime,
             isPreNotification: true,
             isYomTov: lighting.isYomTov,
-            candleLightingTime:
-                lighting.candleLightingTime, // Pass for countdown
+            isSilent: false,
+            useDefaultSound: false,
+            candleLightingTime: candleTime,
           );
-          if (success) {
+          debugPrint('NotificationService: Pre-notification scheduling result: $preSuccess');
+          if (preSuccess) {
             scheduled++;
-            // Store Yom Tov status and notification type for this notification
-            await _storeNotificationYomTov(notificationId, lighting.isYomTov);
-            await _storeNotificationType(notificationId, 'pre');
-            // Store scheduled time for iOS upcoming notifications display
-            await _storeNotificationScheduledTime(notificationId, preTime);
+            await _storeNotificationYomTov(preNotificationId, lighting.isYomTov);
+            await _storeNotificationType(preNotificationId, 'pre');
+            await _storeNotificationScheduledTime(preNotificationId, preTime);
             debugPrint(
-              'NotificationService: ✓ Scheduled pre-notification for ${lighting.displayName} at $preTime',
+              'NotificationService: ✓ Scheduled pre-notification for ${lighting.displayName}',
             );
-            _addDiagnosticLog('✓ Scheduled PRE-notification #$notificationId for ${lighting.displayName} at $preTime');
+            _addDiagnosticLog('✓ Scheduled PRE-notification #$preNotificationId for ${lighting.displayName} at $preTime');
           } else {
-            _addDiagnosticLog('✗ FAILED to schedule PRE-notification #$notificationId for ${lighting.displayName}');
+            debugPrint(
+              'NotificationService: ✗ FAILED to schedule pre-notification for ${lighting.displayName}',
+            );
+            _addDiagnosticLog('✗ FAILED to schedule PRE-notification #$preNotificationId for ${lighting.displayName}');
           }
         } else {
-          skipped++;
           debugPrint(
-            'NotificationService: ✗ SKIPPED pre-notification for ${lighting.displayName} - alarm time falls during Shabbat/Yom Tov',
+            'NotificationService: ✗ SKIPPED pre-notification - blocked by Shabbat rules',
           );
-          _addDiagnosticLog('✗ SKIPPED PRE-notification for ${lighting.displayName} - blocked by Shabbat rules');
+          _addDiagnosticLog('✗ SKIPPED PRE-notification - blocked (canPlayPre=$canPlayPre)');
         }
+      } else {
+        debugPrint(
+          'NotificationService: ✗ SKIPPED pre-notification - in the past',
+        );
+        _addDiagnosticLog('✗ SKIPPED PRE-notification - in past');
       }
 
-      // Candle lighting notification - PLAY SHOFAR SOUND
-      // The shofar should play at the exact moment Shabbat/Yom Tov starts (candle lighting time)
-      // This is the last moment before Shabbat begins, so the shofar is allowed
-      debugPrint('NotificationService: ----------------------------------------');
-      debugPrint('NotificationService: CANDLE LIGHTING NOTIFICATION CHECK');
-      debugPrint('NotificationService: candleEnabled=$candleEnabled');
-      debugPrint('NotificationService: candleLightingTime=${lighting.candleLightingTime}');
-      debugPrint('NotificationService: now=$now');
-      debugPrint('NotificationService: isAfter=${lighting.candleLightingTime.isAfter(now)}');
-      debugPrint('NotificationService: Time difference: ${lighting.candleLightingTime.difference(now).inMinutes} minutes');
-      
-      // ALWAYS schedule candle lighting notification if time is in future
-      // The candleEnabled setting should only control whether to show the notification,
-      // but we should still schedule it for reliability
-      if (lighting.candleLightingTime.isAfter(now)) {
-        if (!candleEnabled) {
-          debugPrint('NotificationService: ⚠️ WARNING: candleEnabled is false, but scheduling anyway for reliability');
-        }
-        // Get localized notification strings for candle lighting
-        final candleTimeFormatted =
-            '${lighting.candleLightingTime.hour}:${lighting.candleLightingTime.minute.toString().padLeft(2, '0')}';
-        final strings = _getLocalizedNotificationStrings(
-          locale: locale,
-          isYomTov: lighting.isYomTov,
-          preMinutes: preMinutes,
-          candleTimeFormatted: candleTimeFormatted,
-        );
-        final title = strings['candleTitle']!;
-        final body = strings['candleBody']!;
+      // 2. Schedule ISSUR MELACHA notification at candle lighting time
+      // Notification appears at candle lighting time but message shows Issur Melacha time (18 minutes later)
+      final issurTime = candleTime; // Notification appears at candle lighting time
 
-        final notificationId = id++;
-        debugPrint('NotificationService: Attempting to schedule candle lighting notification #$notificationId');
-        // Schedule with SHOFAR SOUND at candle lighting time
-        // The shofar marks the start of Shabbat/Yom Tov and is allowed at this exact moment
-        final success = await _scheduleNotification(
-          id: notificationId,
-          title: title,
-          body: body,
-          scheduledTime: lighting.candleLightingTime,
-          isPreNotification: false,
+      // Calculate Issur Melacha time (18 minutes after candle lighting) for display in message
+      final issurMelachaTime = candleTime.add(const Duration(minutes: 18));
+      final issurHour = issurMelachaTime.hour;
+      final issurMinute = issurMelachaTime.minute.toString().padLeft(2, '0');
+      final issurPeriod = issurHour >= 12 ? 'PM' : 'AM';
+      final issurHour12 = issurHour == 0 ? 12 : (issurHour > 12 ? issurHour - 12 : issurHour);
+      final issurTimeFormatted = '$issurHour12:$issurMinute $issurPeriod';
+
+      debugPrint('NotificationService: Checking Issur Melacha notification');
+      debugPrint('NotificationService: issurTime=$issurTime (notification appears at candle lighting time), issurMelachaTime=$issurMelachaTime (shown in message), isAfter=${issurTime.isAfter(now)}');
+
+      // Check if Issur notification would be blocked
+      final canPlayIssur = _canPlayAlarmAt(issurTime, candleLightings);
+      debugPrint('NotificationService: canPlayIssur=$canPlayIssur for Issur notification at $issurTime');
+
+      if (candleEnabled && issurTime.isAfter(now) && canPlayIssur) {
+        final isHebrew = locale == 'he';
+        final issurTitle = isHebrew
+            ? '⏰ איסור מלאכה • Issur Melacha'
+            : '⏰ Issur Melacha • איסור מלאכה';
+        final issurBody = isHebrew
+            ? 'איסור מלאכה ב-$issurTimeFormatted 🕯️\nIssur Melacha is at $issurTimeFormatted'
+            : 'Issur Melacha is at $issurTimeFormatted 🕯️\nאיסור מלאכה ב-$issurTimeFormatted';
+
+        final issurNotificationId = id++;
+        debugPrint('NotificationService: Attempting to schedule Issur Melacha notification #$issurNotificationId');
+        // Schedule Issur Melacha at candle lighting time with SHOFAR sound
+        // Message displays Issur Melacha time (18 minutes after candle lighting)
+        // isPreNotification=false + useDefaultSound=false → calls _getSoundIdForNotification
+        // which returns 'rav_shalom_shofar' (the shofar sound)
+        final issurSuccess = await _scheduleNotification(
+          id: issurNotificationId,
+          title: issurTitle,
+          body: issurBody,
+          scheduledTime: issurTime,
+          isPreNotification: false, // This triggers shofar sound selection
           isYomTov: lighting.isYomTov,
-          isSilent: false, // PLAY SHOFAR - this is the moment Shabbat starts
+          isSilent: false,
+          useDefaultSound: false, // Use shofar sound (rav_shalom_shofar), not default
         );
-        debugPrint('NotificationService: Candle lighting notification scheduling result: $success');
-        if (success) {
+        debugPrint('NotificationService: Issur Melacha notification scheduling result: $issurSuccess');
+        if (issurSuccess) {
           scheduled++;
           // Store Yom Tov status and notification type for this notification
-          await _storeNotificationYomTov(notificationId, lighting.isYomTov);
-          await _storeNotificationType(notificationId, 'candle');
-          // Store scheduled time for iOS upcoming notifications display
-          await _storeNotificationScheduledTime(notificationId, lighting.candleLightingTime);
-          debugPrint(
-            'NotificationService: ✓ Scheduled candle lighting notification with SHOFAR for ${lighting.displayName}',
+          await _storeNotificationYomTov(
+            issurNotificationId,
+            lighting.isYomTov,
           );
-          _addDiagnosticLog('✓ Scheduled CANDLE LIGHTING #$notificationId for ${lighting.displayName} at ${lighting.candleLightingTime}');
+          await _storeNotificationType(issurNotificationId, 'issur');
+          // Store scheduled time for iOS upcoming notifications display
+          await _storeNotificationScheduledTime(issurNotificationId, issurTime);
+          debugPrint(
+            'NotificationService: ✓ Scheduled Issur Melacha notification (appears at candle lighting time, message shows Issur Melacha at $issurTimeFormatted) with SHOFAR sound for ${lighting.displayName}',
+          );
+          _addDiagnosticLog('✓ Scheduled ISSUR MELACHA #$issurNotificationId for ${lighting.displayName} at $issurTime (message shows Issur Melacha at $issurTimeFormatted)');
         } else {
           debugPrint(
-            'NotificationService: ✗ FAILED to schedule candle lighting notification for ${lighting.displayName}',
+            'NotificationService: ✗ FAILED to schedule Issur Melacha notification for ${lighting.displayName}',
           );
-          _addDiagnosticLog('✗ FAILED to schedule CANDLE LIGHTING #$notificationId for ${lighting.displayName}');
+          _addDiagnosticLog('✗ FAILED to schedule ISSUR MELACHA #$issurNotificationId for ${lighting.displayName}');
         }
-
-        // Issur Melacha reminder notification - shows right after the candle lighting shofar completes
-        // Scheduled 35 seconds after candle lighting to ensure the shofar sound has finished
-        // Uses default notification sound (not shofar) to remind user that Issur Melacha is in 18 minutes
-        // NOTE: This notification is scheduled AFTER candle lighting, so it will be blocked by _canPlayAlarmAt
-        // We need to allow it because it's informational and uses default sound (not shofar)
-        final issurReminderTime = lighting.candleLightingTime.add(
-          const Duration(seconds: 35),
-        );
-        debugPrint('NotificationService: Checking Issur Melacha notification');
-        debugPrint('NotificationService: issurReminderTime=$issurReminderTime, isAfter=${issurReminderTime.isAfter(now)}');
-        
-        // Check if Issur notification would be blocked (it's 35 seconds after candle lighting)
-        // We allow it because it's informational and uses default sound
-        final canPlayIssur = _canPlayAlarmAt(issurReminderTime, candleLightings);
-        debugPrint('NotificationService: canPlayIssur=$canPlayIssur for Issur notification at $issurReminderTime');
-        
-        if (issurReminderTime.isAfter(now) && canPlayIssur) {
-          final isHebrew = locale == 'he';
-          final issurTitle = isHebrew
-              ? '⏰ איסור מלאכה • Issur Melacha'
-              : '⏰ Issur Melacha • איסור מלאכה';
-          final issurBody = isHebrew
-              ? 'איסור מלאכה בעוד 18 דקות 🕯️\nWork will be prohibited in 18 minutes'
-              : 'Work will be prohibited in 18 minutes 🕯️\nאיסור מלאכה בעוד 18 דקות';
-
-          final issurNotificationId = id++;
-          debugPrint('NotificationService: Attempting to schedule Issur Melacha notification #$issurNotificationId');
-          // Schedule Issur Melacha reminder with DEFAULT notification sound (not shofar)
-          // This appears right after the candle lighting shofar to remind the user
-          final issurSuccess = await _scheduleNotification(
-            id: issurNotificationId,
-            title: issurTitle,
-            body: issurBody,
-            scheduledTime: issurReminderTime,
-            isPreNotification: false,
-            isYomTov: lighting.isYomTov,
-            isSilent: false,
-            useDefaultSound: true, // Use normal notification sound, not shofar
+      } else {
+        if (!candleEnabled) {
+          debugPrint(
+            'NotificationService: ✗ SKIPPED Issur Melacha notification - candle notification disabled in settings',
           );
-          debugPrint('NotificationService: Issur Melacha notification scheduling result: $issurSuccess');
-          if (issurSuccess) {
-            scheduled++;
-            // Store Yom Tov status and notification type for this notification
-            await _storeNotificationYomTov(
-              issurNotificationId,
-              lighting.isYomTov,
-            );
-            await _storeNotificationType(issurNotificationId, 'issur');
-            // Store scheduled time for iOS upcoming notifications display
-            await _storeNotificationScheduledTime(issurNotificationId, issurReminderTime);
-            debugPrint(
-              'NotificationService: ✓ Scheduled Issur Melacha reminder (35 sec after candle lighting) with DEFAULT sound for ${lighting.displayName}',
-            );
-            _addDiagnosticLog('✓ Scheduled ISSUR MELACHA #$issurNotificationId for ${lighting.displayName} at $issurReminderTime');
-          } else {
-            debugPrint(
-              'NotificationService: ✗ FAILED to schedule Issur Melacha notification for ${lighting.displayName}',
-            );
-            _addDiagnosticLog('✗ FAILED to schedule ISSUR MELACHA #$issurNotificationId for ${lighting.displayName}');
-          }
+          _addDiagnosticLog('✗ SKIPPED ISSUR MELACHA - disabled (candleEnabled=false)');
         } else {
           debugPrint(
             'NotificationService: ✗ SKIPPED Issur Melacha notification - blocked by Shabbat rules or in the past',
           );
-          _addDiagnosticLog('✗ SKIPPED ISSUR MELACHA - blocked or in past (canPlayIssur=$canPlayIssur, isAfter=${issurReminderTime.isAfter(now)})');
-        }
-      } else {
-        if (!candleEnabled) {
-          debugPrint('NotificationService: ✗ SKIPPED candle lighting notification - candleEnabled is false');
-          _addDiagnosticLog('✗ SKIPPED CANDLE LIGHTING - candleEnabled=false');
-        } else {
-          debugPrint('NotificationService: ✗ SKIPPED candle lighting notification - candle lighting time is in the past');
-          _addDiagnosticLog('✗ SKIPPED CANDLE LIGHTING - time is in past (${lighting.candleLightingTime})');
+          _addDiagnosticLog('✗ SKIPPED ISSUR MELACHA - blocked or in past (canPlayIssur=$canPlayIssur, isAfter=${issurTime.isAfter(now)})');
         }
       }
     }
@@ -1014,26 +958,26 @@ class NotificationService {
   /// - No alarms on Saturday (until after Havdalah)
   /// - No alarms on Saturday night if a Yom Tov starts
   /// - No alarms during any Yom Tov day
-  /// - Exception: Allow informational notifications within 1 minute after candle lighting (for Issur Melacha reminder)
+  /// - Exception: Allow informational notifications within 20 minutes after candle lighting (for Issur Melacha reminder)
   /// 
-  /// IMPORTANT: First check if alarm is within 60 seconds of ANY candle lighting (allow it),
+  /// IMPORTANT: First check if alarm is within 20 minutes of ANY candle lighting (allow it),
   /// then check if it falls during a Shabbat/Yom Tov period (block it).
   bool _canPlayAlarmAt(DateTime alarmTime, List<CandleLighting> allEvents) {
     debugPrint('NotificationService: _canPlayAlarmAt checking alarm at $alarmTime');
     debugPrint('NotificationService: Total events to check against: ${allEvents.length}');
     
-    // FIRST PASS: Check if alarm is within 60 seconds of ANY candle lighting time
-    // This allows Issur Melacha reminders (scheduled 35 seconds after candle lighting)
+    // FIRST PASS: Check if alarm is within 20 minutes of ANY candle lighting time
+    // This allows Issur Melacha reminders (scheduled 18 minutes after candle lighting)
     for (final event in allEvents) {
       final candleLighting = event.candleLightingTime;
       
       if (alarmTime.isAfter(candleLighting)) {
         final timeSinceCandleLighting = alarmTime.difference(candleLighting);
-        if (timeSinceCandleLighting.inSeconds <= 60 && timeSinceCandleLighting.inSeconds >= 0) {
+        if (timeSinceCandleLighting.inMinutes <= 20 && timeSinceCandleLighting.inMinutes >= 0) {
           debugPrint(
-            'NotificationService: ✓ Allowing notification at $alarmTime (${timeSinceCandleLighting.inSeconds}s after ${event.displayName} candle lighting)',
+            'NotificationService: ✓ Allowing notification at $alarmTime (${timeSinceCandleLighting.inMinutes}m after ${event.displayName} candle lighting)',
           );
-          return true; // Allow informational notifications right after candle lighting
+          return true; // Allow informational notifications within 20 minutes after candle lighting
         }
       } else if (alarmTime.isAtSameMomentAs(candleLighting)) {
         // Exact candle lighting time is allowed (for shofar sound)
@@ -1778,16 +1722,16 @@ class NotificationService {
 
   Future<int> getPreNotificationMinutes() async {
     final prefs = await SharedPreferences.getInstance();
-    final saved = prefs.getInt(_preNotificationMinutesKey) ?? 20;
+    final saved = prefs.getInt(_preNotificationMinutesKey) ?? 40;
     // Only allow 20, 40, or 60 minutes
-    if (saved == 40 || saved == 60) return saved;
-    return 20; // Default to 20 if invalid value
+    if (saved == 20 || saved == 40 || saved == 60) return saved;
+    return 40; // Default to 40 if invalid value
   }
 
   Future<void> setPreNotificationMinutes(int minutes) async {
     final prefs = await SharedPreferences.getInstance();
     // Edge Case 2: Save old value before updating for comparison
-    final oldMinutes = prefs.getInt(_preNotificationMinutesKey) ?? 20;
+    final oldMinutes = prefs.getInt(_preNotificationMinutesKey) ?? 40;
     if (oldMinutes != minutes) {
       await prefs.setInt(_previousPreNotificationMinutesKey, oldMinutes);
     }
@@ -1859,7 +1803,7 @@ class NotificationService {
     }
     
     final prefs = await SharedPreferences.getInstance();
-    final newPreMinutes = prefs.getInt(_preNotificationMinutesKey) ?? 20;
+    final newPreMinutes = prefs.getInt(_preNotificationMinutesKey) ?? 40;
     final oldPreMinutes = prefs.getInt(_previousPreNotificationMinutesKey) ?? newPreMinutes;
     final now = DateTime.now();
     

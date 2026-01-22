@@ -4,9 +4,6 @@ import '../models/city.dart';
 import '../models/candle_lighting.dart';
 import '../services/location_service.dart';
 import '../services/notification_service.dart';
-import '../services/audio_service.dart';
-import '../services/hebcal_service.dart';
-import 'sound_screen.dart';
 import 'upcoming_notifications_screen.dart';
 import 'diagnostic_report_screen.dart';
 
@@ -31,16 +28,10 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> {
   final LocationService _locationService = LocationService();
   final NotificationService _notificationService = NotificationService();
-  final AudioService _audioService = AudioService();
-  final HebcalService _hebcalService = HebcalService();
 
   bool _useGps = true;
   LocationInfo? _savedLocation;
   bool _notificationsEnabled = true;
-  int _preMinutes = 20;
-  bool _candleNotificationEnabled = true;
-  String _preSound = 'default';
-  String _candleSound = 'default';
 
   bool get isHebrew => widget.locale == 'he';
 
@@ -55,22 +46,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final savedLocation = await _locationService.getSavedLocation();
     final notificationsEnabled = await _notificationService
         .getNotificationsEnabled();
-    final preMinutes = await _notificationService.getPreNotificationMinutes();
-    final candleEnabled = await _notificationService
-        .getCandleNotificationEnabled();
-    final preSound = await _audioService.getEarlyReminderSound();
-    final candleSound = _audioService.getCandleLightingSound();
 
     setState(() {
       _useGps = useGps;
       _savedLocation = savedLocation;
       _notificationsEnabled = notificationsEnabled;
-      _preMinutes = preMinutes;
-      _candleNotificationEnabled = candleEnabled;
-      _preSound = preSound;
-      _candleSound = candleSound;
     });
-    
   }
 
   @override
@@ -163,84 +144,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             );
                           },
                         ),
-                      if (_notificationsEnabled) ...[
-                        _buildTimePicker(),
-                        _buildSwitchTile(
-                          icon: Icons.local_fire_department,
-                          title: isHebrew ? 'בזמן הדלקה' : 'At Candle Lighting',
-                          subtitle: isHebrew
-                              ? 'התראה בזמן ההדלקה'
-                              : 'Notification at lighting time',
-                          value: _candleNotificationEnabled,
-                          onChanged: _onCandleNotificationChanged,
-                        ),
-                        _buildActionTile(
-                          icon: Icons.play_circle_outline,
-                          title: isHebrew ? 'בדוק התראה' : 'Test Notification',
-                          subtitle: isHebrew
-                              ? 'התראה מיידית'
-                              : 'Immediate notification',
-                          onTap: _testNotification,
-                        ),
-                        _buildActionTile(
-                          icon: Icons.schedule_send,
-                          title: isHebrew
-                              ? 'בדוק התראה מתוזמנת'
-                              : 'Test Scheduled Notification',
-                          subtitle: isHebrew
-                              ? 'התראה בעוד 10 שניות (סגור את האפליקציה)'
-                              : 'Notification in 10 seconds (close app)',
-                          onTap: _testDelayedNotification,
-                        ),
-                      ],
-                    ],
-                  ),
-
-                  _buildSection(
-                    title: isHebrew ? 'צלילים' : 'Sounds',
-                    children: [
-                      _buildActionTile(
-                        icon: Icons.music_note,
-                        title: isHebrew
-                            ? 'צליל תזכורת מוקדמת'
-                            : 'Early Reminder Sound',
-                        subtitle: _getSoundName(_preSound),
-                        onTap: () => _openSoundScreen(),
-                      ),
-                      _buildActionTile(
-                        icon: Icons.notifications_active,
-                        title: isHebrew
-                            ? 'צליל הדלקת נרות'
-                            : 'Candle Lighting Sound',
-                        subtitle: _getSoundName(_candleSound),
-                        onTap: () => _openSoundScreen(),
-                      ),
-                    ],
-                  ),
-
-                  _buildSection(
-                    title: isHebrew ? 'הרשאות מערכת' : 'System Permissions',
-                    children: [
-                      _buildActionTile(
-                        icon: Icons.alarm,
-                        title: isHebrew
-                            ? 'הרשאות התראות מדויקות'
-                            : 'Exact Alarm Permission',
-                        subtitle: isHebrew
-                            ? 'נדרש להתראות אמינות'
-                            : 'Required for reliable alerts',
-                        onTap: _checkAndRequestExactAlarmPermission,
-                      ),
-                      _buildActionTile(
-                        icon: Icons.battery_saver,
-                        title: isHebrew
-                            ? 'חסימת חיסכון בסוללה'
-                            : 'Disable Battery Optimization',
-                        subtitle: isHebrew
-                            ? 'נדרש להתראות ברקע'
-                            : 'Required for background alerts',
-                        onTap: _checkAndDisableBatteryOptimization,
-                      ),
                     ],
                   ),
 
@@ -462,73 +365,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  Widget _buildTimePicker() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      child: Row(
-        children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: const Icon(
-              Icons.timer_outlined,
-              size: 20,
-              color: Color(0xFF1A1A1A),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  isHebrew ? 'תזכורת מוקדמת' : 'Early Reminder',
-                  style: const TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w500,
-                    color: Color(0xFF1A1A1A),
-                  ),
-                ),
-                Text(
-                  isHebrew
-                      ? '$_preMinutes דקות לפני'
-                      : '$_preMinutes min before',
-                  style: TextStyle(fontSize: 13, color: Colors.grey[500]),
-                ),
-              ],
-            ),
-          ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: DropdownButton<int>(
-              value: _preMinutes,
-              underline: const SizedBox(),
-              isDense: true,
-              items: [20, 40, 60].map((m) {
-                return DropdownMenuItem(value: m, child: Text('$m'));
-              }).toList(),
-              onChanged: (value) async {
-                if (value != null) {
-                  setState(() => _preMinutes = value);
-                  await _notificationService.setPreNotificationMinutes(value);
-                  await _rescheduleNotifications();
-                  widget.onLocationChanged();
-                }
-              },
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 
   void _onGpsChanged(bool value) async {
     setState(() => _useGps = value);
@@ -568,114 +404,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
     widget.onLocationChanged();
   }
 
-  void _onCandleNotificationChanged(bool value) async {
-    setState(() => _candleNotificationEnabled = value);
-    await _notificationService.setCandleNotificationEnabled(value);
-    widget.onLocationChanged();
-  }
-
-  void _testNotification() async {
-    // First test direct sound playback
-    debugPrint('SettingsScreen: Testing sound playback first...');
-    await _notificationService.testSoundPlayback();
-    
-    // Wait a moment for sound to start
-    await Future.delayed(const Duration(milliseconds: 500));
-    
-    // Then send the notification (which also tries to play sound)
-    await _notificationService.sendTestNotification();
-
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                isHebrew ? 'התראה נשלחה!' : 'Notification sent!',
-                style: const TextStyle(fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                isHebrew
-                    ? 'אם לא שמעת צליל, בדוק:\n• עוצמת קול\n• קובצי צליל\n• הגדרות התראות'
-                    : 'If no sound, check:\n• Device volume\n• Sound files\n• Notification settings',
-                style: const TextStyle(fontSize: 12),
-              ),
-            ],
-          ),
-          behavior: SnackBarBehavior.floating,
-          duration: const Duration(seconds: 4),
-        ),
-      );
-    }
-  }
-
-  void _testDelayedNotification() async {
-    // Schedule the full candle lighting test flow:
-    // - Pre-notification (with countdown) in 10 seconds
-    // - Candle lighting notification in 70 seconds (60 seconds after early reminder)
-    // iOS needs 60 second gap so the 30-second sound can finish playing
-    await _notificationService.sendDelayedTestNotification(
-      preNotificationSeconds: 10,
-      candleLightingSeconds: 70,
-    );
-
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                isHebrew
-                    ? '🕯️ בדיקת זרימת הדלקת נרות'
-                    : '🕯️ Testing Candle Lighting Flow',
-                style: const TextStyle(fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                isHebrew
-                    ? '• תזכורת מוקדמת (עם ספירה לאחור): 10 שניות\n• התראת הדלקת נרות: 70 שניות\n\nסגור את האפליקציה לבדיקה!'
-                    : '• Early reminder (with countdown): 10 sec\n• Candle lighting alert: 70 sec\n\nClose the app to test!',
-                style: const TextStyle(fontSize: 13),
-              ),
-            ],
-          ),
-          behavior: SnackBarBehavior.floating,
-          duration: const Duration(seconds: 8),
-          backgroundColor: const Color(0xFF1A1A1A),
-          action: SnackBarAction(
-            label: isHebrew ? 'הבנתי' : 'OK',
-            textColor: const Color(0xFFE8B923),
-            onPressed: () {},
-          ),
-        ),
-      );
-    }
-  }
-
-  String _getSoundName(String soundId) {
-    // Find sound in all available sounds
-    final sound = SoundOption.findById(soundId);
-    if (sound != null) {
-      return isHebrew ? sound.nameHe : sound.nameEn;
-    }
-    // Default fallback
-    return isHebrew ? 'ברירת מחדל' : 'System Default';
-  }
 
 
-  void _openSoundScreen() async {
-    await Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => SoundScreen(locale: widget.locale)),
-    );
-    // Reload settings after returning
-    _loadSettings();
-  }
+
+
+
 
   void _showCityPicker() {
     showModalBottomSheet(
@@ -736,260 +469,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   /// Check and request exact alarm permission (Android 12+)
-  Future<void> _checkAndRequestExactAlarmPermission() async {
-    final canSchedule = await _notificationService.canScheduleExactAlarms();
-    
-    if (canSchedule) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              isHebrew
-                  ? '✓ הרשאות התראות מדויקות מאושרות'
-                  : '✓ Exact alarm permission granted',
-            ),
-            backgroundColor: Colors.green,
-            duration: const Duration(seconds: 3),
-          ),
-        );
-      }
-    } else {
-      // Show explanation dialog
-      if (mounted) {
-        final result = await showDialog<bool>(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: Text(
-              isHebrew ? 'נדרשת הרשאת התראות מדויקות' : 'Exact Alarm Permission Required',
-            ),
-            content: Text(
-              isHebrew
-                  ? 'להתראות אמינות, האפליקציה צריכה הרשאת התראות מדויקות.\n\nבלי הרשאה זו, ההתראות עלולות שלא להגיע בזמן או בכלל.\n\nנא לאשר בהגדרות המערכת.'
-                  : 'For reliable alerts, this app needs exact alarm permission.\n\nWithout this permission, alerts may not arrive on time or at all.\n\nPlease approve in system settings.',
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context, false),
-                child: Text(isHebrew ? 'ביטול' : 'Cancel'),
-              ),
-              ElevatedButton(
-                onPressed: () => Navigator.pop(context, true),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFE8B923),
-                ),
-                child: Text(isHebrew ? 'אישור' : 'Approve'),
-              ),
-            ],
-          ),
-        );
-        
-        if (result == true) {
-          await _notificationService.requestExactAlarmPermission();
-          
-          // Wait a moment for user to grant permission
-          await Future.delayed(const Duration(seconds: 2));
-          
-          // Check again
-          final nowGranted = await _notificationService.canScheduleExactAlarms();
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(
-                  nowGranted
-                      ? (isHebrew
-                          ? '✓ הרשאה אושרה!'
-                          : '✓ Permission granted!')
-                      : (isHebrew
-                          ? '⚠️ נא לאשר את ההרשאה בהגדרות'
-                          : '⚠️ Please approve in settings'),
-                ),
-                backgroundColor: nowGranted ? Colors.green : Colors.orange,
-                duration: const Duration(seconds: 4),
-              ),
-            );
-          }
-        }
-      }
-    }
-  }
 
   /// Check and request battery optimization exemption
-  Future<void> _checkAndDisableBatteryOptimization() async {
-    final isIgnoring = await _notificationService.isIgnoringBatteryOptimizations();
-    
-    if (isIgnoring) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              isHebrew
-                  ? '✓ חיסכון בסוללה כבר מושבת'
-                  : '✓ Battery optimization already disabled',
-            ),
-            backgroundColor: Colors.green,
-            duration: const Duration(seconds: 3),
-          ),
-        );
-      }
-    } else {
-      // Show explanation dialog
-      if (mounted) {
-        final result = await showDialog<bool>(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: Text(
-              isHebrew ? 'נדרש להשבית חיסכון בסוללה' : 'Disable Battery Optimization',
-            ),
-            content: Text(
-              isHebrew
-                  ? 'חיסכון בסוללה עלול להפסיק את האפליקציה ברקע ולמנוע התראות.\n\nלהתראות אמינות, יש להשבית את האופטימיזציה.\n\nזה לא תורים הרבה מהסוללה.'
-                  : 'Battery optimization may stop app in background and prevent notifications.\n\nFor reliable alerts, please disable optimization.\n\nThis doesn\'t drain battery significantly.',
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context, false),
-                child: Text(isHebrew ? 'ביטול' : 'Cancel'),
-              ),
-              ElevatedButton(
-                onPressed: () => Navigator.pop(context, true),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFE8B923),
-                ),
-                child: Text(isHebrew ? 'המשך' : 'Continue'),
-              ),
-            ],
-          ),
-        );
-        
-        if (result == true) {
-          await _notificationService.requestDisableBatteryOptimization();
-          
-          // Wait a moment for user to grant exemption
-          await Future.delayed(const Duration(seconds: 2));
-          
-          // Check again
-          final nowIgnoring = await _notificationService.isIgnoringBatteryOptimizations();
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(
-                  nowIgnoring
-                      ? (isHebrew
-                          ? '✓ אופטימיזציה הושבתה!'
-                          : '✓ Optimization disabled!')
-                      : (isHebrew
-                          ? '⚠️ נא להשבית בהגדרות'
-                          : '⚠️ Please disable in settings'),
-                ),
-                backgroundColor: nowIgnoring ? Colors.green : Colors.orange,
-                duration: const Duration(seconds: 4),
-              ),
-            );
-          }
-        }
-      }
-    }
-  }
 
   /// Reschedule all notifications with current settings
-  Future<void> _rescheduleNotifications() async {
-    try {
-      debugPrint('SettingsScreen: Rescheduling notifications...');
-
-      // Get current location
-      final location = await _locationService.getSavedLocation();
-      if (location == null) {
-        debugPrint('SettingsScreen: No location saved, skipping reschedule');
-        return;
-      }
-
-      // Calculate date range (today + 30 days)
-      final now = DateTime.now();
-      final startDate = DateTime(now.year, now.month, now.day);
-      final endDate = startDate.add(const Duration(days: 30));
-
-      // Fetch candle lighting times
-      final times = await _hebcalService.getExtendedCandleLightingTimes(
-        latitude: location.latitude,
-        longitude: location.longitude,
-        startDate: startDate,
-        endDate: endDate,
-        timezone: location.timezone,
-        locale: widget.locale,
-      );
-
-      final futureTimes = times
-          .where((t) => t.candleLightingTime.isAfter(now))
-          .toList();
-
-      if (futureTimes.isEmpty) {
-        debugPrint('SettingsScreen: No future times, skipping reschedule');
-        return;
-      }
-
-      // CRITICAL: Verify alarms were actually scheduled
-      debugPrint('SettingsScreen: Scheduling ${futureTimes.take(10).length} alarms...');
-      
-      await _notificationService.rescheduleAllNotifications(
-        futureTimes.take(10).toList(),
-        locale: widget.locale,
-      );
-
-
-      // Verify alarms were scheduled successfully
-      await Future.delayed(const Duration(milliseconds: 500));
-      final diagnostic = await _notificationService.generateDiagnosticReport();
-      
-      debugPrint('SettingsScreen: Notifications rescheduled');
-      debugPrint('SettingsScreen: Verification check:');
-      
-      // Check if alarms are scheduled
-      if (diagnostic.contains('PENDING NOTIFICATIONS:') && 
-          diagnostic.split('PENDING NOTIFICATIONS:')[1].split('\n')[0].trim() != 'None') {
-        debugPrint('SettingsScreen: ✓ Alarms verified as scheduled');
-      } else {
-        debugPrint('SettingsScreen: ⚠️ WARNING: No alarms detected after reschedule!');
-        debugPrint('SettingsScreen: This could indicate a permission or scheduling issue');
-        
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                isHebrew
-                    ? '⚠️ אזהרה: התראות לא תוזמנו. בדוק הרשאות.'
-                    : '⚠️ Warning: Alarms not scheduled. Check permissions.',
-              ),
-              backgroundColor: Colors.orange,
-              duration: const Duration(seconds: 5),
-              action: SnackBarAction(
-                label: isHebrew ? 'הרשאות' : 'Permissions',
-                textColor: Colors.white,
-                onPressed: () {
-                  // Scroll to permissions section
-                },
-              ),
-            ),
-          );
-        }
-      }
-    } catch (e) {
-      debugPrint('SettingsScreen: Error rescheduling: $e');
-      
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              isHebrew
-                  ? 'שגיאה בתזמון התראות: $e'
-                  : 'Error scheduling notifications: $e',
-            ),
-            backgroundColor: Colors.red,
-            duration: const Duration(seconds: 5),
-          ),
-        );
-      }
-    }
-  }
 }
 
 class _CityPicker extends StatefulWidget {

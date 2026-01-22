@@ -404,7 +404,7 @@ class _HomeTabState extends State<HomeTab> {
   }
 
   Widget _buildNextCandleLighting(CandleLighting lighting) {
-    final timeFormat = DateFormat('HH:mm'); // 24-hour format
+    final timeFormat = DateFormat('h:mm a'); // 12-hour format with AM/PM
 
     // Use Hebrew date when in Hebrew mode, otherwise use English date format
     final dateString = (isHebrew && lighting.hebrewDate != null && lighting.hebrewDate!.isNotEmpty)
@@ -570,7 +570,7 @@ class _HomeTabState extends State<HomeTab> {
   }
 
   Widget _buildUpcomingCard(CandleLighting lighting) {
-    final timeFormat = DateFormat('HH:mm'); // 24-hour format
+    final timeFormat = DateFormat('h:mm a'); // 12-hour format with AM/PM
 
     // Use Hebrew date when in Hebrew mode
     final dateString = (isHebrew && lighting.hebrewDate != null && lighting.hebrewDate!.isNotEmpty)

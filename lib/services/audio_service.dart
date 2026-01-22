@@ -24,14 +24,14 @@ class SoundOption {
       id: 'shabbat_shalom_song',
       nameEn: 'Shabbat Shalom Song',
       nameHe: 'שיר שבת שלום',
-      assetPath: 'sounds/RYomTovShabbatShalomSong.mp3',
+      assetPath: 'sounds/RaYomTovShabbosDefault-Android.mp3',
       category: SoundCategory.earlyReminder,
     ),
     SoundOption(
       id: 'yomtov_default',
       nameEn: 'Yom Tov Music',
       nameHe: 'מוזיקת יום טוב',
-      assetPath: 'sounds/YomTov-Default.mp3',
+      assetPath: 'sounds/Vesamachta-YomTov-Default-Android.mp3',
       category: SoundCategory.earlyReminder,
     ),
     SoundOption(
@@ -69,7 +69,7 @@ class SoundOption {
     id: 'rav_shalom_shofar',
     nameEn: 'Rav Shalom Shofar',
     nameHe: 'שופר רב שלום',
-    assetPath: 'sounds/RavShalomShofarDefaultlouder.mp3',
+    assetPath: 'sounds/RavShalomShofarDefaultCandle_Default.mp3',
     category: SoundCategory.candleLighting,
   );
 
@@ -80,7 +80,7 @@ class SoundOption {
       id: 'yomtov_default',
       nameEn: 'Yom Tov Default',
       nameHe: 'יום טוב ברירת מחדל',
-      assetPath: 'sounds/YomTov-Default.mp3',
+      assetPath: 'sounds/Vesamachta-YomTov-Default-Android.mp3',
       category: SoundCategory.yomTov,
     ),
     SoundOption(

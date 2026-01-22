@@ -247,7 +247,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildNextCandleLighting(CandleLighting lighting) {
-    final timeFormat = DateFormat('HH:mm'); // 24-hour format
+    final timeFormat = DateFormat('h:mm a'); // 12-hour format with AM/PM
     final dateFormat = DateFormat('EEEE, MMM d');
     
     final now = DateTime.now();
@@ -436,7 +436,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildUpcomingCard(CandleLighting lighting) {
-    final timeFormat = DateFormat('HH:mm'); // 24-hour format
+    final timeFormat = DateFormat('h:mm a'); // 12-hour format with AM/PM
     final dateFormat = DateFormat('EEE, MMM d');
 
     return Container(

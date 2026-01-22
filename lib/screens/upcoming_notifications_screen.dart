@@ -105,11 +105,16 @@ class _UpcomingNotificationsScreenState extends State<UpcomingNotificationsScree
     final isToday = scheduledTime.year == now.year &&
                     scheduledTime.month == now.month &&
                     scheduledTime.day == now.day;
-    
+
+    // Format time in 12-hour format with AM/PM
+    final hour = scheduledTime.hour;
+    final minute = scheduledTime.minute.toString().padLeft(2, '0');
+    final period = hour >= 12 ? 'PM' : 'AM';
+    final hour12 = hour == 0 ? 12 : (hour > 12 ? hour - 12 : hour);
+    final timeFormatted = '$hour12:$minute $period';
+
     if (isToday) {
-      final hour = scheduledTime.hour;
-      final minute = scheduledTime.minute.toString().padLeft(2, '0');
-      return isHebrew ? 'היום ב-$hour:$minute' : 'Today at $hour:$minute';
+      return isHebrew ? 'היום ב-$timeFormatted' : 'Today at $timeFormatted';
     } else {
       final weekday = isHebrew
           ? _getHebrewWeekday(scheduledTime.weekday)
@@ -118,12 +123,10 @@ class _UpcomingNotificationsScreenState extends State<UpcomingNotificationsScree
           ? _getHebrewMonth(scheduledTime.month)
           : _getEnglishMonth(scheduledTime.month);
       final day = scheduledTime.day;
-      final hour = scheduledTime.hour;
-      final minute = scheduledTime.minute.toString().padLeft(2, '0');
-      
+
       return isHebrew
-          ? '$weekday, $day ב$month ב-$hour:$minute'
-          : '$weekday, $month $day at $hour:$minute';
+          ? '$weekday, $day ב$month ב-$timeFormatted'
+          : '$weekday, $month $day at $timeFormatted';
     }
   }
 

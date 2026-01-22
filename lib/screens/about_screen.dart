@@ -13,7 +13,7 @@ class AboutScreen extends StatelessWidget {
   static const String aboutEn =
       '''Shabbos!! was created out of a love for the special atmosphere that surrounds the moments before Shabbat and Yom Tov.
 
-In Jerusalem and in many cities throughout Israel, a siren is sounded about 20 minutes before candle lighting, and again at candle-lighting time. In some places, gentle music is played during those final minutes, creating a unique feeling of calm, anticipation, and holiness as Shabbat approaches.
+In Jerusalem and in many cities throughout Israel, a siren is sounded about 40 minutes before candle lighting, and again at candle-lighting time. In some places, gentle music is played during those final minutes, creating a unique feeling of calm, anticipation, and holiness as Shabbat approaches.
 
 While visiting Beit Shemesh, I experienced this once again and was deeply moved by it. I have always loved that atmosphere and wished that it existed in my own city — but it does not.
 
@@ -32,7 +32,7 @@ With this app, the feeling of welcoming Shabbat can be right at your fingertips 
   static const String aboutHe =
       '''Shabbos!! נוצרה מתוך אהבה לאווירה המיוחדת המלווה את הרגעים שלפני כניסת שבת ויום טוב.
 
-בירושלים ובערים רבות ברחבי ארץ ישראל, נשמעת צפירה כ־20 דקות לפני הדלקת הנרות, ושוב בזמן הדלקת הנרות. במקומות מסוימים מתנגנת מוזיקה שקטה בדקות האחרונות הללו, ויוצרת תחושה מיוחדת של רוגע, ציפייה וקדושה עם התקרבות השבת.
+בירושלים ובערים רבות ברחבי ארץ ישראל, נשמעת צפירה כ־40 דקות לפני הדלקת הנרות, ושוב בזמן הדלקת הנרות. במקומות מסוימים מתנגנת מוזיקה שקטה בדקות האחרונות הללו, ויוצרת תחושה מיוחדת של רוגע, ציפייה וקדושה עם התקרבות השבת.
 
 במהלך ביקור בבית שמש חוויתי זאת שוב, והדבר ריגש אותי מאוד. תמיד אהבתי את האווירה הזו, ותמיד ייחלתי שתהיה גם בעיר שבה אני גר — אך לצערי, אין.
 
@@ -275,6 +275,11 @@ Users are encouraged to always double-check candle-lighting times with reliable 
                       ).withValues(alpha: 0.3),
                     ),
 
+                    const SizedBox(height: 24),
+
+                    // Creator Information section
+                    _buildCreatorSection(isHebrew),
+
                     const SizedBox(height: 40),
 
                     // Closing greeting
@@ -486,5 +491,127 @@ Users are encouraged to always double-check candle-lighting times with reliable 
       debugPrint('Error launching URL: $e');
       // Silently fail - user will see nothing happens
     }
+  }
+
+  Future<void> _launchUrl(String urlString) async {
+    try {
+      final uri = Uri.parse(urlString);
+      final canLaunch = await canLaunchUrl(uri);
+      if (canLaunch) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+      }
+    } catch (e) {
+      debugPrint('Error launching URL: $e');
+    }
+  }
+
+  Widget _buildCreatorSection(bool isHebrew) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: const Color(0xFFE8F5E9),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: const Color(0xFF4CAF50).withValues(alpha: 0.3),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.person, size: 20, color: Color(0xFF4CAF50)),
+              const SizedBox(width: 8),
+              Text(
+                isHebrew ? 'היוצר' : 'The Creator',
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF1A1A1A),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Text(
+            isHebrew ? 'אפליקציית שבת!!' : 'The Shabbos!! App',
+            style: const TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF1A1A1A),
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            isHebrew ? 'נוצרה על ידי אברהם ונשמח' : 'Created by Avraham Venismach',
+            style: TextStyle(
+              fontSize: 14,
+              color: Colors.grey[700],
+            ),
+          ),
+          const SizedBox(height: 20),
+          Text(
+            isHebrew ? 'השירותים שלי:' : 'My Services:',
+            style: const TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF1A1A1A),
+            ),
+          ),
+          const SizedBox(height: 12),
+          _buildServiceLink(
+            isHebrew: isHebrew,
+            title: isHebrew ? 'שירותי קריינות מקצועיים' : 'Professional Voiceover Service',
+            url: 'https://koshervoiceover.com',
+            icon: Icons.mic,
+          ),
+          const SizedBox(height: 8),
+          _buildServiceLink(
+            isHebrew: isHebrew,
+            title: isHebrew
+                ? 'שירותי שכפול מפתחות לרכב ושירותי מנעולנות לבית ולעסק בקצרין ובגולן'
+                : 'Locksmith and Auto Key Services in Katzrin and the Golan Heights',
+            url: 'https://autokeynow.co.il',
+            icon: Icons.key,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildServiceLink({
+    required bool isHebrew,
+    required String title,
+    required String url,
+    required IconData icon,
+  }) {
+    return InkWell(
+      onTap: () => _launchUrl(url),
+      borderRadius: BorderRadius.circular(8),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        child: Row(
+          children: [
+            Icon(icon, size: 16, color: const Color(0xFF4CAF50)),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                title,
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Colors.grey[700],
+                ),
+              ),
+            ),
+            const Icon(
+              Icons.open_in_new,
+              size: 14,
+              color: Color(0xFF4CAF50),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }

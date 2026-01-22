@@ -8,7 +8,7 @@ plugins {
 android {
     namespace = "com.shabbos.shabbos_app"
     compileSdk = flutter.compileSdkVersion
-    ndkVersion = "27.0.12077973"
+    // ndkVersion = "27.0.12077973" // Commented out - let Flutter manage NDK version
 
     compileOptions {
         isCoreLibraryDesugaringEnabled = true
