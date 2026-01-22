@@ -43,18 +43,81 @@ class MainActivity: FlutterActivity() {
             
             when (call.method) {
                 "scheduleAlarm" -> {
-                    val id = call.argument<Int>("id") ?: 0
-                    val timestampMillis = call.argument<Long>("timestampMillis") ?: 0L
-                    val title = call.argument<String>("title") ?: "שבת שלום!"
-                    val body = call.argument<String>("body") ?: "Time to light candles 🕯️🕯️"
-                    val isPreNotification = call.argument<Boolean>("isPreNotification") ?: false
-                    val candleLightingTime = call.argument<Long>("candleLightingTime") ?: 0L
-                    val soundId = call.argument<String>("soundId") ?: "rav_shalom_shofar"
+                    // Log to debug_logs.txt immediately to track all calls
+                    try {
+                        val entryLog = org.json.JSONObject().apply {
+                            put("timestamp", System.currentTimeMillis())
+                            put("location", "MainActivity.kt:scheduleAlarm")
+                            put("message", "MethodChannel scheduleAlarm called")
+                            put("data", org.json.JSONObject().apply {
+                                put("rawId", call.argument<Any>("id")?.toString() ?: "null")
+                                put("rawTimestamp", call.argument<Any>("timestampMillis")?.toString() ?: "null")
+                                put("rawIsPre", call.argument<Any>("isPreNotification")?.toString() ?: "null")
+                            })
+                        }
+                        java.io.File(getExternalFilesDir(null), "debug_logs.txt")
+                            .appendText("${entryLog.toString()}\n")
+                    } catch (_: Exception) {}
                     
-                    Log.d(TAG, "Scheduling alarm from Flutter: ID=$id, time=$timestampMillis, isPre=$isPreNotification, candleTime=$candleLightingTime, sound=$soundId")
-                    
-                    val success = alarmScheduler.scheduleAlarm(id, timestampMillis, title, body, isPreNotification, candleLightingTime, soundId)
-                    result.success(success)
+                    try {
+                        val id = call.argument<Int>("id") ?: 0
+                        // Handle both Integer and Long for timestampMillis (MethodChannel may send either)
+                        val timestampMillis = when (val ts = call.argument<Any>("timestampMillis")) {
+                            is Long -> ts
+                            is Int -> ts.toLong()
+                            else -> 0L
+                        }
+                        val title = call.argument<String>("title") ?: "שבת שלום!"
+                        val body = call.argument<String>("body") ?: "Time to light candles 🕯️🕯️"
+                        val isPreNotification = call.argument<Boolean>("isPreNotification") ?: false
+                        // Handle both Integer and Long for candleLightingTime (MethodChannel may send either)
+                        val candleLightingTime = when (val ct = call.argument<Any>("candleLightingTime")) {
+                            is Long -> ct
+                            is Int -> ct.toLong()
+                            else -> 0L
+                        }
+                        val soundId = call.argument<String>("soundId") ?: "rav_shalom_shofar"
+                        
+                        Log.d(TAG, "Scheduling alarm from Flutter: ID=$id, time=$timestampMillis, isPre=$isPreNotification, candleTime=$candleLightingTime, sound=$soundId")
+                        
+                        val success = alarmScheduler.scheduleAlarm(id, timestampMillis, title, body, isPreNotification, candleLightingTime, soundId)
+                        
+                        // Log result
+                        try {
+                            val resultLog = org.json.JSONObject().apply {
+                                put("timestamp", System.currentTimeMillis())
+                                put("location", "MainActivity.kt:scheduleAlarm")
+                                put("message", "scheduleAlarm result")
+                                put("data", org.json.JSONObject().apply {
+                                    put("alarmId", id)
+                                    put("success", success)
+                                    put("isPreNotification", isPreNotification)
+                                })
+                            }
+                            java.io.File(getExternalFilesDir(null), "debug_logs.txt")
+                                .appendText("${resultLog.toString()}\n")
+                        } catch (_: Exception) {}
+                        
+                        result.success(success)
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Exception in scheduleAlarm handler: ${e.message}", e)
+                        // Log exception to debug_logs.txt
+                        try {
+                            val errorLog = org.json.JSONObject().apply {
+                                put("timestamp", System.currentTimeMillis())
+                                put("location", "MainActivity.kt:scheduleAlarm")
+                                put("message", "scheduleAlarm exception")
+                                put("data", org.json.JSONObject().apply {
+                                    put("error", e.toString())
+                                    put("errorMessage", e.message ?: "null")
+                                    put("errorClass", e.javaClass.simpleName)
+                                })
+                            }
+                            java.io.File(getExternalFilesDir(null), "debug_logs.txt")
+                                .appendText("${errorLog.toString()}\n")
+                        } catch (_: Exception) {}
+                        result.success(false)
+                    }
                 }
                 "cancelAlarm" -> {
                     val id = call.argument<Int>("id") ?: 0
@@ -62,7 +125,8 @@ class MainActivity: FlutterActivity() {
                     result.success(success)
                 }
                 "cancelAllAlarms" -> {
-                    alarmScheduler.cancelAllAlarms()
+                    val protectImminent = call.argument<Boolean>("protectImminent") ?: true
+                    alarmScheduler.cancelAllAlarms(protectImminent = protectImminent)
                     result.success(true)
                 }
                 "canScheduleExactAlarms" -> {
@@ -86,6 +150,19 @@ class MainActivity: FlutterActivity() {
                 "readDebugLogs" -> {
                     val logs = readDebugLogs()
                     result.success(logs)
+                }
+                "clearDebugLogs" -> {
+                    try {
+                        java.io.File(getExternalFilesDir(null), "debug_logs.txt").writeText("")
+                        result.success(true)
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Failed to clear debug logs: ${e.message}")
+                        result.success(false)
+                    }
+                }
+                "getScheduledAlarms" -> {
+                    val alarms = alarmScheduler.getScheduledAlarms()
+                    result.success(alarms)
                 }
                 else -> {
                     result.notImplemented()

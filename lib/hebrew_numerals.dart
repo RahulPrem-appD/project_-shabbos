@@ -125,11 +125,11 @@ const hebrewMonthNames = {
 /// Convert English Hebrew date format to proper Hebrew format
 /// Converts "29 Elul 5785" to "כ״ט אלול תשפ״ה"
 String? formatHebrewDateProper(String? hebrewDate) {
-  if (hebrewDate == null || hebrewDate!.isEmpty) return null;
+  if (hebrewDate == null || hebrewDate.isEmpty) return null;
 
   try {
     // Parse date format: "29 Elul 5785" or "29 Elul 5785"
-    final parts = hebrewDate!.split(' ');
+    final parts = hebrewDate.split(' ');
     if (parts.length < 2) return hebrewDate;
 
     final dayStr = parts[0]; // e.g., "29"

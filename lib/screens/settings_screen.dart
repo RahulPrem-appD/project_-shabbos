@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+import 'dart:async';
 import '../models/city.dart';
 import '../models/candle_lighting.dart';
 import '../services/location_service.dart';
@@ -7,6 +7,8 @@ import '../services/notification_service.dart';
 import '../services/audio_service.dart';
 import '../services/hebcal_service.dart';
 import 'sound_screen.dart';
+import 'upcoming_notifications_screen.dart';
+import 'diagnostic_report_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   final String locale;
@@ -68,6 +70,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _preSound = preSound;
       _candleSound = candleSound;
     });
+    
   }
 
   @override
@@ -140,6 +143,26 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         value: _notificationsEnabled,
                         onChanged: _onNotificationsChanged,
                       ),
+                      if (_notificationsEnabled)
+                        _buildActionTile(
+                          icon: Icons.schedule,
+                          title: isHebrew
+                              ? 'התראות קרובות'
+                              : 'Upcoming Notifications',
+                          subtitle: isHebrew
+                              ? 'צפה בכל ההתראות המתוזמנות'
+                              : 'View all scheduled notifications',
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => UpcomingNotificationsScreen(
+                                  locale: widget.locale,
+                                ),
+                              ),
+                            );
+                          },
+                        ),
                       if (_notificationsEnabled) ...[
                         _buildTimePicker(),
                         _buildSwitchTile(
@@ -644,6 +667,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return isHebrew ? 'ברירת מחדל' : 'System Default';
   }
 
+
   void _openSoundScreen() async {
     await Navigator.push(
       context,
@@ -703,83 +727,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   /// Show diagnostic report for debugging
   Future<void> _showDiagnosticReport() async {
-    // Show loading indicator
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => const Center(
-        child: CircularProgressIndicator(color: Color(0xFFE8B923)),
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => DiagnosticReportScreen(locale: widget.locale),
       ),
     );
-
-    try {
-      final report = await _notificationService.generateDiagnosticReport();
-      
-      if (mounted) {
-        Navigator.pop(context); // Close loading
-        
-        showDialog(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: Text(
-              isHebrew ? 'דו״ח אבחון' : 'Diagnostic Report',
-              style: const TextStyle(fontWeight: FontWeight.bold),
-            ),
-            content: SingleChildScrollView(
-              child: SelectableText(
-                report,
-                style: const TextStyle(
-                  fontFamily: 'monospace',
-                  fontSize: 11,
-                ),
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: Text(isHebrew ? 'סגור' : 'Close'),
-              ),
-              TextButton(
-                onPressed: () async {
-                  // Copy to clipboard
-                  await Clipboard.setData(ClipboardData(text: report));
-                  if (context.mounted) {
-                    Navigator.pop(context);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(
-                          isHebrew
-                              ? 'הדו״ח הועתק ללוח'
-                              : 'Report copied to clipboard',
-                        ),
-                        backgroundColor: const Color(0xFFE8B923),
-                      ),
-                    );
-                  }
-                },
-                child: Text(
-                  isHebrew ? 'העתק' : 'Copy',
-                  style: const TextStyle(
-                    color: Color(0xFFE8B923),
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        Navigator.pop(context); // Close loading
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
   }
 
   /// Check and request exact alarm permission (Android 12+)
@@ -981,6 +934,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         futureTimes.take(10).toList(),
         locale: widget.locale,
       );
+
 
       // Verify alarms were scheduled successfully
       await Future.delayed(const Duration(milliseconds: 500));

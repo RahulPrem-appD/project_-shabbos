@@ -144,14 +144,18 @@ class NativeAlarmService {
   }
 
   /// Cancel all alarms
-  static Future<bool> cancelAllAlarms() async {
+  /// [protectImminent] - If true, alarms scheduled to fire within 5 minutes will NOT be cancelled
+  /// This ensures alarms cannot be missed even if settings are changed at the last moment
+  static Future<bool> cancelAllAlarms({bool protectImminent = true}) async {
     if (!Platform.isAndroid) {
       return false;
     }
 
     try {
-      final result = await _channel.invokeMethod('cancelAllAlarms');
-      debugPrint('NativeAlarmService: Cancelled all alarms: $result');
+      final result = await _channel.invokeMethod('cancelAllAlarms', {
+        'protectImminent': protectImminent,
+      });
+      debugPrint('NativeAlarmService: Cancelled all alarms (protectImminent=$protectImminent): $result');
       return result as bool? ?? false;
     } catch (e) {
       debugPrint('NativeAlarmService: Error cancelling all alarms: $e');
@@ -171,6 +175,42 @@ class NativeAlarmService {
     } catch (e) {
       debugPrint('NativeAlarmService: Error reading debug logs: $e');
       return null;
+    }
+  }
+
+  /// Clear Android debug logs
+  static Future<bool> clearDebugLogs() async {
+    if (!Platform.isAndroid) {
+      return false;
+    }
+
+    try {
+      final result = await _channel.invokeMethod('clearDebugLogs');
+      return result as bool? ?? false;
+    } catch (e) {
+      debugPrint('NativeAlarmService: Error clearing debug logs: $e');
+      return false;
+    }
+  }
+
+  /// Get all scheduled alarms (Android only)
+  /// Returns list of alarm data maps with: id, timestampMillis, title, body, isPreNotification, soundId
+  static Future<List<Map<String, dynamic>>> getScheduledAlarms() async {
+    if (!Platform.isAndroid) {
+      return [];
+    }
+
+    try {
+      final result = await _channel.invokeMethod('getScheduledAlarms');
+      if (result is List) {
+        return result.cast<Map<dynamic, dynamic>>().map((map) {
+          return Map<String, dynamic>.from(map);
+        }).toList();
+      }
+      return [];
+    } catch (e) {
+      debugPrint('NativeAlarmService: Error getting scheduled alarms: $e');
+      return [];
     }
   }
 }

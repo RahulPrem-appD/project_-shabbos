@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../models/candle_lighting.dart';
 import '../services/audio_service.dart';
 import '../services/notification_service.dart';
 import '../services/hebcal_service.dart';
@@ -543,29 +544,40 @@ class _SoundScreenState extends State<SoundScreen> {
       final startDate = DateTime(now.year, now.month, now.day);
       final endDate = startDate.add(const Duration(days: 30));
 
-      // Fetch candle lighting times
-      final times = await _hebcalService.getExtendedCandleLightingTimes(
-        latitude: location.latitude,
-        longitude: location.longitude,
-        startDate: startDate,
-        endDate: endDate,
-        timezone: location.timezone,
-        locale: widget.locale,
-      );
+      // Edge Case 17: Network failure handling - wrap in try-catch
+      List<CandleLighting> futureTimes;
+      try {
+        // Fetch candle lighting times
+        final times = await _hebcalService.getExtendedCandleLightingTimes(
+          latitude: location.latitude,
+          longitude: location.longitude,
+          startDate: startDate,
+          endDate: endDate,
+          timezone: location.timezone,
+          locale: widget.locale,
+        );
 
-      final futureTimes = times
-          .where((t) => t.candleLightingTime.isAfter(now))
-          .toList();
+        futureTimes = times
+            .where((t) => t.candleLightingTime.isAfter(now))
+            .toList();
 
-      if (futureTimes.isEmpty) {
-        debugPrint('SoundScreen: No future times, skipping reschedule');
-        return;
+        if (futureTimes.isEmpty) {
+          debugPrint('SoundScreen: No future times, skipping reschedule');
+          return;
+        }
+      } catch (e) {
+        // Edge Case 17: Network failure - don't cancel existing alarms
+        debugPrint('SoundScreen: ✗ Network error fetching candle lighting times: $e');
+        debugPrint('SoundScreen: ⚠️ NOT cancelling existing alarms due to network failure');
+        return; // Don't reschedule if network fails
       }
 
       // Reschedule with new sound settings
+      // Edge Case 7: Pass onlySoundChanged flag to skip rescheduling if alarms are imminent
       await _notificationService.rescheduleAllNotifications(
         futureTimes.take(10).toList(),
         locale: widget.locale,
+        onlySoundChanged: true, // Edge Case 7: Indicate only sound changed
       );
 
       debugPrint('SoundScreen: Notifications rescheduled successfully');
