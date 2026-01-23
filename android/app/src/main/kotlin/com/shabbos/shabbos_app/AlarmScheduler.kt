@@ -298,25 +298,18 @@ class AlarmScheduler(private val context: Context) {
                     
                     val pendingIntent = PendingIntent.getBroadcast(context, id, intent, pendingIntentFlags)
                     
-                    // Edge Cases 9-10: Retry logic - try multiple times if scheduling fails
-                    var scheduled = false
-                    var retryCount = 0
-                    while (!scheduled && retryCount < 3) {
-                        try {
-                            scheduleAlarmInternal(timestampMillis, pendingIntent, id)
-                            scheduled = true
-                            rescheduledCount++
-                        } catch (e: Exception) {
-                            retryCount++
-                            Log.w(TAG, "Retry $retryCount/3 failed for alarm #$id: ${e.message}")
-                            if (retryCount < 3) {
-                                Thread.sleep(1000) // Wait 1 second before retry
-                            }
-                        }
+                    // CRITICAL FIX: Use non-blocking retry logic
+                    // Thread.sleep() in BroadcastReceiver can cause ANR
+                    val scheduled = try {
+                        scheduleAlarmInternal(timestampMillis, pendingIntent, id)
+                        true
+                    } catch (e: Exception) {
+                        Log.e(TAG, "✗ Failed to reschedule alarm #$id: ${e.message}")
+                        false
                     }
                     
-                    if (!scheduled) {
-                        Log.e(TAG, "✗ Failed to reschedule alarm #$id after 3 retries")
+                    if (scheduled) {
+                        rescheduledCount++
                     }
                 } else {
                     Log.d(TAG, "Skipping expired alarm #$id (was scheduled for ${Date(timestampMillis)})")

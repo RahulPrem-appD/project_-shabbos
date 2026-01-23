@@ -177,7 +177,27 @@ class MainActivity: FlutterActivity() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channelId = "shabbos_alerts"
             val channelName = "Shabbos Alerts"
-            val importance = NotificationManager.IMPORTANCE_HIGH
+            val importance = NotificationManager.IMPORTANCE_MAX // Use MAX for critical alarms
+            
+            val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            
+            // Check if channel already exists with correct importance
+            val existingChannel = notificationManager.getNotificationChannel(channelId)
+            if (existingChannel != null && existingChannel.importance == NotificationManager.IMPORTANCE_MAX) {
+                Log.d(TAG, "✓ Notification channel already exists with MAX importance")
+                return // Channel is already configured correctly
+            }
+            
+            // Only delete and recreate if importance is wrong
+            if (existingChannel != null && existingChannel.importance != NotificationManager.IMPORTANCE_MAX) {
+                Log.w(TAG, "⚠️ Channel exists with wrong importance, recreating...")
+                try {
+                    notificationManager.deleteNotificationChannel(channelId)
+                    Log.d(TAG, "✓ Deleted existing channel")
+                } catch (e: Exception) {
+                    Log.e(TAG, "✗ Failed to delete channel: ${e.message}")
+                }
+            }
             
             val channel = NotificationChannel(channelId, channelName, importance).apply {
                 description = "Candle lighting time reminders"
@@ -186,12 +206,12 @@ class MainActivity: FlutterActivity() {
                 setShowBadge(true)
                 setBypassDnd(true) // Bypass Do Not Disturb
                 lockscreenVisibility = android.app.Notification.VISIBILITY_PUBLIC
+                setSound(null, null) // We play custom sounds via MediaPlayer
             }
             
-            val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             notificationManager.createNotificationChannel(channel)
             
-            Log.d(TAG, "Notification channel created with high importance")
+            Log.d(TAG, "✓ Notification channel created with MAX importance")
         }
     }
     

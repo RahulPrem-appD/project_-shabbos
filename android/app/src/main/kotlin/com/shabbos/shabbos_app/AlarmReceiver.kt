@@ -66,15 +66,35 @@ class AlarmReceiver : BroadcastReceiver() {
         Log.d(TAG, "AlarmReceiver: onReceive() called!")
         Log.d(TAG, "Intent action: ${intent.action}")
         Log.d(TAG, "Intent extras: ${intent.extras?.keySet()?.joinToString()}")
+        Log.d(TAG, "Current time: ${System.currentTimeMillis()}")
+        Log.d(TAG, "App process state: ${if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) "unknown (requires ActivityManager)" else "unknown"}")
         Log.d(TAG, "========================================")
+        
+        // CRITICAL: Verify this receiver can run even when app is completely closed
+        // This log entry proves the receiver was called by the system
+        Log.d(TAG, "✓ AlarmReceiver triggered by Android AlarmManager (app may be closed)")
         
         // Acquire a WakeLock to ensure the device stays awake long enough
         val powerManager = context.getSystemService(Context.POWER_SERVICE) as PowerManager
+        
+        // CRITICAL: Use PARTIAL_WAKE_LOCK (SCREEN_BRIGHT_WAKE_LOCK is deprecated)
+        // Combined with full screen intent, this ensures notification is visible
+        @Suppress("DEPRECATION")
+        val wakeLockFlags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+            // Android 8.1+: Use PARTIAL_WAKE_LOCK (SCREEN_BRIGHT_WAKE_LOCK is deprecated)
+            // Full screen intent will wake the screen
+            PowerManager.PARTIAL_WAKE_LOCK or PowerManager.ACQUIRE_CAUSES_WAKEUP
+        } else {
+            // Android < 8.1: Use SCREEN_BRIGHT_WAKE_LOCK to wake screen
+            PowerManager.SCREEN_BRIGHT_WAKE_LOCK or PowerManager.ACQUIRE_CAUSES_WAKEUP
+        }
+        
         val wakeLock = powerManager.newWakeLock(
-            PowerManager.PARTIAL_WAKE_LOCK,
+            wakeLockFlags,
             "ShabbosApp::AlarmWakeLock"
         )
         wakeLock.acquire(120000) // Hold for 2 minutes max (for audio playback)
+        Log.d(TAG, "✓ WakeLock acquired")
         
         // #region agent log
         try {
@@ -116,7 +136,7 @@ class AlarmReceiver : BroadcastReceiver() {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
                 notificationsEnabled = notificationManager.areNotificationsEnabled()
                 if (!notificationsEnabled) {
-                    Log.e(TAG, "Notifications are disabled by user!")
+                    Log.e(TAG, "✗ CRITICAL: Notifications are disabled by user!")
                     // #region agent log
                     try {
                         val logData = org.json.JSONObject().apply {
@@ -132,6 +152,12 @@ class AlarmReceiver : BroadcastReceiver() {
                         Log.e(TAG, "Failed to write debug log: ${e.message}")
                     }
                     // #endregion
+                    
+                    // CRITICAL FIX: Release wake lock before returning to avoid resource leak
+                    if (wakeLock.isHeld) {
+                        wakeLock.release()
+                        Log.d(TAG, "✓ WakeLock released (notifications disabled)")
+                    }
                     return
                 }
             }
@@ -215,19 +241,47 @@ class AlarmReceiver : BroadcastReceiver() {
             // #endregion
             
             // Start foreground service to play audio (ensures it works when app is closed)
+            // CRITICAL: This must work even when app hasn't been opened for weeks
             val serviceIntent = Intent(context, AlarmAudioService::class.java).apply {
                 putExtra("sound_id", soundId)
                 putExtra("title", title)
                 putExtra("body", body)
+                // Add action to make intent unique and ensure it's delivered
+                action = "com.shabbos.shabbos_app.PLAY_ALARM_SOUND"
             }
             
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                context.startForegroundService(serviceIntent)
-            } else {
-                context.startService(serviceIntent)
+            try {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    // Android 8.0+: Use startForegroundService
+                    // This works even when app is completely closed
+                    context.startForegroundService(serviceIntent)
+                    Log.d(TAG, "✓ Started foreground service (Android 8.0+) for sound: $soundId")
+                } else {
+                    // Android < 8.0: Use regular startService
+                    context.startService(serviceIntent)
+                    Log.d(TAG, "✓ Started service (Android < 8.0) for sound: $soundId")
+                }
+                
+                // REMOVED: Service verification check
+                // The Handler.postDelayed runs on main looper, but BroadcastReceiver.onReceive
+                // might finish before the handler runs, causing the check to fail
+                // Service startup is verified via logs in AlarmAudioService.onStartCommand
+            } catch (e: IllegalStateException) {
+                // Android 8.0+: This can happen if app is in background and service can't start
+                Log.e(TAG, "✗ CRITICAL: Cannot start foreground service: ${e.message}")
+                Log.e(TAG, "✗ This usually means the app was killed and Android blocked service startup")
+                Log.e(TAG, "✗ User may need to disable battery optimization for this app")
+                
+                // Try to start regular service as fallback (won't work on Android 8.0+ but worth trying)
+                try {
+                    context.startService(serviceIntent)
+                    Log.d(TAG, "✓ Fallback: Started regular service")
+                } catch (e2: Exception) {
+                    Log.e(TAG, "✗ Fallback service start also failed: ${e2.message}")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "✗ Error starting AlarmAudioService: ${e.message}", e)
             }
-            
-            Log.d(TAG, "Started AlarmAudioService for sound: $soundId")
             
             // Create and show notification (without system sound since we play our own)
             // Pass soundId to determine if this is an Issur Melacha notification (soundId == "default")
@@ -281,6 +335,7 @@ class AlarmReceiver : BroadcastReceiver() {
             }, 60000) // Release after 60 seconds
         }
     }
+    
     
     private fun playCustomSound(context: Context, soundId: String) {
         try {
@@ -676,7 +731,29 @@ class AlarmReceiver : BroadcastReceiver() {
     
     private fun createNotificationChannel(context: Context, notificationManager: NotificationManager) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val importance = NotificationManager.IMPORTANCE_HIGH
+            // CRITICAL: Use IMPORTANCE_MAX for alarm notifications to ensure they're always visible
+            // IMPORTANCE_HIGH can still be suppressed by the system
+            val importance = NotificationManager.IMPORTANCE_MAX
+            
+            // Check if channel already exists with correct importance
+            val existingChannel = notificationManager.getNotificationChannel(CHANNEL_ID)
+            if (existingChannel != null && existingChannel.importance == NotificationManager.IMPORTANCE_MAX) {
+                Log.d(TAG, "✓ Notification channel already exists with MAX importance")
+                return // Channel is already configured correctly
+            }
+            
+            // CRITICAL WARNING: Deleting a notification channel will remove ALL pending notifications
+            // Only delete if importance is wrong
+            if (existingChannel != null && existingChannel.importance != NotificationManager.IMPORTANCE_MAX) {
+                Log.w(TAG, "⚠️ Channel exists with wrong importance (${existingChannel.importance}), recreating...")
+                try {
+                    notificationManager.deleteNotificationChannel(CHANNEL_ID)
+                    Log.d(TAG, "✓ Deleted existing channel")
+                    // WARNING: This will clear any existing notifications!
+                } catch (e: Exception) {
+                    Log.e(TAG, "✗ Failed to delete channel: ${e.message}")
+                }
+            }
             
             // Create channel WITHOUT sound (we play our own sound via MediaPlayer)
             val channel = NotificationChannel(CHANNEL_ID, CHANNEL_NAME, importance).apply {
@@ -687,10 +764,23 @@ class AlarmReceiver : BroadcastReceiver() {
                 setSound(null, null) // Disable channel sound - we play custom sounds
                 lockscreenVisibility = android.app.Notification.VISIBILITY_PUBLIC
                 setBypassDnd(true) // Bypass Do Not Disturb mode - critical for religious reminders
+                // IMPORTANCE_MAX automatically enables heads-up notifications
             }
             
             notificationManager.createNotificationChannel(channel)
-            Log.d(TAG, "Notification channel created/updated (without sound, bypass DND enabled)")
+            Log.d(TAG, "✓ Notification channel created with MAX importance")
+            
+            // Verify channel was created correctly
+            val createdChannel = notificationManager.getNotificationChannel(CHANNEL_ID)
+            if (createdChannel != null) {
+                Log.d(TAG, "✓ Channel verification: importance=${createdChannel.importance}, bypassDND=${createdChannel.canBypassDnd()}")
+                if (createdChannel.importance != NotificationManager.IMPORTANCE_MAX) {
+                    Log.e(TAG, "✗ WARNING: Channel importance is ${createdChannel.importance}, expected ${NotificationManager.IMPORTANCE_MAX}!")
+                    Log.e(TAG, "✗ User may have manually changed channel settings in system settings")
+                }
+            } else {
+                Log.e(TAG, "✗ CRITICAL: Channel was not created!")
+            }
         }
     }
     
@@ -707,10 +797,14 @@ class AlarmReceiver : BroadcastReceiver() {
             // Check if this is an Issur Melacha notification (uses default sound)
             val isIssurMelacha = soundId == "default"
             
+            // Create intent that will wake up the screen and show the app
             val intent = Intent(context, MainActivity::class.java).apply {
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
                 action = "android.intent.action.MAIN"
                 addCategory("android.intent.category.LAUNCHER")
+                // Add flags to wake screen and show on top
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
             }
             
             val pendingIntentFlags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
@@ -726,12 +820,27 @@ class AlarmReceiver : BroadcastReceiver() {
                 pendingIntentFlags
             )
             
-            // Build notification - adjust priority and category based on notification type
+            // Create full screen intent with wake-up flags for maximum visibility
+            val fullScreenIntent = Intent(context, MainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+                action = "android.intent.action.MAIN"
+                addCategory("android.intent.category.LAUNCHER")
+            }
+            
+            val fullScreenPendingIntent = PendingIntent.getActivity(
+                context,
+                id + 10000, // Use different ID to avoid conflicts
+                fullScreenIntent,
+                pendingIntentFlags
+            )
+            
+            // Build notification - use MAX priority for all critical alarms
+            // CRITICAL: Use PRIORITY_MAX to ensure notification appears as heads-up
             val builder = NotificationCompat.Builder(context, CHANNEL_ID)
                 .setSmallIcon(R.drawable.ic_notification)
                 .setContentTitle(title)
                 .setContentText(body)
-                .setPriority(if (isIssurMelacha) NotificationCompat.PRIORITY_HIGH else NotificationCompat.PRIORITY_MAX)
+                .setPriority(NotificationCompat.PRIORITY_MAX) // Always use MAX for critical alarms
                 .setCategory(if (isIssurMelacha) NotificationCompat.CATEGORY_REMINDER else NotificationCompat.CATEGORY_ALARM)
                 .setSound(null) // No system sound - we play our own
                 .setVibrate(longArrayOf(0, 500, 250, 500))
@@ -740,6 +849,8 @@ class AlarmReceiver : BroadcastReceiver() {
                 .setContentIntent(pendingIntent)
                 .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
                 .setDefaults(NotificationCompat.DEFAULT_VIBRATE or NotificationCompat.DEFAULT_LIGHTS)
+                .setShowWhen(true) // Always show timestamp
+                .setWhen(System.currentTimeMillis()) // Set to current time
             
             // For pre-notifications with valid candle lighting time, show countdown timer
             if (isPreNotification && candleLightingTime > 0) {
@@ -796,10 +907,11 @@ class AlarmReceiver : BroadcastReceiver() {
                     .setWhen(System.currentTimeMillis())
                     .setShowWhen(true)
                 
-                // Only show full screen intent for candle lighting (shofar), not for Issur Melacha reminder
-                if (!isIssurMelacha) {
-                    builder.setFullScreenIntent(pendingIntent, false)
-                }
+                // Use full screen intent for ALL critical notifications to ensure visibility
+                // This makes the notification appear as a heads-up even if screen is locked
+                // The full screen intent will wake the screen and show the app
+                builder.setFullScreenIntent(fullScreenPendingIntent, true) // true = high priority, show even on lock screen
+                Log.d(TAG, "✓ Full screen intent enabled for maximum visibility (will wake screen)")
             }
             
             val notification = builder.build()
@@ -807,12 +919,38 @@ class AlarmReceiver : BroadcastReceiver() {
             // Use NotificationManager directly for more reliability
             val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             
+            // CRITICAL: Ensure notification is visible
+            // On Android 8.0+, check channel importance
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                val channel = notificationManager.getNotificationChannel(CHANNEL_ID)
+                if (channel != null) {
+                    Log.d(TAG, "Notification channel importance: ${channel.importance}")
+                    Log.d(TAG, "Notification channel can bypass DND: ${channel.canBypassDnd()}")
+                    Log.d(TAG, "Notification channel can show badge: ${channel.canShowBadge()}")
+                    
+                    // If channel importance is too low, recreate it with MAX importance
+                    if (channel.importance < NotificationManager.IMPORTANCE_MAX) {
+                        Log.w(TAG, "⚠️ Channel importance is too low (${channel.importance}), recreating with MAX importance")
+                        createNotificationChannel(context, notificationManager)
+                    }
+                    
+                    // Check if channel is blocked by user
+                    if (channel.importance == NotificationManager.IMPORTANCE_NONE) {
+                        Log.e(TAG, "✗ CRITICAL: Notification channel is BLOCKED by user!")
+                        Log.e(TAG, "✗ User must enable notifications in system settings")
+                    }
+                }
+            }
+            
             var notificationPosted = false
             var notificationError: String? = null
             try {
                 notificationManager.notify(id, notification)
                 notificationPosted = true
-                Log.d(TAG, "Notification posted successfully with ID: $id using NotificationManager")
+                Log.d(TAG, "✓ Notification posted successfully with ID: $id using NotificationManager")
+                Log.d(TAG, "✓ Notification title: $title")
+                Log.d(TAG, "✓ Notification body: $body")
+                Log.d(TAG, "✓ Notification priority: ${notification.priority}")
             } catch (e: SecurityException) {
                 notificationError = "SecurityException: ${e.message}"
                 Log.e(TAG, "SecurityException with NotificationManager: ${e.message}", e)
@@ -839,6 +977,53 @@ class AlarmReceiver : BroadcastReceiver() {
                 }
             }
             
+            // Verify notification was actually posted
+            if (notificationPosted) {
+                Log.d(TAG, "✓ Notification posted successfully")
+                
+                // Check if notification is actually visible (Android 8.0+)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    // Wait a moment for notification to appear in active list
+                    android.os.Handler(context.mainLooper).postDelayed({
+                        val activeNotifications = notificationManager.activeNotifications
+                        val ourNotification = activeNotifications.find { it.id == id }
+                        if (ourNotification != null) {
+                            Log.d(TAG, "✓ Notification confirmed visible in active notifications list")
+                            Log.d(TAG, "✓ Notification tag: ${ourNotification.tag}")
+                            Log.d(TAG, "✓ Notification channel: ${ourNotification.notification.channelId}")
+                        } else {
+                            Log.e(TAG, "✗ CRITICAL: Notification posted but NOT found in active notifications!")
+                            Log.e(TAG, "✗ This means it was suppressed or hidden by the system")
+                            Log.e(TAG, "✗ Active notification count: ${activeNotifications.size}")
+                            Log.e(TAG, "✗ Active notification IDs: ${activeNotifications.map { it.id }.joinToString()}")
+                            
+                            // Check channel status
+                            val channel = notificationManager.getNotificationChannel(CHANNEL_ID)
+                            if (channel != null) {
+                                Log.e(TAG, "✗ Channel importance: ${channel.importance}")
+                                Log.e(TAG, "✗ Channel blocked: ${channel.importance == NotificationManager.IMPORTANCE_NONE}")
+                                if (channel.importance == NotificationManager.IMPORTANCE_NONE) {
+                                    Log.e(TAG, "✗ USER ACTION REQUIRED: Notification channel is BLOCKED!")
+                                    Log.e(TAG, "✗ User must enable notifications in Settings > Apps > Shabbos!! > Notifications")
+                                }
+                            }
+                        }
+                    }, 500) // Check after 500ms
+                }
+            } else {
+                Log.e(TAG, "✗ CRITICAL: Notification was NOT posted!")
+                Log.e(TAG, "✗ Error: ${notificationError ?: "unknown"}")
+                
+                // Check if notifications are enabled
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                    val notificationsEnabled = notificationManager.areNotificationsEnabled()
+                    Log.e(TAG, "✗ System notifications enabled: $notificationsEnabled")
+                    if (!notificationsEnabled) {
+                        Log.e(TAG, "✗ USER ACTION REQUIRED: Notifications are disabled system-wide!")
+                    }
+                }
+            }
+            
             // #region agent log
             try {
                 val logData = org.json.JSONObject().apply {
@@ -852,6 +1037,11 @@ class AlarmReceiver : BroadcastReceiver() {
                         put("notificationPosted", notificationPosted)
                         put("notificationId", id)
                         put("error", notificationError ?: "none")
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                            val activeNotifications = notificationManager.activeNotifications
+                            put("activeNotificationCount", activeNotifications.size)
+                            put("ourNotificationVisible", activeNotifications.any { it.id == id })
+                        }
                     })
                 }
                 java.io.File(context.getExternalFilesDir(null), "debug_logs.txt").appendText("${logData.toString()}\n")

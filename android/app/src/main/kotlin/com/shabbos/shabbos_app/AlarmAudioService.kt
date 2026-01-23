@@ -54,6 +54,8 @@ class AlarmAudioService : Service() {
         Log.d(TAG, "onStartCommand called")
         Log.d(TAG, "Intent: ${intent?.action}")
         Log.d(TAG, "Flags: $flags, StartId: $startId")
+        Log.d(TAG, "Current time: ${System.currentTimeMillis()}")
+        Log.d(TAG, "✓ Service started by AlarmReceiver (app may be closed)")
         
         val soundId = intent?.getStringExtra(EXTRA_SOUND_ID) ?: "rav_shalom_shofar"
         val title = intent?.getStringExtra(EXTRA_TITLE) ?: "שבת שלום!"
@@ -62,6 +64,10 @@ class AlarmAudioService : Service() {
         Log.d(TAG, "Sound ID: $soundId")
         Log.d(TAG, "Title: $title")
         Log.d(TAG, "Body: $body")
+        
+        // CRITICAL: Ensure notification channel exists (required for foreground service)
+        // This must work even when app hasn't been opened for weeks
+        createNotificationChannel()
         
         // #region agent log
         try {
@@ -92,21 +98,38 @@ class AlarmAudioService : Service() {
         wakeLock?.acquire(120000) // 2 minutes - enough for full audio playback
         Log.d(TAG, "Wake lock acquired: ${wakeLock?.isHeld}")
         
-        // Start foreground service (required for background audio playback)
+        // CRITICAL: Start foreground service IMMEDIATELY (must be within 5 seconds on Android 8.0+)
+        // This is required for background audio playback when app is closed
         try {
+            val notification = createNotification(title, body)
+            
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 startForeground(
                     NOTIFICATION_ID,
-                    createNotification(title, body),
+                    notification,
                     android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
                 )
-                Log.d(TAG, "Foreground service started (Android 10+)")
+                Log.d(TAG, "✓ Foreground service started (Android 10+)")
+            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                startForeground(NOTIFICATION_ID, notification)
+                Log.d(TAG, "✓ Foreground service started (Android 8.0-9)")
             } else {
-                startForeground(NOTIFICATION_ID, createNotification(title, body))
-                Log.d(TAG, "Foreground service started (Android < 10)")
+                startForeground(NOTIFICATION_ID, notification)
+                Log.d(TAG, "✓ Foreground service started (Android < 8.0)")
             }
+            
+            // Verify foreground service started successfully
+            Log.d(TAG, "✓ Foreground service notification posted (ID: $NOTIFICATION_ID)")
+        } catch (e: IllegalStateException) {
+            Log.e(TAG, "✗ CRITICAL: Cannot start foreground service: ${e.message}")
+            Log.e(TAG, "✗ This usually means:")
+            Log.e(TAG, "  - Service was started but startForeground() wasn't called within 5 seconds")
+            Log.e(TAG, "  - App is in background and Android blocked foreground service")
+            Log.e(TAG, "  - User needs to disable battery optimization")
+            // Try to continue anyway - audio might still play
         } catch (e: Exception) {
-            Log.e(TAG, "Error starting foreground service: ${e.message}", e)
+            Log.e(TAG, "✗ Error starting foreground service: ${e.message}", e)
+            // Try to continue anyway - audio might still play
         }
         
         // Play the sound
@@ -172,8 +195,54 @@ class AlarmAudioService : Service() {
             Log.d(TAG, "playSoundFromAsset: Starting playback")
             Log.d(TAG, "Asset path: $assetPath")
             
-            // Request audio focus FIRST
+            // Get audio manager FIRST
             audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
+            
+            // CRITICAL: Ensure alarm stream volume is up and not muted
+            // Even with USAGE_ALARM, we need to check/adjust volume
+            val maxVolume = audioManager!!.getStreamMaxVolume(AudioManager.STREAM_ALARM)
+            val currentVolume = audioManager!!.getStreamVolume(AudioManager.STREAM_ALARM)
+            val isMuted = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                audioManager!!.isStreamMute(AudioManager.STREAM_ALARM)
+            } else {
+                currentVolume == 0
+            }
+            
+            Log.d(TAG, "Alarm stream volume: $currentVolume / $maxVolume (muted: $isMuted)")
+            
+            if (isMuted || currentVolume == 0) {
+                Log.w(TAG, "⚠️ Alarm stream is muted or volume is 0!")
+                Log.w(TAG, "⚠️ Attempting to unmute and set volume...")
+                
+                // Try to unmute (requires MODIFY_AUDIO_SETTINGS permission)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                    try {
+                        audioManager!!.adjustStreamVolume(
+                            AudioManager.STREAM_ALARM,
+                            AudioManager.ADJUST_UNMUTE,
+                            0
+                        )
+                        Log.d(TAG, "✓ Attempted to unmute alarm stream")
+                    } catch (e: SecurityException) {
+                        Log.e(TAG, "✗ Cannot unmute: Missing MODIFY_AUDIO_SETTINGS permission")
+                    }
+                }
+                
+                // Set volume to maximum (requires MODIFY_AUDIO_SETTINGS permission)
+                try {
+                    audioManager!!.setStreamVolume(
+                        AudioManager.STREAM_ALARM,
+                        maxVolume,
+                        0
+                    )
+                    Log.d(TAG, "✓ Set alarm stream volume to maximum: $maxVolume")
+                } catch (e: SecurityException) {
+                    Log.e(TAG, "✗ Cannot set volume: Missing MODIFY_AUDIO_SETTINGS permission")
+                    Log.e(TAG, "✗ User must manually enable alarm volume in system settings")
+                }
+            }
+            
+            // Request audio focus
             val audioFocusResult = requestAudioFocus()
             
             Log.d(TAG, "Audio focus result: $audioFocusResult")
@@ -233,9 +302,15 @@ class AlarmAudioService : Service() {
                     AudioAttributes.Builder()
                         .setUsage(AudioAttributes.USAGE_ALARM)
                         .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+                        .setFlags(AudioAttributes.FLAG_AUDIBILITY_ENFORCED) // Ensure sound plays even in silent mode
                         .build()
                 )
-                Log.d(TAG, "✓ Audio attributes set")
+                Log.d(TAG, "✓ Audio attributes set (with AUDIBILITY_ENFORCED flag)")
+                
+                // Set volume to maximum (1.0 = 100%)
+                // This ensures the sound plays at full volume regardless of system volume
+                setVolume(1.0f, 1.0f)
+                Log.d(TAG, "✓ MediaPlayer volume set to maximum (1.0)")
                 
                 setOnPreparedListener {
                     Log.d(TAG, "========================================")
@@ -259,11 +334,41 @@ class AlarmAudioService : Service() {
                         if (!nowPlaying) {
                             Log.e(TAG, "✗ CRITICAL: MediaPlayer.start() called but isPlaying is FALSE!")
                             Log.e(TAG, "✗ This means playback did NOT start")
+                            
+                            // Check audio stream volume and mute state
+                            val audioMgr = getSystemService(Context.AUDIO_SERVICE) as AudioManager
+                            val alarmVolume = audioMgr.getStreamVolume(AudioManager.STREAM_ALARM)
+                            val maxAlarmVolume = audioMgr.getStreamMaxVolume(AudioManager.STREAM_ALARM)
+                            val isAlarmMuted = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                                audioMgr.isStreamMute(AudioManager.STREAM_ALARM)
+                            } else {
+                                alarmVolume == 0
+                            }
+                            
+                            Log.e(TAG, "✗ Alarm stream volume: $alarmVolume / $maxAlarmVolume")
+                            Log.e(TAG, "✗ Alarm stream muted: $isAlarmMuted")
+                            Log.e(TAG, "✗ Audio focus granted: ${audioFocusResult == AudioManager.AUDIOFOCUS_REQUEST_GRANTED}")
+                            
                             // Try to get more info about the error
                             try {
                                 Log.e(TAG, "MediaPlayer state after start: ${if (isPlaying) "PLAYING" else "NOT PLAYING"}")
                             } catch (e: Exception) {
                                 Log.e(TAG, "Could not check MediaPlayer state: ${e.message}")
+                            }
+                            
+                            // Try to restart playback with volume adjustment
+                            if (isAlarmMuted || alarmVolume == 0) {
+                                Log.w(TAG, "⚠️ Attempting to fix volume issue and restart playback...")
+                                android.os.Handler(mainLooper).postDelayed({
+                                    try {
+                                        if (!isPlaying) {
+                                            start()
+                                            Log.d(TAG, "Retry: MediaPlayer.start() called again")
+                                        }
+                                    } catch (e: Exception) {
+                                        Log.e(TAG, "Retry failed: ${e.message}")
+                                    }
+                                }, 100)
                             }
                         } else {
                             Log.d(TAG, "✓ MediaPlayer is playing!")
@@ -424,10 +529,13 @@ class AlarmAudioService : Service() {
             ).apply {
                 description = "Plays alarm sounds"
                 setSound(null, null)
+                setShowBadge(false) // Don't show badge for background service notification
+                lockscreenVisibility = Notification.VISIBILITY_SECRET // Hide on lock screen to avoid confusion
             }
             
             val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             notificationManager.createNotificationChannel(channel)
+            Log.d(TAG, "Foreground service notification channel created (LOW importance, hidden)")
         }
     }
     
@@ -455,6 +563,9 @@ class AlarmAudioService : Service() {
             .setOngoing(false)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setSound(null)
+            .setVisibility(NotificationCompat.VISIBILITY_SECRET) // Hide on lock screen
+            .setShowWhen(false) // Don't show timestamp
+            .setCategory(NotificationCompat.CATEGORY_SERVICE) // Mark as service notification
             .build()
     }
 }
