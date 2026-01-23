@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'dart:convert';
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
@@ -1289,29 +1288,6 @@ class NotificationService {
       debugPrint('NotificationService: ⚠️ Sound ID is LOCKED IN - alarm will use this sound even if settings change');
 
       if (Platform.isAndroid) {
-        // #region agent log
-        try {
-          final logData = {
-            'timestamp': DateTime.now().millisecondsSinceEpoch,
-            'location': 'notification_service.dart:808',
-            'message': 'About to schedule Android alarm',
-            'sessionId': 'debug-session',
-            'runId': 'run1',
-            'hypothesisId': 'E',
-            'data': {
-              'id': id,
-              'scheduledTime': scheduledTime.toIso8601String(),
-              'soundId': soundId,
-              'isPreNotification': isPreNotification,
-            },
-          };
-          final logFile = File('/Users/rahul/Development/project_ shabbos/.cursor/debug.log');
-          logFile.writeAsStringSync('${jsonEncode(logData)}\n', mode: FileMode.append);
-        } catch (e) {
-          debugPrint('Failed to write debug log: $e');
-        }
-        // #endregion
-        
         // Use native alarm scheduler for maximum reliability on Android
         debugPrint('NotificationService: Calling NativeAlarmService.scheduleAlarm for #$id...');
         debugPrint('NotificationService:   - scheduledTime: $scheduledTime');
@@ -1340,28 +1316,6 @@ class NotificationService {
           debugPrint('NotificationService: Stack trace: $stackTrace');
           _addDiagnosticLog('✗ EXCEPTION scheduling #$id: $e');
         }
-
-        // #region agent log
-        try {
-          final logData = {
-            'timestamp': DateTime.now().millisecondsSinceEpoch,
-            'location': 'notification_service.dart:820',
-            'message': 'Android alarm scheduling result',
-            'sessionId': 'debug-session',
-            'runId': 'run1',
-            'hypothesisId': 'E',
-            'data': {
-              'id': id,
-              'success': success,
-              'error': errorMessage,
-            },
-          };
-          final logFile = File('/Users/rahul/Development/project_ shabbos/.cursor/debug.log');
-          logFile.writeAsStringSync('${jsonEncode(logData)}\n', mode: FileMode.append);
-        } catch (e) {
-          debugPrint('Failed to write debug log: $e');
-        }
-        // #endregion
 
         if (!success) {
           final error = errorMessage ?? 'NativeAlarmService.scheduleAlarm returned false';
