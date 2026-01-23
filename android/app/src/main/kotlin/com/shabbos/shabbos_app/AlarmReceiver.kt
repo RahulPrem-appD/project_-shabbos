@@ -24,6 +24,37 @@ class AlarmReceiver : BroadcastReceiver() {
         private const val CHANNEL_NAME = "Shabbos Alerts"
         private const val PREFS_NAME = "FlutterSharedPreferences"
         
+        /**
+         * Helper function to write logs to debug_logs.txt for diagnostic reports
+         * This ensures all critical events are captured in the diagnostic report
+         */
+        private fun writeDebugLog(context: Context, location: String, message: String, data: Map<String, Any?>? = null) {
+            try {
+                val logData = org.json.JSONObject().apply {
+                    put("timestamp", System.currentTimeMillis())
+                    put("location", location)
+                    put("message", message)
+                    if (data != null) {
+                        val dataObj = org.json.JSONObject()
+                        data.forEach { (key, value) ->
+                            when (value) {
+                                null -> dataObj.put(key, "null")
+                                is Boolean -> dataObj.put(key, value)
+                                is Number -> dataObj.put(key, value)
+                                is String -> dataObj.put(key, value)
+                                else -> dataObj.put(key, value.toString())
+                            }
+                        }
+                        put("data", dataObj)
+                    }
+                }
+                java.io.File(context.getExternalFilesDir(null), "debug_logs.txt").appendText("${logData.toString()}\n")
+            } catch (e: Exception) {
+                // Don't log logging failures to avoid infinite loops
+                android.util.Log.e(TAG, "Failed to write debug log: ${e.message}")
+            }
+        }
+        
         // Sound file mappings (must match audio_service.dart)
         // NOTE: shofar_candle removed - Candle lighting ALWAYS uses rav_shalom_shofar
         // IMPORTANT: File names must match actual files in assets/sounds/
@@ -73,6 +104,11 @@ class AlarmReceiver : BroadcastReceiver() {
         // CRITICAL: Verify this receiver can run even when app is completely closed
         // This log entry proves the receiver was called by the system
         Log.d(TAG, "✓ AlarmReceiver triggered by Android AlarmManager (app may be closed)")
+        writeDebugLog(context, "AlarmReceiver.kt:onReceive", "AlarmReceiver triggered by Android AlarmManager", mapOf(
+            "intentAction" to (intent.action ?: "null"),
+            "appMayBeClosed" to true,
+            "timestamp" to System.currentTimeMillis()
+        ))
         
         // Acquire a WakeLock to ensure the device stays awake long enough
         val powerManager = context.getSystemService(Context.POWER_SERVICE) as PowerManager
@@ -95,6 +131,10 @@ class AlarmReceiver : BroadcastReceiver() {
         )
         wakeLock.acquire(120000) // Hold for 2 minutes max (for audio playback)
         Log.d(TAG, "✓ WakeLock acquired")
+        writeDebugLog(context, "AlarmReceiver.kt:wakeLock", "WakeLock acquired", mapOf(
+            "wakeLockHeld" to wakeLock.isHeld,
+            "duration" to 120000
+        ))
         
         // #region agent log
         try {
@@ -129,6 +169,13 @@ class AlarmReceiver : BroadcastReceiver() {
             Log.d(TAG, "Is pre-notification: $isPreNotification")
             Log.d(TAG, "Candle lighting time: $candleLightingTime")
             Log.d(TAG, "Sound ID: $soundId")
+            writeDebugLog(context, "AlarmReceiver.kt:onReceive", "Alarm data extracted", mapOf(
+                "notificationId" to notificationId,
+                "title" to title,
+                "isPreNotification" to isPreNotification,
+                "soundId" to soundId,
+                "candleLightingTime" to candleLightingTime
+            ))
             
             // Check if notifications are enabled
             val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
@@ -137,26 +184,16 @@ class AlarmReceiver : BroadcastReceiver() {
                 notificationsEnabled = notificationManager.areNotificationsEnabled()
                 if (!notificationsEnabled) {
                     Log.e(TAG, "✗ CRITICAL: Notifications are disabled by user!")
-                    // #region agent log
-                    try {
-                        val logData = org.json.JSONObject().apply {
-                            put("timestamp", System.currentTimeMillis())
-                            put("location", "AlarmReceiver.kt:70")
-                            put("message", "Notifications disabled - returning early")
-                            put("sessionId", "debug-session")
-                            put("runId", "run1")
-                            put("hypothesisId", "D")
-                        }
-                        java.io.File(context.getExternalFilesDir(null), "debug_logs.txt").appendText("${logData.toString()}\n")
-                    } catch (e: Exception) {
-                        Log.e(TAG, "Failed to write debug log: ${e.message}")
-                    }
-                    // #endregion
+                    writeDebugLog(context, "AlarmReceiver.kt:notificationsCheck", "Notifications disabled - returning early", mapOf(
+                        "notificationsEnabled" to false,
+                        "action" to "returning_early"
+                    ))
                     
                     // CRITICAL FIX: Release wake lock before returning to avoid resource leak
                     if (wakeLock.isHeld) {
                         wakeLock.release()
                         Log.d(TAG, "✓ WakeLock released (notifications disabled)")
+                        writeDebugLog(context, "AlarmReceiver.kt:wakeLock", "WakeLock released (notifications disabled)")
                     }
                     return
                 }
@@ -190,12 +227,25 @@ class AlarmReceiver : BroadcastReceiver() {
                 val channel = notificationManager.getNotificationChannel(CHANNEL_ID)
                 if (channel == null) {
                     Log.e(TAG, "Notification channel is null!")
+                    writeDebugLog(context, "AlarmReceiver.kt:channelCheck", "Notification channel is null - recreating", mapOf(
+                        "channelId" to CHANNEL_ID,
+                        "action" to "recreating_channel"
+                    ))
                     createNotificationChannel(context, notificationManager)
                 } else {
                     channelImportance = channel.importance
                     Log.d(TAG, "Channel importance: ${channel.importance}")
+                    writeDebugLog(context, "AlarmReceiver.kt:channelCheck", "Channel verification complete", mapOf(
+                        "channelImportance" to channel.importance,
+                        "channelExists" to true,
+                        "canBypassDnd" to channel.canBypassDnd()
+                    ))
                     if (channel.importance == NotificationManager.IMPORTANCE_NONE) {
                         Log.e(TAG, "Notification channel is disabled!")
+                        writeDebugLog(context, "AlarmReceiver.kt:channelCheck", "CRITICAL: Notification channel is BLOCKED", mapOf(
+                            "channelImportance" to NotificationManager.IMPORTANCE_NONE,
+                            "userActionRequired" to true
+                        ))
                     }
                 }
             }
@@ -256,10 +306,20 @@ class AlarmReceiver : BroadcastReceiver() {
                     // This works even when app is completely closed
                     context.startForegroundService(serviceIntent)
                     Log.d(TAG, "✓ Started foreground service (Android 8.0+) for sound: $soundId")
+                    writeDebugLog(context, "AlarmReceiver.kt:serviceStart", "Started foreground service", mapOf(
+                        "method" to "startForegroundService",
+                        "soundId" to soundId,
+                        "androidVersion" to Build.VERSION.SDK_INT
+                    ))
                 } else {
                     // Android < 8.0: Use regular startService
                     context.startService(serviceIntent)
                     Log.d(TAG, "✓ Started service (Android < 8.0) for sound: $soundId")
+                    writeDebugLog(context, "AlarmReceiver.kt:serviceStart", "Started service", mapOf(
+                        "method" to "startService",
+                        "soundId" to soundId,
+                        "androidVersion" to Build.VERSION.SDK_INT
+                    ))
                 }
                 
                 // REMOVED: Service verification check
@@ -271,16 +331,36 @@ class AlarmReceiver : BroadcastReceiver() {
                 Log.e(TAG, "✗ CRITICAL: Cannot start foreground service: ${e.message}")
                 Log.e(TAG, "✗ This usually means the app was killed and Android blocked service startup")
                 Log.e(TAG, "✗ User may need to disable battery optimization for this app")
+                writeDebugLog(context, "AlarmReceiver.kt:serviceStart", "CRITICAL: Cannot start foreground service", mapOf(
+                    "error" to (e.message ?: "unknown"),
+                    "errorType" to "IllegalStateException",
+                    "soundId" to soundId,
+                    "userActionRequired" to true,
+                    "action" to "disable_battery_optimization"
+                ))
                 
                 // Try to start regular service as fallback (won't work on Android 8.0+ but worth trying)
                 try {
                     context.startService(serviceIntent)
                     Log.d(TAG, "✓ Fallback: Started regular service")
+                    writeDebugLog(context, "AlarmReceiver.kt:serviceStart", "Fallback service started", mapOf(
+                        "method" to "startService",
+                        "soundId" to soundId
+                    ))
                 } catch (e2: Exception) {
                     Log.e(TAG, "✗ Fallback service start also failed: ${e2.message}")
+                    writeDebugLog(context, "AlarmReceiver.kt:serviceStart", "Fallback service start failed", mapOf(
+                        "error" to (e2.message ?: "unknown"),
+                        "soundId" to soundId
+                    ))
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "✗ Error starting AlarmAudioService: ${e.message}", e)
+                writeDebugLog(context, "AlarmReceiver.kt:serviceStart", "Error starting AlarmAudioService", mapOf(
+                    "error" to (e.message ?: "unknown"),
+                    "errorType" to e.javaClass.simpleName,
+                    "soundId" to soundId
+                ))
             }
             
             // Create and show notification (without system sound since we play our own)
@@ -322,15 +402,28 @@ class AlarmReceiver : BroadcastReceiver() {
             }
             // #endregion
             Log.d(TAG, "Notification shown successfully")
+            writeDebugLog(context, "AlarmReceiver.kt:onReceive", "Notification shown successfully", mapOf(
+                "notificationId" to notificationId,
+                "title" to title,
+                "isPreNotification" to isPreNotification
+            ))
         } catch (e: Exception) {
             Log.e(TAG, "Error in onReceive: ${e.message}", e)
             e.printStackTrace()
+            writeDebugLog(context, "AlarmReceiver.kt:onReceive", "CRITICAL ERROR in onReceive", mapOf(
+                "error" to (e.message ?: "unknown"),
+                "errorType" to e.javaClass.simpleName,
+                "stackTrace" to e.stackTraceToString()
+            ))
         } finally {
             // Release wakelock after a delay to allow sound to play
             android.os.Handler(context.mainLooper).postDelayed({
                 if (wakeLock.isHeld) {
                     wakeLock.release()
                     Log.d(TAG, "WakeLock released")
+                    writeDebugLog(context, "AlarmReceiver.kt:wakeLock", "WakeLock released", mapOf(
+                        "delay" to 60000
+                    ))
                 }
             }, 60000) // Release after 60 seconds
         }
@@ -931,6 +1024,11 @@ class AlarmReceiver : BroadcastReceiver() {
                     // If channel importance is too low, recreate it with MAX importance
                     if (channel.importance < NotificationManager.IMPORTANCE_MAX) {
                         Log.w(TAG, "⚠️ Channel importance is too low (${channel.importance}), recreating with MAX importance")
+                        writeDebugLog(context, "AlarmReceiver.kt:channelCheck", "Channel importance too low - recreating", mapOf(
+                            "currentImportance" to channel.importance,
+                            "requiredImportance" to NotificationManager.IMPORTANCE_MAX,
+                            "action" to "recreating_channel"
+                        ))
                         createNotificationChannel(context, notificationManager)
                     }
                     
@@ -938,6 +1036,11 @@ class AlarmReceiver : BroadcastReceiver() {
                     if (channel.importance == NotificationManager.IMPORTANCE_NONE) {
                         Log.e(TAG, "✗ CRITICAL: Notification channel is BLOCKED by user!")
                         Log.e(TAG, "✗ User must enable notifications in system settings")
+                        writeDebugLog(context, "AlarmReceiver.kt:channelCheck", "CRITICAL: Notification channel is BLOCKED", mapOf(
+                            "channelImportance" to NotificationManager.IMPORTANCE_NONE,
+                            "userActionRequired" to true,
+                            "action" to "enable_notifications_in_settings"
+                        ))
                     }
                 }
             }
@@ -991,20 +1094,40 @@ class AlarmReceiver : BroadcastReceiver() {
                             Log.d(TAG, "✓ Notification confirmed visible in active notifications list")
                             Log.d(TAG, "✓ Notification tag: ${ourNotification.tag}")
                             Log.d(TAG, "✓ Notification channel: ${ourNotification.notification.channelId}")
+                            writeDebugLog(context, "AlarmReceiver.kt:notificationCheck", "Notification confirmed visible", mapOf(
+                                "notificationId" to id,
+                                "tag" to (ourNotification.tag ?: "null"),
+                                "channelId" to ourNotification.notification.channelId,
+                                "visible" to true
+                            ))
                         } else {
                             Log.e(TAG, "✗ CRITICAL: Notification posted but NOT found in active notifications!")
                             Log.e(TAG, "✗ This means it was suppressed or hidden by the system")
                             Log.e(TAG, "✗ Active notification count: ${activeNotifications.size}")
                             Log.e(TAG, "✗ Active notification IDs: ${activeNotifications.map { it.id }.joinToString()}")
+                            writeDebugLog(context, "AlarmReceiver.kt:notificationCheck", "CRITICAL: Notification not found in active list", mapOf(
+                                "notificationId" to id,
+                                "activeNotificationCount" to activeNotifications.size,
+                                "activeNotificationIds" to activeNotifications.map { it.id }.joinToString(),
+                                "suppressed" to true
+                            ))
                             
                             // Check channel status
                             val channel = notificationManager.getNotificationChannel(CHANNEL_ID)
                             if (channel != null) {
                                 Log.e(TAG, "✗ Channel importance: ${channel.importance}")
                                 Log.e(TAG, "✗ Channel blocked: ${channel.importance == NotificationManager.IMPORTANCE_NONE}")
+                                writeDebugLog(context, "AlarmReceiver.kt:notificationCheck", "Channel status check", mapOf(
+                                    "channelImportance" to channel.importance,
+                                    "channelBlocked" to (channel.importance == NotificationManager.IMPORTANCE_NONE)
+                                ))
                                 if (channel.importance == NotificationManager.IMPORTANCE_NONE) {
                                     Log.e(TAG, "✗ USER ACTION REQUIRED: Notification channel is BLOCKED!")
                                     Log.e(TAG, "✗ User must enable notifications in Settings > Apps > Shabbos!! > Notifications")
+                                    writeDebugLog(context, "AlarmReceiver.kt:notificationCheck", "USER ACTION REQUIRED: Channel blocked", mapOf(
+                                        "userActionRequired" to true,
+                                        "action" to "enable_notifications_in_settings"
+                                    ))
                                 }
                             }
                         }
@@ -1013,13 +1136,25 @@ class AlarmReceiver : BroadcastReceiver() {
             } else {
                 Log.e(TAG, "✗ CRITICAL: Notification was NOT posted!")
                 Log.e(TAG, "✗ Error: ${notificationError ?: "unknown"}")
+                writeDebugLog(context, "AlarmReceiver.kt:notificationPost", "CRITICAL: Notification was NOT posted", mapOf(
+                    "notificationId" to id,
+                    "error" to (notificationError ?: "unknown"),
+                    "title" to title
+                ))
                 
                 // Check if notifications are enabled
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
                     val notificationsEnabled = notificationManager.areNotificationsEnabled()
                     Log.e(TAG, "✗ System notifications enabled: $notificationsEnabled")
+                    writeDebugLog(context, "AlarmReceiver.kt:notificationPost", "System notifications check", mapOf(
+                        "notificationsEnabled" to notificationsEnabled
+                    ))
                     if (!notificationsEnabled) {
                         Log.e(TAG, "✗ USER ACTION REQUIRED: Notifications are disabled system-wide!")
+                        writeDebugLog(context, "AlarmReceiver.kt:notificationPost", "USER ACTION REQUIRED: Notifications disabled system-wide", mapOf(
+                            "userActionRequired" to true,
+                            "action" to "enable_system_notifications"
+                        ))
                     }
                 }
             }
@@ -1052,6 +1187,12 @@ class AlarmReceiver : BroadcastReceiver() {
         } catch (e: Exception) {
             Log.e(TAG, "Critical error in showNotification: ${e.message}", e)
             e.printStackTrace()
+            writeDebugLog(context, "AlarmReceiver.kt:showNotification", "CRITICAL ERROR in showNotification", mapOf(
+                "error" to (e.message ?: "unknown"),
+                "errorType" to e.javaClass.simpleName,
+                "notificationId" to id,
+                "stackTrace" to e.stackTraceToString()
+            ))
         }
     }
 }
