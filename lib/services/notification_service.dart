@@ -467,6 +467,59 @@ class NotificationService {
     return status;
   }
 
+  /// CRITICAL: Validate all Android conditions before scheduling alarms
+  /// Returns validation result with issues list
+  Future<Map<String, dynamic>> _validateAndroidConditions() async {
+    final issues = <String>[];
+    bool canSchedule = true;
+
+    // 1. Check notification permission (Android 13+)
+    if (Platform.isAndroid) {
+      final android = _notifications
+          .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin
+          >();
+      
+      if (android != null) {
+        final notificationsEnabled = await android.areNotificationsEnabled() ?? false;
+        if (!notificationsEnabled) {
+          issues.add('Notifications disabled');
+          canSchedule = false;
+          debugPrint('NotificationService: ✗ Notifications are disabled');
+        } else {
+          debugPrint('NotificationService: ✓ Notifications enabled');
+        }
+      }
+    }
+
+    // 2. Check exact alarm permission (Android 12+)
+    final canScheduleExact = await NativeAlarmService.canScheduleExactAlarms();
+    if (!canScheduleExact) {
+      issues.add('Exact alarm permission missing');
+      canSchedule = false;
+      debugPrint('NotificationService: ✗ Exact alarm permission missing');
+    } else {
+      debugPrint('NotificationService: ✓ Exact alarm permission granted');
+    }
+
+    // 3. Check battery optimization
+    final isIgnoringBattery = await NativeAlarmService.isIgnoringBatteryOptimizations();
+    if (!isIgnoringBattery) {
+      issues.add('Battery optimization enabled (may cause failures)');
+      // Don't set canSchedule = false for this - it's a warning, not a blocker
+      // Alarms can still work with battery optimization, just less reliably
+      debugPrint('NotificationService: ⚠️ Battery optimization enabled (reliability reduced)');
+    } else {
+      debugPrint('NotificationService: ✓ Battery optimization disabled');
+    }
+
+    return {
+      'canSchedule': canSchedule,
+      'issues': issues,
+      'warnings': isIgnoringBattery ? <String>[] : ['Battery optimization enabled'],
+    };
+  }
+
   /// Check if app can schedule exact alarms (Android 12+)
   /// Returns true if permission is granted or not required (Android < 12)
   Future<bool> canScheduleExactAlarms() async {
@@ -716,6 +769,25 @@ class NotificationService {
     );
 
     await initialize();
+
+    // CRITICAL: Proactive validation before scheduling
+    // Check all permissions and system settings to ensure alarms will work
+    if (Platform.isAndroid) {
+      final validationResult = await _validateAndroidConditions();
+      if (!validationResult['canSchedule']) {
+        final issues = validationResult['issues'] as List<String>;
+        debugPrint('NotificationService: ⚠️ CRITICAL: Cannot schedule alarms reliably!');
+        debugPrint('NotificationService: Issues found: ${issues.join(", ")}');
+        _addDiagnosticLog('⚠️ CRITICAL: Cannot schedule alarms - ${issues.join(", ")}');
+        _addDiagnosticLog('⚠️ User action required before alarms will work');
+        
+        // Still attempt to schedule (user might fix issues before alarm time)
+        // But log the warning clearly
+      } else {
+        debugPrint('NotificationService: ✓ All conditions validated - alarms should work');
+        _addDiagnosticLog('✓ All conditions validated - alarms should work reliably');
+      }
+    }
 
     // Cancel all existing notifications and alarms (unless skipping cancellation)
     if (!skipCancellation) {

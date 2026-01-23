@@ -232,6 +232,10 @@ class AlarmAudioService : Service() {
                 playSoundFromAsset(defaultPath)
             } else {
                 Log.e(TAG, "✗ CRITICAL: Even default sound path is null!")
+                writeDebugLog("AlarmAudioService.kt:playSound", "CRITICAL: Even default sound path is null", mapOf(
+                    "soundId" to soundId,
+                    "availableSounds" to SOUND_FILES.keys.joinToString()
+                ))
                 stopSelf()
             }
             return
@@ -287,6 +291,10 @@ class AlarmAudioService : Service() {
                         Log.d(TAG, "✓ Attempted to unmute alarm stream")
                     } catch (e: SecurityException) {
                         Log.e(TAG, "✗ Cannot unmute: Missing MODIFY_AUDIO_SETTINGS permission")
+                        writeDebugLog("AlarmAudioService.kt:volumeCheck", "Cannot unmute - permission denied", mapOf(
+                            "error" to "SecurityException",
+                            "permission" to "MODIFY_AUDIO_SETTINGS"
+                        ))
                     }
                 }
                 
@@ -371,6 +379,11 @@ class AlarmAudioService : Service() {
                     Log.d(TAG, "✓ Data source set successfully")
                 } catch (e: Exception) {
                     Log.e(TAG, "✗ Error opening asset: ${e.message}", e)
+                    writeDebugLog("AlarmAudioService.kt:playSoundFromAsset", "Error opening asset", mapOf(
+                        "assetPath" to assetPath,
+                        "error" to (e.message ?: "unknown"),
+                        "errorType" to e.javaClass.simpleName
+                    ))
                     afd?.close()
                     throw e
                 }
@@ -440,6 +453,9 @@ class AlarmAudioService : Service() {
                                 Log.e(TAG, "MediaPlayer state after start: ${if (isPlaying) "PLAYING" else "NOT PLAYING"}")
                             } catch (e: Exception) {
                                 Log.e(TAG, "Could not check MediaPlayer state: ${e.message}")
+                                writeDebugLog("AlarmAudioService.kt:playback", "Could not check MediaPlayer state", mapOf(
+                                    "error" to (e.message ?: "unknown")
+                                ))
                             }
                             
                             // Try to restart playback with volume adjustment
@@ -453,6 +469,9 @@ class AlarmAudioService : Service() {
                                         }
                                     } catch (e: Exception) {
                                         Log.e(TAG, "Retry failed: ${e.message}")
+                                        writeDebugLog("AlarmAudioService.kt:playback", "Retry playback failed", mapOf(
+                                            "error" to (e.message ?: "unknown")
+                                        ))
                                     }
                                 }, 100)
                             }
@@ -482,8 +501,16 @@ class AlarmAudioService : Service() {
                                 Log.e(TAG, "  - Audio system issue")
                             } else if (stillPlaying) {
                                 Log.d(TAG, "✓ Playback confirmed - audio is playing at position $currentPos ms")
+                                writeDebugLog("AlarmAudioService.kt:playback", "Playback confirmed after 500ms", mapOf(
+                                    "isPlaying" to stillPlaying,
+                                    "position" to currentPos
+                                ))
                             } else {
                                 Log.w(TAG, "⚠️ Playback stopped but position is $currentPos ms (might have completed quickly)")
+                                writeDebugLog("AlarmAudioService.kt:playback", "Playback stopped but position > 0", mapOf(
+                                    "isPlaying" to stillPlaying,
+                                    "position" to currentPos
+                                ))
                             }
                         }, 500)
                         
@@ -509,6 +536,11 @@ class AlarmAudioService : Service() {
                     } catch (e: Exception) {
                         Log.e(TAG, "✗ CRITICAL ERROR starting playback: ${e.message}", e)
                         e.printStackTrace()
+                        writeDebugLog("AlarmAudioService.kt:playback", "CRITICAL ERROR starting playback", mapOf(
+                            "error" to (e.message ?: "unknown"),
+                            "errorType" to e.javaClass.simpleName,
+                            "stackTrace" to e.stackTraceToString()
+                        ))
                         stopSelf()
                     }
                     Log.d(TAG, "========================================")
@@ -591,6 +623,9 @@ class AlarmAudioService : Service() {
                 Log.d(TAG, "✓ MediaPlayer released")
             } catch (e: Exception) {
                 Log.e(TAG, "Error releasing MediaPlayer: ${e.message}", e)
+                writeDebugLog("AlarmAudioService.kt:releaseMediaPlayer", "Error releasing MediaPlayer", mapOf(
+                    "error" to (e.message ?: "unknown")
+                ))
             }
             mediaPlayer = null
         }
@@ -610,6 +645,9 @@ class AlarmAudioService : Service() {
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Error releasing audio focus: ${e.message}")
+                writeDebugLog("AlarmAudioService.kt:releaseAudioFocus", "Error releasing audio focus", mapOf(
+                    "error" to (e.message ?: "unknown")
+                ))
             }
         }
         audioFocusRequest = null

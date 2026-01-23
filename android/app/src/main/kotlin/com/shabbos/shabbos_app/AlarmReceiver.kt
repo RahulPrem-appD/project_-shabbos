@@ -16,6 +16,7 @@ import android.os.PowerManager
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
+import androidx.core.content.ContextCompat
 
 class AlarmReceiver : BroadcastReceiver() {
     companion object {
@@ -109,6 +110,34 @@ class AlarmReceiver : BroadcastReceiver() {
             "appMayBeClosed" to true,
             "timestamp" to System.currentTimeMillis()
         ))
+        
+        // CRITICAL: Pre-execution validation - check conditions before proceeding
+        // This helps catch issues early and provides better diagnostics
+        val preExecutionIssues = mutableListOf<String>()
+        
+        // Check battery optimization (if enabled, we might have been killed)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            val powerManager = context.getSystemService(Context.POWER_SERVICE) as PowerManager
+            val isIgnoringBattery = powerManager.isIgnoringBatteryOptimizations(context.packageName)
+            if (!isIgnoringBattery) {
+                preExecutionIssues.add("Battery optimization enabled")
+                Log.w(TAG, "⚠️ WARNING: Battery optimization is enabled - app may have been killed")
+                writeDebugLog(context, "AlarmReceiver.kt:preExecution", "WARNING: Battery optimization enabled", mapOf(
+                    "risk" to "app_may_have_been_killed",
+                    "receiverStillRan" to true
+                ))
+            }
+        }
+        
+        if (preExecutionIssues.isNotEmpty()) {
+            Log.w(TAG, "⚠️ Pre-execution warnings:")
+            preExecutionIssues.forEach { issue ->
+                Log.w(TAG, "  - $issue")
+            }
+            Log.w(TAG, "⚠️ Continuing anyway - receiver was called, so system allowed it")
+        } else {
+            Log.d(TAG, "✓ Pre-execution validation passed")
+        }
         
         // Acquire a WakeLock to ensure the device stays awake long enough
         val powerManager = context.getSystemService(Context.POWER_SERVICE) as PowerManager
@@ -408,12 +437,13 @@ class AlarmReceiver : BroadcastReceiver() {
                 "isPreNotification" to isPreNotification
             ))
         } catch (e: Exception) {
-            Log.e(TAG, "Error in onReceive: ${e.message}", e)
+            Log.e(TAG, "✗ CRITICAL ERROR in onReceive: ${e.message}", e)
             e.printStackTrace()
             writeDebugLog(context, "AlarmReceiver.kt:onReceive", "CRITICAL ERROR in onReceive", mapOf(
                 "error" to (e.message ?: "unknown"),
                 "errorType" to e.javaClass.simpleName,
-                "stackTrace" to e.stackTraceToString()
+                "stackTrace" to e.stackTraceToString(),
+                "intentAction" to (intent?.action ?: "null")
             ))
         } finally {
             // Release wakelock after a delay to allow sound to play
@@ -456,6 +486,11 @@ class AlarmReceiver : BroadcastReceiver() {
                 Log.e(TAG, "✗ No asset path found for sound ID: '$soundId'")
                 Log.e(TAG, "✗ This might mean the sound ID is misspelled or not registered")
                 Log.d(TAG, "Falling back to default shofar sound (rav_shalom_shofar)")
+                writeDebugLog(context, "AlarmReceiver.kt:playCustomSound", "Sound ID not found - falling back", mapOf(
+                    "soundId" to soundId,
+                    "availableSounds" to SOUND_FILES.keys.joinToString(),
+                    "fallbackTo" to "rav_shalom_shofar"
+                ))
                 playAssetSound(context, SOUND_FILES["rav_shalom_shofar"]!!)
                 return
             }
@@ -467,13 +502,23 @@ class AlarmReceiver : BroadcastReceiver() {
         } catch (e: Exception) {
             Log.e(TAG, "✗ Error in playCustomSound: ${e.message}", e)
             e.printStackTrace()
+            writeDebugLog(context, "AlarmReceiver.kt:playCustomSound", "Error in playCustomSound", mapOf(
+                "error" to (e.message ?: "unknown"),
+                "errorType" to e.javaClass.simpleName,
+                "soundId" to soundId
+            ))
             
             // Try system sound as ultimate fallback
             try {
                 Log.d(TAG, "Attempting system notification sound as fallback")
+                writeDebugLog(context, "AlarmReceiver.kt:playCustomSound", "Attempting system sound fallback")
                 playDefaultNotificationSound(context)
             } catch (e2: Exception) {
                 Log.e(TAG, "✗ Even fallback sound failed: ${e2.message}")
+                writeDebugLog(context, "AlarmReceiver.kt:playCustomSound", "CRITICAL: Even fallback sound failed", mapOf(
+                    "error" to (e2.message ?: "unknown"),
+                    "errorType" to e2.javaClass.simpleName
+                ))
             }
         }
     }
@@ -493,9 +538,13 @@ class AlarmReceiver : BroadcastReceiver() {
                 Log.d(TAG, "✓ Default notification sound played")
             } else {
                 Log.w(TAG, "No default notification sound available")
+                writeDebugLog(context, "AlarmReceiver.kt:playDefaultNotificationSound", "No default notification sound available")
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error playing default notification sound: ${e.message}", e)
+            writeDebugLog(context, "AlarmReceiver.kt:playDefaultNotificationSound", "Error playing default notification sound", mapOf(
+                "error" to (e.message ?: "unknown")
+            ))
         }
     }
     
@@ -539,16 +588,27 @@ class AlarmReceiver : BroadcastReceiver() {
                 
                 if (!fileExists) {
                     Log.e(TAG, "✗ Sound file NOT found in assets! Available: ${assetList?.joinToString()}")
+                    writeDebugLog(context, "AlarmReceiver.kt:playAssetSound", "Sound file NOT found in assets", mapOf(
+                        "assetPath" to assetPath,
+                        "fileName" to fileName,
+                        "availableFiles" to (assetList?.joinToString() ?: "none")
+                    ))
                     // Try to play default shofar as fallback
                     val defaultPath = SOUND_FILES["rav_shalom_shofar"]
                     if (defaultPath != null && defaultPath != assetPath) {
                         Log.d(TAG, "Falling back to default shofar sound")
+                        writeDebugLog(context, "AlarmReceiver.kt:playAssetSound", "Falling back to default shofar", mapOf(
+                            "fallbackPath" to defaultPath
+                        ))
                         playAssetSound(context, defaultPath)
                         return
                     }
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Could not list assets: ${e.message}")
+                writeDebugLog(context, "AlarmReceiver.kt:playAssetSound", "Could not list assets", mapOf(
+                    "error" to (e.message ?: "unknown")
+                ))
             }
             
             Log.d(TAG, "Creating MediaPlayer...")
@@ -563,10 +623,17 @@ class AlarmReceiver : BroadcastReceiver() {
                 } catch (e: java.io.FileNotFoundException) {
                     Log.e(TAG, "✗ File not found: $assetPath")
                     Log.e(TAG, "✗ Exception: ${e.message}")
+                    writeDebugLog(context, "AlarmReceiver.kt:playAssetSound", "File not found exception", mapOf(
+                        "assetPath" to assetPath,
+                        "error" to (e.message ?: "unknown")
+                    ))
                     // Try default sound as fallback
                     val defaultPath = SOUND_FILES["rav_shalom_shofar"]
                     if (defaultPath != null && defaultPath != assetPath) {
                         Log.d(TAG, "Falling back to default shofar sound after file not found")
+                        writeDebugLog(context, "AlarmReceiver.kt:playAssetSound", "Falling back after file not found", mapOf(
+                            "fallbackPath" to defaultPath
+                        ))
                         release()
                         playAssetSound(context, defaultPath)
                         return
@@ -668,6 +735,10 @@ class AlarmReceiver : BroadcastReceiver() {
                             Log.d(TAG, "✓ MediaPlayer.start() called - isPlaying: ${isPlaying}")
                         } catch (e: Exception) {
                             Log.e(TAG, "✗ Error starting playback: ${e.message}")
+                            writeDebugLog(context, "AlarmReceiver.kt:playAssetSound", "Error starting playback", mapOf(
+                                "error" to (e.message ?: "unknown"),
+                                "assetPath" to assetPath
+                            ))
                             // #region agent log
                             try {
                                 val logData = org.json.JSONObject().apply {
@@ -687,9 +758,14 @@ class AlarmReceiver : BroadcastReceiver() {
                             }
                             // #endregion
                         }
-                    } else {
-                        Log.e(TAG, "✗ Audio focus NOT granted! Result: $audioFocusResult")
-                        // #region agent log
+                        } else {
+                            Log.e(TAG, "✗ Audio focus NOT granted! Result: $audioFocusResult")
+                            writeDebugLog(context, "AlarmReceiver.kt:playAssetSound", "Audio focus NOT granted", mapOf(
+                                "audioFocusResult" to audioFocusResult,
+                                "expected" to AudioManager.AUDIOFOCUS_REQUEST_GRANTED,
+                                "assetPath" to assetPath
+                            ))
+                            // #region agent log
                         try {
                             val logData = org.json.JSONObject().apply {
                                 put("timestamp", System.currentTimeMillis())
@@ -718,6 +794,11 @@ class AlarmReceiver : BroadcastReceiver() {
                 
                 setOnErrorListener { _, what, extra ->
                     Log.e(TAG, "✗ MediaPlayer error: what=$what, extra=$extra")
+                    writeDebugLog(context, "AlarmReceiver.kt:playAssetSound", "MediaPlayer ERROR", mapOf(
+                        "what" to what,
+                        "extra" to extra,
+                        "assetPath" to assetPath
+                    ))
                     // #region agent log
                     try {
                         val logData = org.json.JSONObject().apply {
@@ -752,13 +833,24 @@ class AlarmReceiver : BroadcastReceiver() {
         } catch (e: Exception) {
             Log.e(TAG, "✗ Error setting up MediaPlayer: ${e.message}", e)
             e.printStackTrace()
+            writeDebugLog(context, "AlarmReceiver.kt:playAssetSound", "CRITICAL ERROR setting up MediaPlayer", mapOf(
+                "error" to (e.message ?: "unknown"),
+                "errorType" to e.javaClass.simpleName,
+                "assetPath" to assetPath,
+                "stackTrace" to e.stackTraceToString()
+            ))
             
             // Last resort: try default notification sound
             Log.d(TAG, "Attempting to play system notification sound as last resort")
+            writeDebugLog(context, "AlarmReceiver.kt:playAssetSound", "Attempting system sound as last resort")
             try {
                 playDefaultNotificationSound(context)
             } catch (e2: Exception) {
                 Log.e(TAG, "✗ Even system sound failed: ${e2.message}")
+                writeDebugLog(context, "AlarmReceiver.kt:playAssetSound", "CRITICAL: Even system sound failed", mapOf(
+                    "error" to (e2.message ?: "unknown"),
+                    "errorType" to e2.javaClass.simpleName
+                ))
             }
         }
     }
@@ -781,6 +873,9 @@ class AlarmReceiver : BroadcastReceiver() {
                         AudioManager.AUDIOFOCUS_LOSS, AudioManager.AUDIOFOCUS_LOSS_TRANSIENT -> {
                             // Don't pause alarms - they should play regardless
                             Log.w(TAG, "Audio focus lost but continuing alarm playback")
+                            writeDebugLog(context, "AlarmReceiver.kt:requestAudioFocus", "Audio focus lost but continuing", mapOf(
+                                "focusChange" to focusChange
+                            ))
                         }
                         AudioManager.AUDIOFOCUS_GAIN -> {
                             // Resume playback if focus is regained
@@ -819,6 +914,9 @@ class AlarmReceiver : BroadcastReceiver() {
             Log.d(TAG, "Audio focus released")
         } catch (e: Exception) {
             Log.e(TAG, "Error releasing audio focus: ${e.message}")
+            writeDebugLog(context, "AlarmReceiver.kt:releaseAudioFocus", "Error releasing audio focus", mapOf(
+                "error" to (e.message ?: "unknown")
+            ))
         }
     }
     
@@ -870,9 +968,17 @@ class AlarmReceiver : BroadcastReceiver() {
                 if (createdChannel.importance != NotificationManager.IMPORTANCE_MAX) {
                     Log.e(TAG, "✗ WARNING: Channel importance is ${createdChannel.importance}, expected ${NotificationManager.IMPORTANCE_MAX}!")
                     Log.e(TAG, "✗ User may have manually changed channel settings in system settings")
+                    writeDebugLog(context, "AlarmReceiver.kt:createNotificationChannel", "WARNING: Channel importance mismatch", mapOf(
+                        "actualImportance" to createdChannel.importance,
+                        "expectedImportance" to NotificationManager.IMPORTANCE_MAX,
+                        "userActionPossible" to true
+                    ))
                 }
             } else {
                 Log.e(TAG, "✗ CRITICAL: Channel was not created!")
+                writeDebugLog(context, "AlarmReceiver.kt:createNotificationChannel", "CRITICAL: Channel was not created", mapOf(
+                    "channelId" to CHANNEL_ID
+                ))
             }
         }
     }
@@ -1012,8 +1118,88 @@ class AlarmReceiver : BroadcastReceiver() {
             // Use NotificationManager directly for more reliability
             val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             
+            // CRITICAL: Comprehensive permission and system state checks BEFORE posting
+            var systemBlockingReasons = mutableListOf<String>()
+            
+            // 1. Check POST_NOTIFICATIONS runtime permission (Android 13+)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                val permissionStatus = ContextCompat.checkSelfPermission(context, android.Manifest.permission.POST_NOTIFICATIONS)
+                val hasPostNotificationPermission = permissionStatus == android.content.pm.PackageManager.PERMISSION_GRANTED
+                
+                if (!hasPostNotificationPermission) {
+                    systemBlockingReasons.add("POST_NOTIFICATIONS permission denied")
+                    Log.e(TAG, "✗ CRITICAL: POST_NOTIFICATIONS runtime permission is DENIED!")
+                    Log.e(TAG, "✗ Notification will NOT appear on Android 13+")
+                    writeDebugLog(context, "AlarmReceiver.kt:permissionCheck", "CRITICAL: POST_NOTIFICATIONS permission denied", mapOf(
+                        "permissionStatus" to permissionStatus,
+                        "androidVersion" to Build.VERSION.SDK_INT,
+                        "userActionRequired" to true,
+                        "action" to "grant_post_notifications_permission"
+                    ))
+                } else {
+                    Log.d(TAG, "✓ POST_NOTIFICATIONS permission granted")
+                }
+            }
+            
+            // 2. Check system-level notification enablement
+            var systemNotificationsEnabled = true
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                systemNotificationsEnabled = notificationManager.areNotificationsEnabled()
+                if (!systemNotificationsEnabled) {
+                    systemBlockingReasons.add("System notifications disabled")
+                    Log.e(TAG, "✗ CRITICAL: System notifications are DISABLED!")
+                    writeDebugLog(context, "AlarmReceiver.kt:systemCheck", "CRITICAL: System notifications disabled", mapOf(
+                        "userActionRequired" to true,
+                        "action" to "enable_system_notifications"
+                    ))
+                } else {
+                    Log.d(TAG, "✓ System notifications enabled")
+                }
+            }
+            
+            // 3. Check battery optimization (if enabled, app might be killed)
+            var isIgnoringBatteryOptimizations = false
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                val powerManager = context.getSystemService(Context.POWER_SERVICE) as android.os.PowerManager
+                isIgnoringBatteryOptimizations = powerManager.isIgnoringBatteryOptimizations(context.packageName)
+                if (!isIgnoringBatteryOptimizations) {
+                    Log.w(TAG, "⚠️ WARNING: Battery optimization is ENABLED - app may be killed!")
+                    Log.w(TAG, "⚠️ This receiver might not run if app is killed")
+                    writeDebugLog(context, "AlarmReceiver.kt:batteryCheck", "WARNING: Battery optimization enabled", mapOf(
+                        "isIgnoringBatteryOptimizations" to false,
+                        "risk" to "app_may_be_killed",
+                        "userActionRecommended" to true
+                    ))
+                } else {
+                    Log.d(TAG, "✓ Battery optimization disabled (good)")
+                }
+            }
+            
+            // 4. Check Do Not Disturb mode (even with bypass, some modes might suppress)
+            var dndMode = 0
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+                dndMode = notificationManager.currentInterruptionFilter
+                val dndNames = mapOf(
+                    NotificationManager.INTERRUPTION_FILTER_ALL to "ALL",
+                    NotificationManager.INTERRUPTION_FILTER_PRIORITY to "PRIORITY",
+                    NotificationManager.INTERRUPTION_FILTER_NONE to "NONE",
+                    NotificationManager.INTERRUPTION_FILTER_ALARMS to "ALARMS",
+                    NotificationManager.INTERRUPTION_FILTER_UNKNOWN to "UNKNOWN"
+                )
+                Log.d(TAG, "Do Not Disturb mode: ${dndNames[dndMode] ?: dndMode}")
+                if (dndMode == NotificationManager.INTERRUPTION_FILTER_NONE) {
+                    Log.w(TAG, "⚠️ WARNING: DND is set to NONE - notifications may be suppressed")
+                    writeDebugLog(context, "AlarmReceiver.kt:dndCheck", "WARNING: DND mode is NONE", mapOf(
+                        "dndMode" to dndMode,
+                        "risk" to "notifications_may_be_suppressed"
+                    ))
+                }
+            }
+            
             // CRITICAL: Ensure notification is visible
-            // On Android 8.0+, check channel importance
+            // On Android 8.0+, check channel importance BEFORE posting
+            var channelBlocked = false
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 val channel = notificationManager.getNotificationChannel(CHANNEL_ID)
                 if (channel != null) {
@@ -1021,8 +1207,22 @@ class AlarmReceiver : BroadcastReceiver() {
                     Log.d(TAG, "Notification channel can bypass DND: ${channel.canBypassDnd()}")
                     Log.d(TAG, "Notification channel can show badge: ${channel.canShowBadge()}")
                     
+                    // CRITICAL: Check if channel is blocked BEFORE attempting to post
+                    if (channel.importance == NotificationManager.IMPORTANCE_NONE) {
+                        channelBlocked = true
+                        Log.e(TAG, "✗ CRITICAL: Notification channel is BLOCKED by user!")
+                        Log.e(TAG, "✗ Notification will NOT appear even if notify() succeeds!")
+                        Log.e(TAG, "✗ User must enable notifications in system settings")
+                        writeDebugLog(context, "AlarmReceiver.kt:channelCheck", "CRITICAL: Notification channel is BLOCKED", mapOf(
+                            "channelImportance" to NotificationManager.IMPORTANCE_NONE,
+                            "userActionRequired" to true,
+                            "action" to "enable_notifications_in_settings",
+                            "notificationWillFail" to true
+                        ))
+                    }
+                    
                     // If channel importance is too low, recreate it with MAX importance
-                    if (channel.importance < NotificationManager.IMPORTANCE_MAX) {
+                    if (channel.importance < NotificationManager.IMPORTANCE_MAX && !channelBlocked) {
                         Log.w(TAG, "⚠️ Channel importance is too low (${channel.importance}), recreating with MAX importance")
                         writeDebugLog(context, "AlarmReceiver.kt:channelCheck", "Channel importance too low - recreating", mapOf(
                             "currentImportance" to channel.importance,
@@ -1031,109 +1231,272 @@ class AlarmReceiver : BroadcastReceiver() {
                         ))
                         createNotificationChannel(context, notificationManager)
                     }
-                    
-                    // Check if channel is blocked by user
-                    if (channel.importance == NotificationManager.IMPORTANCE_NONE) {
-                        Log.e(TAG, "✗ CRITICAL: Notification channel is BLOCKED by user!")
-                        Log.e(TAG, "✗ User must enable notifications in system settings")
-                        writeDebugLog(context, "AlarmReceiver.kt:channelCheck", "CRITICAL: Notification channel is BLOCKED", mapOf(
-                            "channelImportance" to NotificationManager.IMPORTANCE_NONE,
-                            "userActionRequired" to true,
-                            "action" to "enable_notifications_in_settings"
-                        ))
-                    }
+                } else {
+                    Log.e(TAG, "✗ CRITICAL: Notification channel is NULL!")
+                    writeDebugLog(context, "AlarmReceiver.kt:channelCheck", "CRITICAL: Notification channel is NULL", mapOf(
+                        "channelId" to CHANNEL_ID,
+                        "action" to "recreating_channel"
+                    ))
+                    createNotificationChannel(context, notificationManager)
                 }
+            }
+            
+            // CRITICAL: If channel is blocked, notify() will succeed but notification won't appear
+            // We'll still attempt to post (user might have unblocked it) but verify immediately
+            if (channelBlocked) {
+                systemBlockingReasons.add("Notification channel blocked")
+                Log.e(TAG, "⚠️ WARNING: Channel is blocked - notification will likely fail silently")
+                Log.e(TAG, "⚠️ Attempting to post anyway (user might have unblocked it)")
+                writeDebugLog(context, "AlarmReceiver.kt:showNotification", "WARNING: Channel blocked - will verify after posting", mapOf(
+                    "notificationId" to id,
+                    "title" to title,
+                    "channelBlocked" to true,
+                    "willVerify" to true
+                ))
+            }
+            
+            // Log all blocking reasons before attempting to post
+            if (systemBlockingReasons.isNotEmpty()) {
+                Log.e(TAG, "✗ CRITICAL: ${systemBlockingReasons.size} system blocking reason(s) detected:")
+                systemBlockingReasons.forEach { reason ->
+                    Log.e(TAG, "  - $reason")
+                }
+                writeDebugLog(context, "AlarmReceiver.kt:prePostCheck", "CRITICAL: System blocking reasons detected", mapOf(
+                    "blockingReasons" to systemBlockingReasons,
+                    "count" to systemBlockingReasons.size,
+                    "notificationId" to id,
+                    "willStillAttempt" to true
+                ))
+            } else {
+                Log.d(TAG, "✓ All system checks passed - notification should appear")
+                writeDebugLog(context, "AlarmReceiver.kt:prePostCheck", "All system checks passed", mapOf(
+                    "systemNotificationsEnabled" to systemNotificationsEnabled,
+                    "isIgnoringBatteryOptimizations" to isIgnoringBatteryOptimizations,
+                    "dndMode" to dndMode,
+                    "channelBlocked" to channelBlocked
+                ))
             }
             
             var notificationPosted = false
             var notificationError: String? = null
             try {
+                // CRITICAL: notify() can succeed even if notification is suppressed!
+                // We must verify it actually appears
                 notificationManager.notify(id, notification)
-                notificationPosted = true
-                Log.d(TAG, "✓ Notification posted successfully with ID: $id using NotificationManager")
-                Log.d(TAG, "✓ Notification title: $title")
-                Log.d(TAG, "✓ Notification body: $body")
-                Log.d(TAG, "✓ Notification priority: ${notification.priority}")
+                
+                // CRITICAL: Immediately verify notification was actually posted
+                // notify() doesn't throw if notification is suppressed
+                var actuallyPosted = false
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    val activeNotifications = notificationManager.activeNotifications
+                    actuallyPosted = activeNotifications.any { it.id == id }
+                    if (!actuallyPosted) {
+                        Log.e(TAG, "✗ CRITICAL: notify() succeeded but notification NOT in active list!")
+                        Log.e(TAG, "✗ This means notification was suppressed by the system")
+                        notificationError = "Notification suppressed by system (notify() succeeded but not visible)"
+                        
+                        // Check channel again - might have been blocked
+                        val channelAfterPost = notificationManager.getNotificationChannel(CHANNEL_ID)
+                        val channelStillBlocked = channelAfterPost?.importance == NotificationManager.IMPORTANCE_NONE
+                        
+                        // Re-check all system blocking reasons
+                        val postBlockingReasons = mutableListOf<String>()
+                        if (channelStillBlocked) postBlockingReasons.add("Channel blocked")
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                            val permissionStatus = ContextCompat.checkSelfPermission(context, android.Manifest.permission.POST_NOTIFICATIONS)
+                            if (permissionStatus != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                                postBlockingReasons.add("POST_NOTIFICATIONS denied")
+                            }
+                        }
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                            if (!notificationManager.areNotificationsEnabled()) {
+                                postBlockingReasons.add("System notifications disabled")
+                            }
+                        }
+                        
+                        writeDebugLog(context, "AlarmReceiver.kt:showNotification", "CRITICAL: notify() succeeded but notification not visible", mapOf(
+                            "notificationId" to id,
+                            "activeNotificationCount" to activeNotifications.size,
+                            "suppressed" to true,
+                            "channelBlocked" to channelStillBlocked,
+                            "channelImportance" to (channelAfterPost?.importance ?: -1),
+                            "blockingReasons" to postBlockingReasons,
+                            "blockingReasonCount" to postBlockingReasons.size
+                        ))
+                        
+                        if (postBlockingReasons.isNotEmpty()) {
+                            Log.e(TAG, "✗ Notification suppressed - blocking reasons:")
+                            postBlockingReasons.forEach { reason ->
+                                Log.e(TAG, "  - $reason")
+                            }
+                            Log.e(TAG, "✗ USER ACTION REQUIRED: Fix notification settings in Settings > Apps > Shabbos!! > Notifications")
+                        }
+                    } else {
+                        notificationPosted = true
+                        Log.d(TAG, "✓ Notification posted successfully with ID: $id using NotificationManager")
+                        Log.d(TAG, "✓ Notification title: $title")
+                        Log.d(TAG, "✓ Notification body: $body")
+                        Log.d(TAG, "✓ Notification priority: ${notification.priority}")
+                        Log.d(TAG, "✓ Notification verified in active notifications list")
+                    }
+                } else {
+                    // Android < 8.0: Can't verify, assume success
+                    notificationPosted = true
+                    Log.d(TAG, "✓ Notification posted successfully with ID: $id using NotificationManager")
+                    Log.d(TAG, "✓ Notification title: $title")
+                    Log.d(TAG, "✓ Notification body: $body")
+                    Log.d(TAG, "✓ Notification priority: ${notification.priority}")
+                }
             } catch (e: SecurityException) {
                 notificationError = "SecurityException: ${e.message}"
                 Log.e(TAG, "SecurityException with NotificationManager: ${e.message}", e)
+                writeDebugLog(context, "AlarmReceiver.kt:showNotification", "SecurityException posting notification", mapOf(
+                    "notificationId" to id,
+                    "error" to (e.message ?: "unknown"),
+                    "action" to "fallback_to_compat"
+                ))
                 // Fallback to NotificationManagerCompat
                 try {
                     NotificationManagerCompat.from(context).notify(id, notification)
-                    notificationPosted = true
-                    Log.d(TAG, "Notification posted successfully with ID: $id using NotificationManagerCompat (fallback)")
+                    
+                    // CRITICAL: Verify fallback also worked
+                    var fallbackPosted = false
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                        val activeNotifications = notificationManager.activeNotifications
+                        fallbackPosted = activeNotifications.any { it.id == id }
+                        if (!fallbackPosted) {
+                            Log.e(TAG, "✗ CRITICAL: Fallback notify() succeeded but notification NOT visible!")
+                            notificationError = "Fallback also suppressed by system"
+                            writeDebugLog(context, "AlarmReceiver.kt:showNotification", "CRITICAL: Fallback also suppressed", mapOf(
+                                "notificationId" to id,
+                                "method" to "NotificationManagerCompat",
+                                "suppressed" to true
+                            ))
+                        } else {
+                            notificationPosted = true
+                            Log.d(TAG, "Notification posted successfully with ID: $id using NotificationManagerCompat (fallback)")
+                            Log.d(TAG, "✓ Fallback notification verified in active list")
+                            writeDebugLog(context, "AlarmReceiver.kt:showNotification", "Notification posted via fallback", mapOf(
+                                "notificationId" to id,
+                                "method" to "NotificationManagerCompat",
+                                "verified" to true
+                            ))
+                        }
+                    } else {
+                        notificationPosted = true
+                        Log.d(TAG, "Notification posted successfully with ID: $id using NotificationManagerCompat (fallback)")
+                        writeDebugLog(context, "AlarmReceiver.kt:showNotification", "Notification posted via fallback", mapOf(
+                            "notificationId" to id,
+                            "method" to "NotificationManagerCompat"
+                        ))
+                    }
                 } catch (e2: Exception) {
                     notificationError = "NotificationManagerCompat error: ${e2.message}"
                     Log.e(TAG, "Failed to post notification with NotificationManagerCompat: ${e2.message}", e2)
+                    writeDebugLog(context, "AlarmReceiver.kt:showNotification", "CRITICAL: Fallback also failed", mapOf(
+                        "notificationId" to id,
+                        "error" to (e2.message ?: "unknown")
+                    ))
                 }
             } catch (e: Exception) {
                 notificationError = "Exception: ${e.message}"
                 Log.e(TAG, "Exception showing notification with NotificationManager: ${e.message}", e)
+                writeDebugLog(context, "AlarmReceiver.kt:showNotification", "Exception posting notification", mapOf(
+                    "notificationId" to id,
+                    "error" to (e.message ?: "unknown"),
+                    "errorType" to e.javaClass.simpleName,
+                    "action" to "fallback_to_compat"
+                ))
                 // Fallback to NotificationManagerCompat
                 try {
                     NotificationManagerCompat.from(context).notify(id, notification)
-                    notificationPosted = true
-                    Log.d(TAG, "Notification posted successfully with ID: $id using NotificationManagerCompat (fallback)")
+                    
+                    // CRITICAL: Verify fallback also worked
+                    var fallbackPosted = false
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                        val activeNotifications = notificationManager.activeNotifications
+                        fallbackPosted = activeNotifications.any { it.id == id }
+                        if (!fallbackPosted) {
+                            Log.e(TAG, "✗ CRITICAL: Fallback notify() succeeded but notification NOT visible!")
+                            notificationError = "Fallback also suppressed by system"
+                            writeDebugLog(context, "AlarmReceiver.kt:showNotification", "CRITICAL: Fallback also suppressed", mapOf(
+                                "notificationId" to id,
+                                "method" to "NotificationManagerCompat",
+                                "suppressed" to true
+                            ))
+                        } else {
+                            notificationPosted = true
+                            Log.d(TAG, "Notification posted successfully with ID: $id using NotificationManagerCompat (fallback)")
+                            Log.d(TAG, "✓ Fallback notification verified in active list")
+                            writeDebugLog(context, "AlarmReceiver.kt:showNotification", "Notification posted via fallback", mapOf(
+                                "notificationId" to id,
+                                "method" to "NotificationManagerCompat",
+                                "verified" to true
+                            ))
+                        }
+                    } else {
+                        notificationPosted = true
+                        Log.d(TAG, "Notification posted successfully with ID: $id using NotificationManagerCompat (fallback)")
+                        writeDebugLog(context, "AlarmReceiver.kt:showNotification", "Notification posted via fallback", mapOf(
+                            "notificationId" to id,
+                            "method" to "NotificationManagerCompat"
+                        ))
+                    }
                 } catch (e2: Exception) {
                     notificationError = "NotificationManagerCompat error: ${e2.message}"
                     Log.e(TAG, "Failed to post notification with NotificationManagerCompat: ${e2.message}", e2)
+                    writeDebugLog(context, "AlarmReceiver.kt:showNotification", "CRITICAL: Fallback also failed", mapOf(
+                        "notificationId" to id,
+                        "error" to (e2.message ?: "unknown")
+                    ))
                 }
             }
             
-            // Verify notification was actually posted
-            if (notificationPosted) {
-                Log.d(TAG, "✓ Notification posted successfully")
-                
-                // Check if notification is actually visible (Android 8.0+)
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    // Wait a moment for notification to appear in active list
-                    android.os.Handler(context.mainLooper).postDelayed({
-                        val activeNotifications = notificationManager.activeNotifications
-                        val ourNotification = activeNotifications.find { it.id == id }
-                        if (ourNotification != null) {
-                            Log.d(TAG, "✓ Notification confirmed visible in active notifications list")
-                            Log.d(TAG, "✓ Notification tag: ${ourNotification.tag}")
-                            Log.d(TAG, "✓ Notification channel: ${ourNotification.notification.channelId}")
-                            writeDebugLog(context, "AlarmReceiver.kt:notificationCheck", "Notification confirmed visible", mapOf(
-                                "notificationId" to id,
-                                "tag" to (ourNotification.tag ?: "null"),
-                                "channelId" to ourNotification.notification.channelId,
-                                "visible" to true
+            // CRITICAL: Additional verification - check again after a short delay
+            // Sometimes notifications are suppressed after being posted (rare but possible)
+            if (notificationPosted && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                android.os.Handler(context.mainLooper).postDelayed({
+                    val activeNotifications = notificationManager.activeNotifications
+                    val stillVisible = activeNotifications.any { it.id == id }
+                    
+                    if (!stillVisible) {
+                        Log.e(TAG, "✗ CRITICAL: Notification disappeared from active list after posting!")
+                        Log.e(TAG, "✗ This means it was suppressed or dismissed by the system")
+                        writeDebugLog(context, "AlarmReceiver.kt:notificationCheck", "CRITICAL: Notification disappeared after posting", mapOf(
+                            "notificationId" to id,
+                            "activeNotificationCount" to activeNotifications.size,
+                            "suppressedAfterPost" to true,
+                            "timeSincePost" to 500
+                        ))
+                        
+                        // Re-check channel - user might have blocked it between checks
+                        val channel = notificationManager.getNotificationChannel(CHANNEL_ID)
+                        if (channel != null && channel.importance == NotificationManager.IMPORTANCE_NONE) {
+                            Log.e(TAG, "✗ Channel was blocked after posting - notification suppressed")
+                            writeDebugLog(context, "AlarmReceiver.kt:notificationCheck", "Channel blocked after posting", mapOf(
+                                "channelImportance" to NotificationManager.IMPORTANCE_NONE,
+                                "userActionRequired" to true
                             ))
                         } else {
-                            Log.e(TAG, "✗ CRITICAL: Notification posted but NOT found in active notifications!")
-                            Log.e(TAG, "✗ This means it was suppressed or hidden by the system")
-                            Log.e(TAG, "✗ Active notification count: ${activeNotifications.size}")
-                            Log.e(TAG, "✗ Active notification IDs: ${activeNotifications.map { it.id }.joinToString()}")
-                            writeDebugLog(context, "AlarmReceiver.kt:notificationCheck", "CRITICAL: Notification not found in active list", mapOf(
-                                "notificationId" to id,
-                                "activeNotificationCount" to activeNotifications.size,
-                                "activeNotificationIds" to activeNotifications.map { it.id }.joinToString(),
-                                "suppressed" to true
+                            Log.e(TAG, "✗ Notification suppressed for unknown reason (channel not blocked)")
+                            writeDebugLog(context, "AlarmReceiver.kt:notificationCheck", "Notification suppressed - unknown reason", mapOf(
+                                "channelImportance" to (channel?.importance ?: -1),
+                                "possibleReasons" to "system_suppression_or_dismissal"
                             ))
-                            
-                            // Check channel status
-                            val channel = notificationManager.getNotificationChannel(CHANNEL_ID)
-                            if (channel != null) {
-                                Log.e(TAG, "✗ Channel importance: ${channel.importance}")
-                                Log.e(TAG, "✗ Channel blocked: ${channel.importance == NotificationManager.IMPORTANCE_NONE}")
-                                writeDebugLog(context, "AlarmReceiver.kt:notificationCheck", "Channel status check", mapOf(
-                                    "channelImportance" to channel.importance,
-                                    "channelBlocked" to (channel.importance == NotificationManager.IMPORTANCE_NONE)
-                                ))
-                                if (channel.importance == NotificationManager.IMPORTANCE_NONE) {
-                                    Log.e(TAG, "✗ USER ACTION REQUIRED: Notification channel is BLOCKED!")
-                                    Log.e(TAG, "✗ User must enable notifications in Settings > Apps > Shabbos!! > Notifications")
-                                    writeDebugLog(context, "AlarmReceiver.kt:notificationCheck", "USER ACTION REQUIRED: Channel blocked", mapOf(
-                                        "userActionRequired" to true,
-                                        "action" to "enable_notifications_in_settings"
-                                    ))
-                                }
-                            }
                         }
-                    }, 500) // Check after 500ms
-                }
-            } else {
+                    } else {
+                        Log.d(TAG, "✓ Notification still visible after 500ms - confirmed posted")
+                        writeDebugLog(context, "AlarmReceiver.kt:notificationCheck", "Notification confirmed visible after delay", mapOf(
+                            "notificationId" to id,
+                            "visible" to true,
+                            "timeSincePost" to 500
+                        ))
+                    }
+                }, 500) // Check after 500ms
+            }
+            
+            // Final status check
+            if (!notificationPosted) {
                 Log.e(TAG, "✗ CRITICAL: Notification was NOT posted!")
                 Log.e(TAG, "✗ Error: ${notificationError ?: "unknown"}")
                 writeDebugLog(context, "AlarmReceiver.kt:notificationPost", "CRITICAL: Notification was NOT posted", mapOf(
@@ -1142,21 +1505,55 @@ class AlarmReceiver : BroadcastReceiver() {
                     "title" to title
                 ))
                 
-                // Check if notifications are enabled
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-                    val notificationsEnabled = notificationManager.areNotificationsEnabled()
-                    Log.e(TAG, "✗ System notifications enabled: $notificationsEnabled")
-                    writeDebugLog(context, "AlarmReceiver.kt:notificationPost", "System notifications check", mapOf(
-                        "notificationsEnabled" to notificationsEnabled
-                    ))
-                    if (!notificationsEnabled) {
-                        Log.e(TAG, "✗ USER ACTION REQUIRED: Notifications are disabled system-wide!")
-                        writeDebugLog(context, "AlarmReceiver.kt:notificationPost", "USER ACTION REQUIRED: Notifications disabled system-wide", mapOf(
-                            "userActionRequired" to true,
-                            "action" to "enable_system_notifications"
-                        ))
+                // Comprehensive failure analysis
+                    val failureReasons = mutableListOf<String>()
+                    
+                    // Check all possible blocking reasons
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        val permissionStatus = ContextCompat.checkSelfPermission(context, android.Manifest.permission.POST_NOTIFICATIONS)
+                        if (permissionStatus != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                            failureReasons.add("POST_NOTIFICATIONS permission denied")
+                            Log.e(TAG, "✗ POST_NOTIFICATIONS permission: DENIED")
+                        } else {
+                            Log.d(TAG, "✓ POST_NOTIFICATIONS permission: GRANTED")
+                        }
                     }
-                }
+                    
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                        val notificationsEnabled = notificationManager.areNotificationsEnabled()
+                        Log.e(TAG, "✗ System notifications enabled: $notificationsEnabled")
+                        if (!notificationsEnabled) {
+                            failureReasons.add("System notifications disabled")
+                            Log.e(TAG, "✗ USER ACTION REQUIRED: Notifications are disabled system-wide!")
+                        }
+                    }
+                    
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                        val channel = notificationManager.getNotificationChannel(CHANNEL_ID)
+                        if (channel?.importance == NotificationManager.IMPORTANCE_NONE) {
+                            failureReasons.add("Notification channel blocked")
+                            Log.e(TAG, "✗ Notification channel: BLOCKED")
+                        } else {
+                            Log.d(TAG, "✓ Notification channel: ${channel?.importance ?: "unknown"}")
+                        }
+                    }
+                    
+                    writeDebugLog(context, "AlarmReceiver.kt:notificationPost", "CRITICAL: Notification posting failed - comprehensive analysis", mapOf(
+                        "notificationId" to id,
+                        "error" to (notificationError ?: "unknown"),
+                        "failureReasons" to failureReasons,
+                        "failureReasonCount" to failureReasons.size,
+                        "userActionRequired" to (failureReasons.isNotEmpty()),
+                        "action" to if (failureReasons.isNotEmpty()) "fix_notification_settings" else "unknown"
+                    ))
+                    
+                    if (failureReasons.isNotEmpty()) {
+                        Log.e(TAG, "✗ FAILURE REASONS:")
+                        failureReasons.forEach { reason ->
+                            Log.e(TAG, "  - $reason")
+                        }
+                        Log.e(TAG, "✗ USER ACTION REQUIRED: Fix notification settings in Settings > Apps > Shabbos!! > Notifications")
+                    }
             }
             
             // #region agent log
