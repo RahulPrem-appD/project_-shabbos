@@ -75,6 +75,11 @@ class BootReceiver : BroadcastReceiver() {
                 val alarmScheduler = AlarmScheduler(context)
                 alarmScheduler.rescheduleAllSavedAlarms()
                 
+                // Restart alarm health monitoring
+                AlarmHealthWorker.schedule(context)
+                Log.d(TAG, "✓ Alarm health monitoring restarted")
+                writeDebugLog(context, "BootReceiver.kt:onReceive", "Alarm health monitoring restarted")
+                
                 Log.d(TAG, "========================================")
                 Log.d(TAG, "Boot rescheduling complete!")
                 Log.d(TAG, "========================================")
@@ -95,4 +100,3 @@ class BootReceiver : BroadcastReceiver() {
         }
     }
 }
-

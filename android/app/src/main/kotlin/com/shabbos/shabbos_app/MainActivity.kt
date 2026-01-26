@@ -32,6 +32,11 @@ class MainActivity: FlutterActivity() {
         // Create notification channel on startup
         createNotificationChannel()
         
+        // Start alarm health monitoring ("install and forget" functionality)
+        // This will auto-recover alarms if they get cleared (e.g., force-stop)
+        AlarmHealthWorker.schedule(applicationContext)
+        Log.d(TAG, "✓ Alarm health monitoring activated")
+        
         // Check and log permissions status
         logPermissionsStatus()
         

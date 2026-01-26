@@ -2291,6 +2291,56 @@ class NotificationService {
       }
       buffer.writeln('');
 
+      // WorkManager Health Check Status
+      buffer.writeln('--- WORKMANAGER HEALTH CHECK STATUS ---');
+      try {
+        final nativeDebug = await NativeAlarmService.readDebugLogs();
+        if (nativeDebug != null && nativeDebug.isNotEmpty) {
+          final lines = nativeDebug.split('\n');
+          
+          // Find health check related logs
+          final healthCheckLogs = lines.where((line) => 
+            line.contains('AlarmHealthWorker') ||
+            line.contains('Health check') ||
+            line.contains('health_check')
+          ).toList();
+          
+          if (healthCheckLogs.isEmpty) {
+            buffer.writeln('No health check logs found yet.');
+            buffer.writeln('Health checks run every 12 hours automatically.');
+          } else {
+            buffer.writeln('Recent health check activity (last ${healthCheckLogs.length > 20 ? 20 : healthCheckLogs.length} entries):');
+            for (final log in healthCheckLogs.reversed.take(20)) {
+              buffer.writeln(log);
+            }
+            if (healthCheckLogs.length > 20) {
+              buffer.writeln('... (${healthCheckLogs.length - 20} more health check logs)');
+            }
+            
+            // Highlight critical events
+            final criticalLogs = healthCheckLogs.where((line) =>
+              line.contains('CRITICAL') ||
+              line.contains('missing') ||
+              line.contains('restored') ||
+              line.contains('rescheduled')
+            ).toList();
+            
+            if (criticalLogs.isNotEmpty) {
+              buffer.writeln('');
+              buffer.writeln('⚠️  IMPORTANT HEALTH CHECK EVENTS:');
+              for (final log in criticalLogs.reversed.take(10)) {
+                buffer.writeln(log);
+              }
+            }
+          }
+        } else {
+          buffer.writeln('No health check logs available yet.');
+        }
+      } catch (e) {
+        buffer.writeln('Error reading health check logs: $e');
+      }
+      buffer.writeln('');
+
       buffer.writeln('--- ANDROID NATIVE DEBUG LOGS (debug_logs.txt) ---');
       try {
         final nativeDebug = await NativeAlarmService.readDebugLogs();
@@ -2300,6 +2350,8 @@ class NotificationService {
           final lines = nativeDebug.split('\n');
           final tail = lines.length > 250 ? lines.sublist(lines.length - 250) : lines;
           buffer.writeln('Showing last ${tail.length} lines (of ${lines.length} total):');
+          buffer.writeln('This includes: AlarmScheduler, AlarmReceiver, AlarmHealthWorker, BootReceiver');
+          buffer.writeln('');
           for (final line in tail) {
             buffer.writeln(line);
           }
