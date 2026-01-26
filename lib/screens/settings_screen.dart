@@ -148,6 +148,47 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
 
                   _buildSection(
+                    title: isHebrew ? 'אמינות' : 'Reliability',
+                    children: [
+                      _buildInfoTile(
+                        icon: Icons.health_and_safety,
+                        iconColor: Colors.green,
+                        title: isHebrew
+                            ? 'ניטור בריאות אוטומטי'
+                            : 'Auto Health Monitoring',
+                        subtitle: isHebrew
+                            ? 'פועל • בדיקה כל 12 שעות'
+                            : 'Active • Checks every 12 hours',
+                        trailing: const Icon(
+                          Icons.check_circle,
+                          color: Colors.green,
+                          size: 20,
+                        ),
+                      ),
+                      _buildInfoTile(
+                        icon: Icons.autorenew,
+                        iconColor: const Color(0xFFE8B923),
+                        title: isHebrew
+                            ? 'שחזור אוטומטי'
+                            : 'Auto-Recovery',
+                        subtitle: isHebrew
+                            ? 'משחזר התראות אוטומטית אם נמחקו'
+                            : 'Restores alarms automatically if cleared',
+                      ),
+                      _buildInfoTile(
+                        icon: Icons.restart_alt,
+                        iconColor: const Color(0xFF1A1A1A),
+                        title: isHebrew
+                            ? 'שחזור לאחר אתחול'
+                            : 'Boot Recovery',
+                        subtitle: isHebrew
+                            ? 'התראות משוחזרות אוטומטית לאחר הפעלה מחדש'
+                            : 'Alarms restored automatically after reboot',
+                      ),
+                    ],
+                  ),
+
+                  _buildSection(
                     title: isHebrew ? 'תמיכה' : 'Support',
                     children: [
                       _buildActionTile(
@@ -308,6 +349,57 @@ class _SettingsScreenState extends State<SettingsScreen> {
             Icon(Icons.chevron_right, color: Colors.grey[400]),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildInfoTile({
+    required IconData icon,
+    Color? iconColor,
+    required String title,
+    String? subtitle,
+    Widget? trailing,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      child: Row(
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(
+              icon,
+              size: 20,
+              color: iconColor ?? const Color(0xFF1A1A1A),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w500,
+                    color: Color(0xFF1A1A1A),
+                  ),
+                ),
+                if (subtitle != null)
+                  Text(
+                    subtitle,
+                    style: TextStyle(fontSize: 13, color: Colors.grey[500]),
+                  ),
+              ],
+            ),
+          ),
+          if (trailing != null) trailing,
+        ],
       ),
     );
   }

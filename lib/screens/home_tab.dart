@@ -2,7 +2,6 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:intl/intl.dart' hide TextDirection;
-import 'package:url_launcher/url_launcher.dart';
 import '../models/candle_lighting.dart';
 import '../services/hebcal_service.dart';
 import '../services/location_service.dart';
@@ -432,31 +431,6 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
     );
   }
 
-  String _getPermissionMessage(List<String> missingPermissions) {
-    final hasBattery = missingPermissions.any((p) => 
-      p.contains('Battery') || p.contains('אופטימיזציית סוללה'));
-    final hasExactAlarm = missingPermissions.any((p) => 
-      p.contains('Exact Alarms') || p.contains('התראות מדויקות'));
-
-    if (hasBattery && hasExactAlarm) {
-      return isHebrew
-          ? 'הגדרות הסוללה והתראות מדויקות של האפליקציה מגבילות את ההתראות. אנא עזור לאפליקציה להציג התראות על ידי הסרת ההגבלות.'
-          : 'The Battery settings and Exact Alarm permission of this app are restricting the notifications. Kindly help this app to show notifications by removing the restrictions.';
-    } else if (hasBattery) {
-      return isHebrew
-          ? 'הגדרות הסוללה של האפליקציה מגבילות את ההתראות. אנא עזור לאפליקציה להציג התראות על ידי הסרת הגבלת הסוללה.'
-          : 'The Battery settings of this app are restricting the notifications. Kindly help this app to show notifications by removing the battery restrictions.';
-    } else if (hasExactAlarm) {
-      return isHebrew
-          ? 'הרשאת התראות מדויקות נדרשת להצגת התראות. אנא עזור לאפליקציה להציג התראות על ידי מתן הרשאת התראות מדויקות.'
-          : 'Exact Alarm permission is required to show notifications. Kindly help this app to show notifications by granting the Exact Alarm permission.';
-    } else {
-      return isHebrew
-          ? 'הרשאות נדרשות להצגת התראות. אנא עזור לאפליקציה להציג התראות על ידי מתן ההרשאות הנדרשות.'
-          : 'Permissions are required to show notifications. Kindly help this app to show notifications by granting the required permissions.';
-    }
-  }
-
   Widget _buildPermissionBanner() {
     if (!Platform.isAndroid) {
       debugPrint('HomeTab: Not Android, skipping permission banner');
@@ -521,12 +495,33 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
                   ),
                 ),
                 const SizedBox(height: 4),
-                Text(
-                  _getPermissionMessage(missingPermissions),
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey[700],
-                    height: 1.3,
+                RichText(
+                  text: TextSpan(
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey[700],
+                      height: 1.3,
+                    ),
+                    children: [
+                      TextSpan(
+                        text: 'To make sure Shabbat and Yom Tov alerts arrive on time\n\n',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const TextSpan(
+                        text: 'Android may pause this app to save battery.\n\n',
+                      ),
+                      const TextSpan(
+                        text: 'Please allow the Shabbos App to run normally so alerts play at the correct time.\n\n',
+                      ),
+                      TextSpan(
+                        text: 'This only applies to the Shabbos App and does not affect any other apps or phone settings.',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],
@@ -582,7 +577,6 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
           const SizedBox(height: 24),
           _buildNextCandleLighting(_candleLightings.first),
           const SizedBox(height: 32),
-          _buildPromotionalLink(),
           if (_candleLightings.length > 1) ...[
             Text(
               isHebrew ? 'בקרוב' : 'Upcoming',
@@ -918,64 +912,4 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
     );
   }
 
-  Widget _buildPromotionalLink() {
-    return GestureDetector(
-      onTap: () async {
-        final url = isHebrew
-            ? Uri.parse('https://shabbos.crd.co/#chasid')
-            : Uri.parse('https://shabbos.app/#chasid');
-
-        try {
-          if (await canLaunchUrl(url)) {
-            await launchUrl(
-              url,
-              mode: LaunchMode.externalApplication,
-            );
-            debugPrint('Promotional link opened: $url');
-          } else {
-            debugPrint('Could not launch URL: $url');
-          }
-        } catch (e) {
-          debugPrint('Error launching URL: $e');
-        }
-      },
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 24),
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: const Color(0xFFF8F8F8),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: const Color(0xFFE8B923).withValues(alpha: 0.3),
-            width: 1,
-          ),
-        ),
-        child: Row(
-          children: [
-            Icon(
-              Icons.card_giftcard_outlined,
-              color: const Color(0xFFE8B923),
-              size: 24,
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Text(
-                isHebrew ? 'עוד דברים מתנות' : 'More Free Stuff',
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w500,
-                  color: Color(0xFF1A1A1A),
-                ),
-              ),
-            ),
-            Icon(
-              Icons.chevron_right,
-              color: const Color(0xFFE8B923),
-              size: 24,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 }
