@@ -204,6 +204,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ],
                   ),
 
+                  _buildSection(
+                    title: isHebrew ? 'בדיקות' : 'Testing',
+                    children: [
+                      _buildActionTile(
+                        icon: Icons.science,
+                        title: isHebrew
+                            ? 'התראות בדיקה יומיות'
+                            : 'Daily Test Notifications',
+                        subtitle: isHebrew
+                            ? 'כל יום בשעה 20:00 ו-20:20'
+                            : 'Every day at 8:00 PM & 8:20 PM',
+                        onTap: _scheduleDailyTests,
+                      ),
+                    ],
+                  ),
+
                   const SizedBox(height: 40),
                 ],
               ),
@@ -560,11 +576,116 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  /// Check and request exact alarm permission (Android 12+)
+  /// Schedule daily test notifications
+  Future<void> _scheduleDailyTests() async {
+    try {
+      // Show loading
+      if (!mounted) return;
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => Center(
+          child: Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const CircularProgressIndicator(
+                  color: Color(0xFFE8B923),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  isHebrew
+                      ? 'מגדיר התראות בדיקה...'
+                      : 'Scheduling test notifications...',
+                  style: const TextStyle(fontSize: 16),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
 
-  /// Check and request battery optimization exemption
+      // Schedule daily tests at 8:00 PM and 8:20 PM
+      await _notificationService.scheduleDailyTestNotifications(
+        locale: widget.locale,
+        preNotificationHour: 20,
+        preNotificationMinute: 0,
+        candleLightingHour: 20,
+        candleLightingMinute: 20,
+      );
 
-  /// Reschedule all notifications with current settings
+      if (!mounted) return;
+      Navigator.pop(context); // Close loading dialog
+
+      // Show success message
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          title: Row(
+            children: [
+              const Icon(Icons.check_circle, color: Colors.green, size: 28),
+              const SizedBox(width: 12),
+              Text(
+                isHebrew ? 'הוגדר בהצלחה!' : 'Success!',
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
+            ],
+          ),
+          content: Text(
+            isHebrew
+                ? 'התראות בדיקה יומיות הוגדרו:\n\n'
+                    '🔔 התראה מוקדמת: 20:00 (8:00 PM)\n'
+                    '🕯️ הדלקת נרות: 20:20 (8:20 PM)\n'
+                    '⏰ איסור מלאכה: 20:20:18 (8:20:18 PM)\n\n'
+                    'ההתראות יופיעו כל יום באותן השעות לצורך בדיקה.'
+                : 'Daily test notifications scheduled:\n\n'
+                    '🔔 Pre-notification: 8:00 PM\n'
+                    '🕯️ Candle Lighting: 8:20 PM\n'
+                    '⏰ Issur Melacha: 8:20:18 PM\n\n'
+                    'These will appear at the same time every day for testing.',
+            style: const TextStyle(fontSize: 14, height: 1.5),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text(
+                isHebrew ? 'אישור' : 'OK',
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF1A1A1A),
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      Navigator.pop(context); // Close loading dialog
+
+      // Show error message
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            isHebrew
+                ? 'שגיאה בהגדרת התראות: $e'
+                : 'Error scheduling notifications: $e',
+          ),
+          backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
 }
 
 class _CityPicker extends StatefulWidget {

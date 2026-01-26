@@ -1530,6 +1530,191 @@ class NotificationService {
     }
   }
 
+  /// Schedule daily test notifications for testing
+  /// Schedules notifications for TOMORROW at specified times
+  /// This allows daily testing without waiting for actual Shabbat
+  Future<void> scheduleDailyTestNotifications({
+    required String locale,
+    int preNotificationHour = 20, // 8 PM
+    int preNotificationMinute = 0,
+    int candleLightingHour = 20, // 8:20 PM
+    int candleLightingMinute = 20,
+  }) async {
+    debugPrint('==========================================');
+    debugPrint('NotificationService: SCHEDULING DAILY TEST NOTIFICATIONS');
+    debugPrint('==========================================');
+
+    await initialize();
+    await requestPermissions();
+
+    final now = DateTime.now();
+    
+    // Schedule for tomorrow (or today if times haven't passed yet)
+    var preTime = DateTime(
+      now.year,
+      now.month,
+      now.day,
+      preNotificationHour,
+      preNotificationMinute,
+    );
+    
+    var candleTime = DateTime(
+      now.year,
+      now.month,
+      now.day,
+      candleLightingHour,
+      candleLightingMinute,
+    );
+
+    // If times have already passed today, schedule for tomorrow
+    if (preTime.isBefore(now)) {
+      preTime = preTime.add(const Duration(days: 1));
+    }
+    if (candleTime.isBefore(now)) {
+      candleTime = candleTime.add(const Duration(days: 1));
+    }
+
+    debugPrint('NotificationService: Current time: $now');
+    debugPrint('NotificationService: Pre-notification scheduled: $preTime');
+    debugPrint('NotificationService: Candle lighting scheduled: $candleTime');
+
+    // Cancel any existing test notifications
+    await _notifications.cancel(996);
+    await _notifications.cancel(997);
+    await _notifications.cancel(998);
+    if (Platform.isAndroid) {
+      await NativeAlarmService.cancelAlarm(996);
+      await NativeAlarmService.cancelAlarm(997);
+      await NativeAlarmService.cancelAlarm(998);
+    }
+
+    // Get sounds
+    final earlyReminderSoundId = await _audioService.getEarlyReminderSound();
+    final candleLightingSoundId = _audioService.getCandleLightingSound();
+
+    final preMinutes = (candleTime.difference(preTime).inMinutes);
+    final candleTimeFormatted = '${candleTime.hour}:${candleTime.minute.toString().padLeft(2, '0')}';
+
+    final strings = _getLocalizedNotificationStrings(
+      locale: locale,
+      isYomTov: false,
+      preMinutes: preMinutes,
+      candleTimeFormatted: candleTimeFormatted,
+    );
+
+    if (Platform.isAndroid) {
+      // Schedule pre-notification
+      final preSuccess = await NativeAlarmService.scheduleAlarm(
+        id: 996,
+        scheduledTime: preTime,
+        title: '🧪 TEST: ${strings['preTitle']!}',
+        body: 'Daily test alarm\n${strings['preBody']!}',
+        isPreNotification: true,
+        candleLightingTime: candleTime,
+        soundId: earlyReminderSoundId,
+      );
+      debugPrint('NotificationService: Pre-notification scheduled: $preSuccess');
+
+      // Schedule candle lighting notification
+      final candleSuccess = await NativeAlarmService.scheduleAlarm(
+        id: 997,
+        scheduledTime: candleTime,
+        title: '🧪 TEST: ${strings['candleTitle']!}',
+        body: 'Daily test alarm\n${strings['candleBody']!}',
+        isPreNotification: false,
+        soundId: candleLightingSoundId,
+      );
+      debugPrint('NotificationService: Candle lighting scheduled: $candleSuccess');
+
+      // Schedule issur melacha (18 seconds after for quick testing)
+      final issurTime = candleTime.add(const Duration(seconds: 18));
+      final issurSuccess = await NativeAlarmService.scheduleAlarm(
+        id: 998,
+        scheduledTime: issurTime,
+        title: '🧪 TEST: ⏰ Issur Melacha',
+        body: 'Daily test alarm - Issur Melacha notification',
+        isPreNotification: false,
+        soundId: candleLightingSoundId, // Shofar sound
+      );
+      debugPrint('NotificationService: Issur Melacha scheduled: $issurSuccess');
+    } else {
+      // iOS scheduling
+      final preIosSoundFile = _getIosSoundFile(earlyReminderSoundId);
+      final candleIosSoundFile = _getIosSoundFile(candleLightingSoundId);
+
+      try {
+        final preTzTime = tz.TZDateTime(
+          tz.local,
+          preTime.year,
+          preTime.month,
+          preTime.day,
+          preTime.hour,
+          preTime.minute,
+        );
+
+        await _notifications.zonedSchedule(
+          996,
+          '🧪 TEST: ${strings['preTitle']!}',
+          'Daily test alarm\n${strings['preBody']!}',
+          preTzTime,
+          _getNotificationDetails(iosSoundFile: preIosSoundFile),
+          androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+        );
+        debugPrint('NotificationService: ✓ iOS pre-notification scheduled');
+
+        final candleTzTime = tz.TZDateTime(
+          tz.local,
+          candleTime.year,
+          candleTime.month,
+          candleTime.day,
+          candleTime.hour,
+          candleTime.minute,
+        );
+
+        await _notifications.zonedSchedule(
+          997,
+          '🧪 TEST: ${strings['candleTitle']!}',
+          'Daily test alarm\n${strings['candleBody']!}',
+          candleTzTime,
+          _getNotificationDetails(iosSoundFile: candleIosSoundFile),
+          androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+        );
+        debugPrint('NotificationService: ✓ iOS candle lighting scheduled');
+
+        // Issur melacha
+        final issurTime = candleTime.add(const Duration(seconds: 18));
+        final issurTzTime = tz.TZDateTime(
+          tz.local,
+          issurTime.year,
+          issurTime.month,
+          issurTime.day,
+          issurTime.hour,
+          issurTime.minute,
+          issurTime.second,
+        );
+
+        await _notifications.zonedSchedule(
+          998,
+          '🧪 TEST: ⏰ Issur Melacha',
+          'Daily test alarm - Issur Melacha notification',
+          issurTzTime,
+          _getNotificationDetails(iosSoundFile: candleIosSoundFile),
+          androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+        );
+        debugPrint('NotificationService: ✓ iOS issur melacha scheduled');
+      } catch (e) {
+        debugPrint('NotificationService: ✗ ERROR: $e');
+      }
+    }
+
+    debugPrint('==========================================');
+    debugPrint('✓ Daily test notifications scheduled!');
+    debugPrint('Pre-notification: $preTime');
+    debugPrint('Candle lighting: $candleTime');
+    debugPrint('These will repeat at the same time tomorrow');
+    debugPrint('==========================================');
+  }
+
   /// Send a delayed test notification that simulates the full candle lighting flow
   /// - Pre-notification (early reminder) fires after [preNotificationSeconds]
   /// - Candle lighting notification fires after [candleLightingSeconds]
