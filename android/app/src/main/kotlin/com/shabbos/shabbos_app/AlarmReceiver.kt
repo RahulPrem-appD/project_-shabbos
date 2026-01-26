@@ -59,13 +59,16 @@ class AlarmReceiver : BroadcastReceiver() {
         // Sound file mappings (must match audio_service.dart)
         // NOTE: shofar_candle removed - Candle lighting ALWAYS uses rav_shalom_shofar
         // IMPORTANT: File names must match actual files in assets/sounds/
+        // NOTE: Only sounds that actually exist in assets/sounds/ should be listed here
         private val SOUND_FILES = mapOf(
             "rav_shalom_shofar" to "flutter_assets/assets/sounds/RavShalomShofarDefaultCandle_Default.mp3",
             "shabbat_shalom_song" to "flutter_assets/assets/sounds/RaYomTovShabbosDefault-Android.mp3",
-            "yomtov_default" to "flutter_assets/assets/sounds/Vesamachta-YomTov-Default-Android.mp3",
-            "ata_bechartanu" to "flutter_assets/assets/sounds/Ata Bechartanu-YomTov.mp3",
-            "ata_bechartanu_2" to "flutter_assets/assets/sounds/Ata Bechartanu2-YomTov.mp3",
-            "hodu_lahashem" to "flutter_assets/assets/sounds/Hodu La'Hashem Ki Tov-YomTov.mp3"
+            "yomtov_default" to "flutter_assets/assets/sounds/Vesamachta-YomTov-Default-Android.mp3"
+            // NOTE: The following sounds were REMOVED because the files don't exist:
+            // "ata_bechartanu" to "flutter_assets/assets/sounds/Ata Bechartanu-YomTov.mp3",
+            // "ata_bechartanu_2" to "flutter_assets/assets/sounds/Ata Bechartanu2-YomTov.mp3",
+            // "hodu_lahashem" to "flutter_assets/assets/sounds/Hodu La'Hashem Ki Tov-YomTov.mp3"
+            // Add these files to assets/sounds/ to re-enable these options
         )
     }
     

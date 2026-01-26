@@ -19,6 +19,7 @@ class SoundOption {
 
   /// Early Reminder sounds (music only - no shofar)
   /// Default: Shabbat Shalom Song
+  /// NOTE: Only sounds that exist in assets/sounds/ are included
   static const List<SoundOption> earlyReminderSounds = [
     SoundOption(
       id: 'shabbat_shalom_song',
@@ -34,27 +35,11 @@ class SoundOption {
       assetPath: 'sounds/Vesamachta-YomTov-Default-Android.mp3',
       category: SoundCategory.earlyReminder,
     ),
-    SoundOption(
-      id: 'ata_bechartanu',
-      nameEn: 'Ata Bechartanu',
-      nameHe: 'אתה בחרתנו',
-      assetPath: 'sounds/Ata Bechartanu-YomTov.mp3',
-      category: SoundCategory.earlyReminder,
-    ),
-    SoundOption(
-      id: 'ata_bechartanu_2',
-      nameEn: 'Ata Bechartanu 2',
-      nameHe: 'אתה בחרתנו 2',
-      assetPath: 'sounds/Ata Bechartanu2-YomTov.mp3',
-      category: SoundCategory.earlyReminder,
-    ),
-    SoundOption(
-      id: 'hodu_lahashem',
-      nameEn: 'Hodu LaHashem Ki Tov',
-      nameHe: 'הודו לה׳ כי טוב',
-      assetPath: "sounds/Hodu La'Hashem Ki Tov-YomTov.mp3",
-      category: SoundCategory.earlyReminder,
-    ),
+    // NOTE: The following sounds were removed because the files don't exist:
+    // - ata_bechartanu (Ata Bechartanu-YomTov.mp3 - MISSING)
+    // - ata_bechartanu_2 (Ata Bechartanu2-YomTov.mp3 - MISSING)
+    // - hodu_lahashem (Hodu La'Hashem Ki Tov-YomTov.mp3 - MISSING)
+    // Add these files to assets/sounds/ to re-enable these options
     SoundOption(
       id: 'silent',
       nameEn: 'Silent',
@@ -75,6 +60,7 @@ class SoundOption {
 
   /// Yom Tov sounds - separate section with clear default
   /// Default: Yom Tov Default
+  /// NOTE: Only sounds that exist in assets/sounds/ are included
   static const List<SoundOption> yomTovSounds = [
     SoundOption(
       id: 'yomtov_default',
@@ -83,27 +69,11 @@ class SoundOption {
       assetPath: 'sounds/Vesamachta-YomTov-Default-Android.mp3',
       category: SoundCategory.yomTov,
     ),
-    SoundOption(
-      id: 'ata_bechartanu',
-      nameEn: 'Ata Bechartanu',
-      nameHe: 'אתה בחרתנו',
-      assetPath: 'sounds/Ata Bechartanu-YomTov.mp3',
-      category: SoundCategory.yomTov,
-    ),
-    SoundOption(
-      id: 'ata_bechartanu_2',
-      nameEn: 'Ata Bechartanu 2',
-      nameHe: 'אתה בחרתנו 2',
-      assetPath: 'sounds/Ata Bechartanu2-YomTov.mp3',
-      category: SoundCategory.yomTov,
-    ),
-    SoundOption(
-      id: 'hodu_lahashem',
-      nameEn: 'Hodu LaHashem Ki Tov',
-      nameHe: 'הודו לה׳ כי טוב',
-      assetPath: "sounds/Hodu La'Hashem Ki Tov-YomTov.mp3",
-      category: SoundCategory.yomTov,
-    ),
+    // NOTE: The following sounds were removed because the files don't exist:
+    // - ata_bechartanu (Ata Bechartanu-YomTov.mp3 - MISSING)
+    // - ata_bechartanu_2 (Ata Bechartanu2-YomTov.mp3 - MISSING)
+    // - hodu_lahashem (Hodu La'Hashem Ki Tov-YomTov.mp3 - MISSING)
+    // Add these files to assets/sounds/ to re-enable these options
     SoundOption(
       id: 'silent',
       nameEn: 'Silent',

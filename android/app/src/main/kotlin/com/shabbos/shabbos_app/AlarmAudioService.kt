@@ -29,13 +29,18 @@ class AlarmAudioService : Service() {
         private const val EXTRA_TITLE = "title"
         private const val EXTRA_BODY = "body"
         
+        // SOUND_FILES: Map of sound IDs to asset paths
+        // NOTE: Only sounds that actually exist in assets/sounds/ should be listed here
+        // Missing files will cause playback to fail and fallback to default shofar
         private val SOUND_FILES = mapOf(
             "rav_shalom_shofar" to "flutter_assets/assets/sounds/RavShalomShofarDefaultCandle_Default.mp3",
             "shabbat_shalom_song" to "flutter_assets/assets/sounds/RaYomTovShabbosDefault-Android.mp3",
-            "yomtov_default" to "flutter_assets/assets/sounds/Vesamachta-YomTov-Default-Android.mp3",
-            "ata_bechartanu" to "flutter_assets/assets/sounds/Ata Bechartanu-YomTov.mp3",
-            "ata_bechartanu_2" to "flutter_assets/assets/sounds/Ata Bechartanu2-YomTov.mp3",
-            "hodu_lahashem" to "flutter_assets/assets/sounds/Hodu La'Hashem Ki Tov-YomTov.mp3"
+            "yomtov_default" to "flutter_assets/assets/sounds/Vesamachta-YomTov-Default-Android.mp3"
+            // NOTE: The following sounds were REMOVED because the files don't exist:
+            // "ata_bechartanu" to "flutter_assets/assets/sounds/Ata Bechartanu-YomTov.mp3",
+            // "ata_bechartanu_2" to "flutter_assets/assets/sounds/Ata Bechartanu2-YomTov.mp3",
+            // "hodu_lahashem" to "flutter_assets/assets/sounds/Hodu La'Hashem Ki Tov-YomTov.mp3"
+            // Add these files to assets/sounds/ to re-enable these options
         )
     }
     
@@ -245,11 +250,12 @@ class AlarmAudioService : Service() {
         playSoundFromAsset(assetPath)
     }
     
-    private fun playSoundFromAsset(assetPath: String) {
+    private fun playSoundFromAsset(assetPath: String, isRetry: Boolean = false) {
         try {
             Log.d(TAG, "========================================")
             Log.d(TAG, "playSoundFromAsset: Starting playback")
             Log.d(TAG, "Asset path: $assetPath")
+            Log.d(TAG, "Is retry: $isRetry")
             
             // Get audio manager FIRST
             audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
@@ -579,9 +585,79 @@ class AlarmAudioService : Service() {
             writeDebugLog("AlarmAudioService.kt:playSoundFromAsset", "CRITICAL ERROR setting up MediaPlayer", mapOf(
                 "error" to (e.message ?: "unknown"),
                 "errorType" to e.javaClass.simpleName,
+                "assetPath" to assetPath,
+                "isRetry" to isRetry,
                 "stackTrace" to e.stackTraceToString()
             ))
+            
+            // CRITICAL FIX: Fall back to default shofar sound if this isn't already a retry
+            // This ensures sound ALWAYS plays even if the selected sound file is missing
+            val defaultPath = SOUND_FILES["rav_shalom_shofar"]
+            if (!isRetry && defaultPath != null && defaultPath != assetPath) {
+                Log.w(TAG, "⚠️ Falling back to default shofar sound due to error")
+                writeDebugLog("AlarmAudioService.kt:playSoundFromAsset", "Falling back to default shofar sound", mapOf(
+                    "originalPath" to assetPath,
+                    "fallbackPath" to defaultPath,
+                    "errorReason" to (e.message ?: "unknown")
+                ))
+                // Try to play the default sound instead
+                playSoundFromAsset(defaultPath, isRetry = true)
+                return
+            }
+            
+            // If fallback also failed, try system notification sound as last resort
+            Log.e(TAG, "✗ Fallback also failed or not available - trying system sound")
+            writeDebugLog("AlarmAudioService.kt:playSoundFromAsset", "Fallback failed - trying system sound")
+            try {
+                playDefaultNotificationSound()
+            } catch (e2: Exception) {
+                Log.e(TAG, "✗ Even system notification sound failed: ${e2.message}")
+                writeDebugLog("AlarmAudioService.kt:playSoundFromAsset", "CRITICAL: All sound playback methods failed", mapOf(
+                    "originalError" to (e.message ?: "unknown"),
+                    "systemSoundError" to (e2.message ?: "unknown")
+                ))
+            }
             stopSelf()
+        }
+    }
+    
+    /**
+     * Play the default system notification sound as a last resort fallback
+     */
+    private fun playDefaultNotificationSound() {
+        try {
+            Log.d(TAG, "Playing default system notification sound as fallback")
+            writeDebugLog("AlarmAudioService.kt:playDefaultNotificationSound", "Playing system notification sound")
+            
+            val defaultSoundUri = android.media.RingtoneManager.getDefaultUri(
+                android.media.RingtoneManager.TYPE_ALARM
+            ) ?: android.media.RingtoneManager.getDefaultUri(
+                android.media.RingtoneManager.TYPE_NOTIFICATION
+            )
+            
+            if (defaultSoundUri != null) {
+                val ringtone = android.media.RingtoneManager.getRingtone(this, defaultSoundUri)
+                if (ringtone != null) {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                        ringtone.isLooping = false
+                    }
+                    ringtone.play()
+                    Log.d(TAG, "✓ System notification/alarm sound played")
+                    writeDebugLog("AlarmAudioService.kt:playDefaultNotificationSound", "System sound played successfully")
+                } else {
+                    Log.w(TAG, "⚠️ Ringtone is null")
+                    writeDebugLog("AlarmAudioService.kt:playDefaultNotificationSound", "Ringtone is null")
+                }
+            } else {
+                Log.w(TAG, "⚠️ No default notification/alarm sound available")
+                writeDebugLog("AlarmAudioService.kt:playDefaultNotificationSound", "No default sound URI available")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "✗ Error playing system sound: ${e.message}")
+            writeDebugLog("AlarmAudioService.kt:playDefaultNotificationSound", "Error playing system sound", mapOf(
+                "error" to (e.message ?: "unknown")
+            ))
+            throw e
         }
     }
     
@@ -711,4 +787,3 @@ class AlarmAudioService : Service() {
             .build()
     }
 }
-
