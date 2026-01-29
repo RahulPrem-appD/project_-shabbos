@@ -789,10 +789,35 @@ class NotificationService {
     }
 
     // Cancel all existing notifications and alarms (unless skipping cancellation)
+    // ALWAYS protect test notification IDs (996, 997, 998) from cancellation
     if (!skipCancellation) {
-      await _notifications.cancelAll();
+      debugPrint('NotificationService: Cancelling old notifications...');
+      
+      // Get pending notifications and cancel all except test IDs
+      final pending = await _notifications.pendingNotificationRequests();
+      for (final notification in pending) {
+        // Skip test notification IDs (996, 997, 998)
+        if (notification.id == 996 || notification.id == 997 || notification.id == 998) {
+          debugPrint('NotificationService: Protecting test notification #${notification.id}');
+          continue;
+        }
+        await _notifications.cancel(notification.id);
+      }
+      debugPrint('NotificationService: Cancelled ${pending.length - 3} notifications, kept 3 test notifications');
+      
       if (Platform.isAndroid) {
-        await NativeAlarmService.cancelAllAlarms(protectImminent: false);
+        // Cancel all Android alarms except test IDs
+        final androidAlarms = await NativeAlarmService.getScheduledAlarms();
+        for (final alarm in androidAlarms) {
+          final id = alarm['id'] as int;
+          // Skip test notification IDs (996, 997, 998)
+          if (id == 996 || id == 997 || id == 998) {
+            debugPrint('NotificationService: Protecting test alarm #$id');
+            continue;
+          }
+          await NativeAlarmService.cancelAlarm(id);
+        }
+        debugPrint('NotificationService: Cancelled Android alarms, kept test alarms');
       }
     } else {
       debugPrint('NotificationService: Skipping cancellation (protected alarms will remain)');

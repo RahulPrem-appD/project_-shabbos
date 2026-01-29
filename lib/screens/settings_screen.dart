@@ -1,9 +1,11 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'dart:async';
 import '../models/city.dart';
 import '../models/candle_lighting.dart';
 import '../services/location_service.dart';
 import '../services/notification_service.dart';
+import '../services/audio_service.dart';
 import 'upcoming_notifications_screen.dart';
 import 'diagnostic_report_screen.dart';
 
@@ -28,10 +30,17 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> {
   final LocationService _locationService = LocationService();
   final NotificationService _notificationService = NotificationService();
+  final AudioService _audioService = AudioService();
 
   bool _useGps = true;
   LocationInfo? _savedLocation;
   bool _notificationsEnabled = true;
+  
+  // Permission status (Android only)
+  bool _hasNotificationPermission = true;
+  bool _hasExactAlarmPermission = true;
+  bool _hasBatteryOptimizationDisabled = true;
+  bool _isLoadingPermissions = false;
 
   bool get isHebrew => widget.locale == 'he';
 
@@ -52,6 +61,31 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _savedLocation = savedLocation;
       _notificationsEnabled = notificationsEnabled;
     });
+    
+    // Load permission status (Android only)
+    if (Platform.isAndroid) {
+      await _loadPermissionStatus();
+    }
+  }
+  
+  Future<void> _loadPermissionStatus() async {
+    if (!Platform.isAndroid) return;
+    
+    setState(() => _isLoadingPermissions = true);
+    
+    try {
+      final permissions = await _notificationService.checkAllPermissions();
+      
+      setState(() {
+        _hasNotificationPermission = permissions['notifications'] ?? false;
+        _hasExactAlarmPermission = permissions['exactAlarms'] ?? true;
+        _hasBatteryOptimizationDisabled = permissions['batteryOptimization'] ?? true;
+        _isLoadingPermissions = false;
+      });
+    } catch (e) {
+      debugPrint('Error loading permissions: $e');
+      setState(() => _isLoadingPermissions = false);
+    }
   }
 
   @override
@@ -147,6 +181,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ],
                   ),
 
+                  // Permissions section (Android only)
+                  if (Platform.isAndroid)
+                    _buildPermissionsSection(),
+
                   _buildSection(
                     title: isHebrew ? 'אמינות' : 'Reliability',
                     children: [
@@ -207,6 +245,26 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   _buildSection(
                     title: isHebrew ? 'בדיקות' : 'Testing',
                     children: [
+                      _buildActionTile(
+                        icon: Icons.volume_up,
+                        title: isHebrew
+                            ? 'בדוק צליל שופר'
+                            : 'Test Shofar Sound',
+                        subtitle: isHebrew
+                            ? 'בדוק אם הצליל פועל'
+                            : 'Check if sound is working',
+                        onTap: _testShofarSound,
+                      ),
+                      _buildActionTile(
+                        icon: Icons.notifications_active,
+                        title: isHebrew
+                            ? 'שלח התראת בדיקה'
+                            : 'Send Test Notification',
+                        subtitle: isHebrew
+                            ? 'התראה מיידית עם צליל'
+                            : 'Immediate notification with sound',
+                        onTap: _sendTestNotification,
+                      ),
                       _buildActionTile(
                         icon: Icons.science,
                         title: isHebrew
@@ -564,6 +622,295 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ),
       ),
     );
+  }
+
+  /// Build permissions section with status indicators and fix buttons (Android only)
+  Widget _buildPermissionsSection() {
+    final allPermissionsOk = _hasNotificationPermission && 
+                              _hasExactAlarmPermission && 
+                              _hasBatteryOptimizationDisabled;
+    
+    return _buildSection(
+      title: isHebrew ? 'הרשאות (אנדרואיד)' : 'Permissions (Android)',
+      children: [
+        // Overall status
+        _buildPermissionStatusTile(
+          icon: allPermissionsOk ? Icons.verified_user : Icons.warning_amber_rounded,
+          iconColor: allPermissionsOk ? Colors.green : Colors.orange,
+          title: allPermissionsOk 
+              ? (isHebrew ? 'כל ההרשאות תקינות' : 'All Permissions OK')
+              : (isHebrew ? 'נדרשת פעולה' : 'Action Required'),
+          subtitle: allPermissionsOk
+              ? (isHebrew ? 'ההתראות יפעלו כראוי' : 'Notifications will work properly')
+              : (isHebrew ? 'יש לתקן הרשאות כדי שהתראות יפעלו' : 'Fix permissions for notifications to work'),
+          isOk: allPermissionsOk,
+          isLoading: _isLoadingPermissions,
+          onRefresh: _loadPermissionStatus,
+        ),
+        
+        // Notification permission
+        _buildPermissionStatusTile(
+          icon: Icons.notifications_outlined,
+          iconColor: _hasNotificationPermission ? Colors.green : Colors.red,
+          title: isHebrew ? 'הרשאת התראות' : 'Notification Permission',
+          subtitle: _hasNotificationPermission
+              ? (isHebrew ? 'מאושר ✓' : 'Granted ✓')
+              : (isHebrew ? 'נדרש - לחץ לתיקון' : 'Required - Tap to fix'),
+          isOk: _hasNotificationPermission,
+          onFix: _hasNotificationPermission ? null : () async {
+            await _notificationService.requestPermissions();
+            await _loadPermissionStatus();
+          },
+        ),
+        
+        // Exact alarm permission
+        _buildPermissionStatusTile(
+          icon: Icons.alarm,
+          iconColor: _hasExactAlarmPermission ? Colors.green : Colors.red,
+          title: isHebrew ? 'הרשאת התראות מדויקות' : 'Exact Alarm Permission',
+          subtitle: _hasExactAlarmPermission
+              ? (isHebrew ? 'מאושר ✓' : 'Granted ✓')
+              : (isHebrew ? 'נדרש - לחץ לתיקון' : 'Required - Tap to fix'),
+          isOk: _hasExactAlarmPermission,
+          onFix: _hasExactAlarmPermission ? null : () async {
+            await _notificationService.requestExactAlarmPermission();
+            // Wait a bit for user to grant permission
+            await Future.delayed(const Duration(seconds: 2));
+            await _loadPermissionStatus();
+          },
+        ),
+        
+        // Battery optimization
+        _buildPermissionStatusTile(
+          icon: Icons.battery_saver,
+          iconColor: _hasBatteryOptimizationDisabled ? Colors.green : Colors.orange,
+          title: isHebrew ? 'אופטימיזציית סוללה' : 'Battery Optimization',
+          subtitle: _hasBatteryOptimizationDisabled
+              ? (isHebrew ? 'מושבת (טוב) ✓' : 'Disabled (good) ✓')
+              : (isHebrew ? 'פעיל - עלול לחסום התראות!' : 'Active - May block notifications!'),
+          isOk: _hasBatteryOptimizationDisabled,
+          onFix: _hasBatteryOptimizationDisabled ? null : () async {
+            await _notificationService.requestDisableBatteryOptimization();
+            // Wait a bit for user to grant permission
+            await Future.delayed(const Duration(seconds: 2));
+            await _loadPermissionStatus();
+          },
+        ),
+      ],
+    );
+  }
+  
+  /// Build a permission status tile with optional fix button
+  Widget _buildPermissionStatusTile({
+    required IconData icon,
+    required Color iconColor,
+    required String title,
+    required String subtitle,
+    required bool isOk,
+    bool isLoading = false,
+    VoidCallback? onFix,
+    VoidCallback? onRefresh,
+  }) {
+    return InkWell(
+      onTap: onFix ?? onRefresh,
+      borderRadius: BorderRadius.circular(16),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        child: Row(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: iconColor.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: isLoading
+                  ? const Padding(
+                      padding: EdgeInsets.all(10),
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Color(0xFFE8B923),
+                      ),
+                    )
+                  : Icon(icon, size: 20, color: iconColor),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w500,
+                      color: Color(0xFF1A1A1A),
+                    ),
+                  ),
+                  Text(
+                    subtitle,
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: isOk ? Colors.grey[500] : Colors.red[400],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (onFix != null)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE8B923),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  isHebrew ? 'תקן' : 'Fix',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.white,
+                  ),
+                ),
+              )
+            else if (onRefresh != null)
+              IconButton(
+                icon: const Icon(Icons.refresh, color: Colors.grey),
+                onPressed: onRefresh,
+                iconSize: 20,
+              )
+            else
+              Icon(
+                isOk ? Icons.check_circle : Icons.error,
+                color: isOk ? Colors.green : Colors.red,
+                size: 20,
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Test shofar sound playback
+  Future<void> _testShofarSound() async {
+    try {
+      // Show playing indicator
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: Colors.white,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Text(isHebrew ? 'מנגן צליל שופר...' : 'Playing shofar sound...'),
+            ],
+          ),
+          duration: const Duration(seconds: 3),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      
+      // Play the candle lighting sound (Rav Shalom Shofar)
+      final soundId = _audioService.getCandleLightingSound();
+      await _audioService.playSound(soundId);
+      
+      // Show success after a short delay
+      await Future.delayed(const Duration(seconds: 2));
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(Icons.check_circle, color: Colors.white),
+              const SizedBox(width: 12),
+              Text(isHebrew ? 'הצליל פועל!' : 'Sound is working!'),
+            ],
+          ),
+          backgroundColor: Colors.green,
+          duration: const Duration(seconds: 2),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(isHebrew ? 'שגיאה בהשמעת צליל: $e' : 'Error playing sound: $e'),
+          backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
+  /// Send immediate test notification
+  Future<void> _sendTestNotification() async {
+    try {
+      // Show loading
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: Colors.white,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Text(isHebrew ? 'שולח התראת בדיקה...' : 'Sending test notification...'),
+            ],
+          ),
+          duration: const Duration(seconds: 2),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      
+      // Send test notification
+      await _notificationService.sendTestNotification();
+      
+      // Show success
+      await Future.delayed(const Duration(milliseconds: 500));
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(Icons.check_circle, color: Colors.white),
+              const SizedBox(width: 12),
+              Text(isHebrew ? 'התראה נשלחה!' : 'Notification sent!'),
+            ],
+          ),
+          backgroundColor: Colors.green,
+          duration: const Duration(seconds: 2),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(isHebrew ? 'שגיאה בשליחת התראה: $e' : 'Error sending notification: $e'),
+          backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
   }
 
   /// Show diagnostic report for debugging

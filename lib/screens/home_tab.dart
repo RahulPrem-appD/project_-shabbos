@@ -276,10 +276,17 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
           _isLoading = false;
         });
 
-        await _notificationService.scheduleNotifications(
-          futureTimes.take(10).toList(),
-          locale: widget.locale,
-        );
+        // Only reschedule notifications if needed (not every app open)
+        final needsRescheduling = await _checkIfNotificationsNeedRescheduling(futureTimes);
+        if (needsRescheduling) {
+          debugPrint('HomeTab: Rescheduling notifications (needed)');
+          await _notificationService.scheduleNotifications(
+            futureTimes.take(10).toList(),
+            locale: widget.locale,
+          );
+        } else {
+          debugPrint('HomeTab: Notifications already scheduled, skipping reschedule');
+        }
 
         // Check and start Live Activity for iOS if within pre-notification window
         await _notificationService.checkAndStartLiveActivity(futureTimes);
@@ -910,6 +917,84 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
         ],
       ),
     );
+  }
+
+  /// Check if notifications need rescheduling
+  /// Returns true if notifications are missing or don't match expected schedule
+  /// Returns false if notifications are already properly scheduled
+  Future<bool> _checkIfNotificationsNeedRescheduling(List<CandleLighting> expectedTimes) async {
+    try {
+      debugPrint('HomeTab: Checking if notifications need rescheduling...');
+      
+      // Get currently scheduled notifications/alarms
+      List<Map<String, dynamic>> scheduledAlarms = [];
+      
+      if (Platform.isAndroid) {
+        scheduledAlarms = await NativeAlarmService.getScheduledAlarms();
+      } else {
+        // For iOS, we'd need to check pending notifications
+        // For now, just reschedule on iOS (simpler approach)
+        debugPrint('HomeTab: iOS - always rescheduling for simplicity');
+        return true;
+      }
+      
+      // Filter out test notifications (996, 997, 998)
+      final realAlarms = scheduledAlarms.where((alarm) {
+        final id = alarm['id'] as int;
+        return id != 996 && id != 997 && id != 998;
+      }).toList();
+      
+      debugPrint('HomeTab: Found ${realAlarms.length} real alarms scheduled (excluding tests)');
+      debugPrint('HomeTab: Expected ${expectedTimes.take(10).length * 2} alarms (pre + issur for each event)');
+      
+      // Calculate expected number of alarms (pre-notification + issur melacha for each event)
+      final expectedCount = expectedTimes.take(10).length * 2; // 2 per event (pre + issur)
+      
+      // If count doesn't match, reschedule
+      if (realAlarms.length != expectedCount) {
+        debugPrint('HomeTab: Alarm count mismatch - need rescheduling');
+        return true;
+      }
+      
+      // Check if the scheduled times roughly match expected times
+      // We'll check the first few alarms to see if they're scheduled correctly
+      final now = DateTime.now();
+      final preMinutes = await _notificationService.getPreNotificationMinutes();
+      
+      for (int i = 0; i < expectedTimes.take(3).length; i++) {
+        final expectedPreTime = expectedTimes[i].candleLightingTime.subtract(Duration(minutes: preMinutes));
+        final expectedCandleTime = expectedTimes[i].candleLightingTime;
+        
+        // Skip if times are in the past
+        if (expectedPreTime.isBefore(now)) continue;
+        
+        // Find alarms that match these times (within 5 minutes tolerance)
+        final matchingPreAlarm = realAlarms.any((alarm) {
+          final scheduledTime = DateTime.fromMillisecondsSinceEpoch(alarm['timestampMillis'] as int);
+          final diff = scheduledTime.difference(expectedPreTime).abs();
+          return diff.inMinutes < 5;
+        });
+        
+        final matchingCandleAlarm = realAlarms.any((alarm) {
+          final scheduledTime = DateTime.fromMillisecondsSinceEpoch(alarm['timestampMillis'] as int);
+          final diff = scheduledTime.difference(expectedCandleTime).abs();
+          return diff.inMinutes < 5;
+        });
+        
+        if (!matchingPreAlarm || !matchingCandleAlarm) {
+          debugPrint('HomeTab: Alarm times don\'t match expected - need rescheduling');
+          return true;
+        }
+      }
+      
+      debugPrint('HomeTab: Notifications are properly scheduled - no rescheduling needed');
+      return false;
+      
+    } catch (e) {
+      debugPrint('HomeTab: Error checking notifications: $e');
+      // On error, reschedule to be safe
+      return true;
+    }
   }
 
 }
