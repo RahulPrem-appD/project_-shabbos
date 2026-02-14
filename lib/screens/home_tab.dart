@@ -7,6 +7,7 @@ import '../services/hebcal_service.dart';
 import '../services/location_service.dart';
 import '../services/notification_service.dart';
 import '../services/native_alarm_service.dart';
+import '../services/preferences_service.dart';
 
 class HomeTab extends StatefulWidget {
   final String locale;
@@ -26,6 +27,7 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
   final HebcalService _hebcalService = HebcalService();
   final LocationService _locationService = LocationService();
   final NotificationService _notificationService = NotificationService();
+  final PreferencesService _preferencesService = PreferencesService();
 
   List<CandleLighting> _candleLightings = [];
   LocationInfo? _location;
@@ -203,6 +205,162 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
     }
   }
 
+  Future<void> _detectLocationWithReschedule() async {
+    final oldLocation = _location;
+
+    setState(() {
+      _isDetectingLocation = true;
+      _error = null;
+    });
+
+    try {
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                isHebrew
+                    ? 'שירותי המיקום כבויים. אנא הפעל אותם בהגדרות.'
+                    : 'Location services are disabled. Please enable them in settings.',
+              ),
+              backgroundColor: Colors.red[400],
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+          );
+        }
+        return;
+      }
+
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+
+      if (permission == LocationPermission.whileInUse ||
+          permission == LocationPermission.always) {
+        final newLocation = await _locationService.getCurrentLocation();
+
+        if (newLocation != null) {
+          await _locationService.saveLocation(newLocation);
+          await _locationService.setUseGps(true);
+
+          // Check if location meaningfully changed
+          final locationChanged = oldLocation == null ||
+              oldLocation.cityName != newLocation.cityName ||
+              _distanceKm(
+                    oldLocation.latitude, oldLocation.longitude,
+                    newLocation.latitude, newLocation.longitude,
+                  ) > 5;
+
+          if (locationChanged) {
+            // Force reschedule: reload data and schedule notifications
+            await _loadData();
+
+            // Force schedule even if smart check says no
+            if (_candleLightings.isNotEmpty) {
+              await _notificationService.scheduleNotifications(
+                _candleLightings.take(10).toList(),
+                locale: widget.locale,
+              );
+            }
+
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(
+                    isHebrew
+                        ? '✓ מיקום עודכן ל${newLocation.displayName}. ההתראות תוזמנו מחדש!'
+                        : '✓ Location updated to ${newLocation.displayName}. Notifications rescheduled!',
+                  ),
+                  backgroundColor: Colors.green,
+                  behavior: SnackBarBehavior.floating,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+              );
+            }
+          } else {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(
+                    isHebrew
+                        ? 'המיקום לא השתנה: ${newLocation.displayName}'
+                        : 'Location unchanged: ${newLocation.displayName}',
+                  ),
+                  behavior: SnackBarBehavior.floating,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+              );
+            }
+          }
+        } else {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  isHebrew
+                      ? 'לא ניתן לזהות מיקום. נסה שוב.'
+                      : 'Could not detect location. Please try again.',
+                ),
+                backgroundColor: Colors.red[400],
+                behavior: SnackBarBehavior.floating,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+            );
+          }
+        }
+      } else if (permission == LocationPermission.deniedForever) {
+        if (mounted) {
+          _showLocationSettingsDialog();
+        }
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                isHebrew
+                    ? 'נדרשת הרשאת מיקום'
+                    : 'Location permission is required',
+              ),
+              backgroundColor: Colors.red[400],
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      debugPrint('HomeTab: Error detecting location: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              isHebrew
+                  ? 'שגיאה בזיהוי מיקום'
+                  : 'Error detecting location',
+            ),
+            backgroundColor: Colors.red[400],
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isDetectingLocation = false;
+        });
+      }
+    }
+  }
+
+  /// Distance in km between two coordinates using Geolocator
+  double _distanceKm(double lat1, double lon1, double lat2, double lon2) {
+    return Geolocator.distanceBetween(lat1, lon1, lat2, lon2) / 1000.0;
+  }
+
   void _showLocationSettingsDialog() {
     showDialog(
       context: context,
@@ -236,6 +394,60 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
         ],
       ),
     );
+  }
+
+  Future<void> _showTravelTipIfNeeded() async {
+    final hasSeenTip = await _preferencesService.hasSeenTravelTip();
+    if (hasSeenTip) return;
+    if (!mounted) return;
+
+    await showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            const Icon(
+              Icons.flight_takeoff,
+              color: Color(0xFFE8B923),
+              size: 28,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                isHebrew ? '?נוסע/ת' : 'Travelling?',
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ],
+        ),
+        content: Text(
+          isHebrew
+              ? 'כשאתה נוסע לעיר אחרת, עדכן את המיקום שלך בהגדרות או לחץ על כפתור המיקום בדף הבית כדי שההתראות יגיעו בזמן הנכון של הדלקת נרות במיקום שלך.'
+              : 'When you travel to a different city, update your location in Settings or tap the location button on the home page so notifications arrive at the correct candle lighting time for your location.',
+          style: const TextStyle(fontSize: 14, height: 1.5),
+        ),
+        actions: [
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF1A1A1A),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+            child: Text(isHebrew ? 'הבנתי' : 'Got it'),
+          ),
+        ],
+      ),
+    );
+
+    await _preferencesService.setTravelTipSeen();
   }
 
   Future<void> _loadData() async {
@@ -290,6 +502,9 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
 
         // Check and start Live Activity for iOS if within pre-notification window
         await _notificationService.checkAndStartLiveActivity(futureTimes);
+
+        // Show travel tip dialog on first launch
+        _showTravelTipIfNeeded();
       } else {
         setState(() {
           _isLoading = false;
@@ -560,6 +775,79 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
     );
   }
 
+  Widget _buildLocationDetectButton() {
+    return GestureDetector(
+      onTap: _isDetectingLocation ? null : _detectLocationWithReschedule,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: const Color(0xFFFFFBEB),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: const Color(0xFFE8B923).withValues(alpha: 0.4),
+          ),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: const Color(0xFFE8B923).withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: _isDetectingLocation
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Color(0xFFE8B923),
+                      ),
+                    )
+                  : const Icon(
+                      Icons.my_location,
+                      size: 20,
+                      color: Color(0xFFE8B923),
+                    ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    _location?.displayName ?? (isHebrew ? 'זהה מיקום' : 'Detect Location'),
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF1A1A1A),
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    isHebrew
+                        ? 'לחץ לעדכון המיקום שלך'
+                        : 'Tap to update your location',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: Colors.grey[500],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Icon(
+              Icons.refresh,
+              size: 20,
+              color: Colors.grey[400],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildBody() {
     if (_isLoading) {
       return const Center(
@@ -581,7 +869,9 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
       child: ListView(
         padding: const EdgeInsets.symmetric(horizontal: 24),
         children: [
-          const SizedBox(height: 24),
+          const SizedBox(height: 16),
+          _buildLocationDetectButton(),
+          const SizedBox(height: 16),
           _buildNextCandleLighting(_candleLightings.first),
           const SizedBox(height: 32),
           if (_candleLightings.length > 1) ...[

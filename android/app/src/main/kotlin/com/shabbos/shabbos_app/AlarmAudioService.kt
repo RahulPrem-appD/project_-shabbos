@@ -100,10 +100,16 @@ class AlarmAudioService : Service() {
         val soundId = intent?.getStringExtra(EXTRA_SOUND_ID) ?: "rav_shalom_shofar"
         val title = intent?.getStringExtra(EXTRA_TITLE) ?: "שבת שלום!"
         val body = intent?.getStringExtra(EXTRA_BODY) ?: "Time to light candles 🕯️🕯️"
-        
+
+        // Read alarm volume from Flutter SharedPreferences (stored as string to avoid type mismatch)
+        val flutterPrefs = getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
+        val volumeStr = flutterPrefs.getString("flutter.alarm_volume", null) ?: "1.0"
+        val alarmVolume = (volumeStr.toFloatOrNull() ?: 1.0f).coerceIn(0.1f, 1.0f)
+
         Log.d(TAG, "Sound ID: $soundId")
         Log.d(TAG, "Title: $title")
         Log.d(TAG, "Body: $body")
+        Log.d(TAG, "Alarm volume: $alarmVolume")
         
         // CRITICAL: Ensure notification channel exists (required for foreground service)
         // This must work even when app hasn't been opened for weeks
@@ -183,8 +189,8 @@ class AlarmAudioService : Service() {
         }
         
         // Play the sound
-        Log.d(TAG, "Calling playSound($soundId)...")
-        playSound(soundId)
+        Log.d(TAG, "Calling playSound($soundId) at volume $alarmVolume...")
+        playSound(soundId, alarmVolume)
         
         Log.d(TAG, "========================================")
         // Return START_STICKY to ensure service restarts if killed
@@ -206,8 +212,8 @@ class AlarmAudioService : Service() {
         super.onDestroy()
     }
     
-    private fun playSound(soundId: String) {
-        Log.d(TAG, "playSound called with soundId: '$soundId'")
+    private fun playSound(soundId: String, volume: Float = 1.0f) {
+        Log.d(TAG, "playSound called with soundId: '$soundId', volume: $volume")
         
         if (soundId == "silent") {
             Log.d(TAG, "Silent mode - stopping service (no sound to play)")
@@ -234,7 +240,7 @@ class AlarmAudioService : Service() {
             val defaultPath = SOUND_FILES["rav_shalom_shofar"]
             if (defaultPath != null) {
                 Log.d(TAG, "Using default path: $defaultPath")
-                playSoundFromAsset(defaultPath)
+                playSoundFromAsset(defaultPath, volume = volume)
             } else {
                 Log.e(TAG, "✗ CRITICAL: Even default sound path is null!")
                 writeDebugLog("AlarmAudioService.kt:playSound", "CRITICAL: Even default sound path is null", mapOf(
@@ -247,10 +253,10 @@ class AlarmAudioService : Service() {
         }
         
         Log.d(TAG, "✓ Found asset path for '$soundId': $assetPath")
-        playSoundFromAsset(assetPath)
+        playSoundFromAsset(assetPath, volume = volume)
     }
     
-    private fun playSoundFromAsset(assetPath: String, isRetry: Boolean = false) {
+    private fun playSoundFromAsset(assetPath: String, isRetry: Boolean = false, volume: Float = 1.0f) {
         try {
             Log.d(TAG, "========================================")
             Log.d(TAG, "playSoundFromAsset: Starting playback")
@@ -404,10 +410,9 @@ class AlarmAudioService : Service() {
                 )
                 Log.d(TAG, "✓ Audio attributes set (with AUDIBILITY_ENFORCED flag)")
                 
-                // Set volume to maximum (1.0 = 100%)
-                // This ensures the sound plays at full volume regardless of system volume
-                setVolume(1.0f, 1.0f)
-                Log.d(TAG, "✓ MediaPlayer volume set to maximum (1.0)")
+                // Set volume based on user preference (0.1 to 1.0)
+                setVolume(volume, volume)
+                Log.d(TAG, "✓ MediaPlayer volume set to $volume")
                 
                 setOnPreparedListener {
                     Log.d(TAG, "========================================")
@@ -601,7 +606,7 @@ class AlarmAudioService : Service() {
                     "errorReason" to (e.message ?: "unknown")
                 ))
                 // Try to play the default sound instead
-                playSoundFromAsset(defaultPath, isRetry = true)
+                playSoundFromAsset(defaultPath, isRetry = true, volume = volume)
                 return
             }
             

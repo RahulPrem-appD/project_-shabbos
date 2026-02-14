@@ -114,6 +114,8 @@ class AudioService {
 
   static const String _earlyReminderSoundKey = 'early_reminder_sound';
   static const String _yomTovSoundKey = 'yomtov_sound';
+  static const String _alarmVolumeKey = 'alarm_volume';
+  static const double defaultAlarmVolume = 1.0;
   
   // Default sound IDs
   static const String defaultEarlyReminderSound = 'shabbat_shalom_song';
@@ -166,6 +168,8 @@ class AudioService {
 
       debugPrint('AudioService: Playing asset: ${sound.assetPath}');
       await player.setSource(AssetSource(sound.assetPath!));
+      final volume = await getAlarmVolume();
+      await player.setVolume(volume);
       await player.resume();
       debugPrint('AudioService: Successfully started playing ${sound.id}');
     } catch (e, stackTrace) {
@@ -251,6 +255,25 @@ class AudioService {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_yomTovSoundKey, soundId);
     debugPrint('AudioService: Yom Tov sound set to: $soundId');
+  }
+
+  // ============================================
+  // Alarm Volume settings (Android only)
+  // ============================================
+
+  Future<double> getAlarmVolume() async {
+    final prefs = await SharedPreferences.getInstance();
+    final volumeStr = prefs.getString(_alarmVolumeKey);
+    if (volumeStr == null) return defaultAlarmVolume;
+    final volume = double.tryParse(volumeStr) ?? defaultAlarmVolume;
+    return volume.clamp(0.1, 1.0);
+  }
+
+  Future<void> setAlarmVolume(double volume) async {
+    final clampedVolume = volume.clamp(0.1, 1.0);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_alarmVolumeKey, clampedVolume.toString());
+    debugPrint('AudioService: Alarm volume set to: $clampedVolume');
   }
 
   // ============================================

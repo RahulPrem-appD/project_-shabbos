@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import '../models/candle_lighting.dart';
 import '../services/audio_service.dart';
@@ -23,6 +24,7 @@ class _SoundScreenState extends State<SoundScreen> {
 
   String _earlyReminderSound = AudioService.defaultEarlyReminderSound;
   String _yomTovSound = AudioService.defaultYomTovSound;
+  double _alarmVolume = AudioService.defaultAlarmVolume;
   String? _playingId;
   bool _isLoading = true;
 
@@ -39,10 +41,12 @@ class _SoundScreenState extends State<SoundScreen> {
 
     final earlySound = await _audioService.getEarlyReminderSound();
     final yomTovSound = await _audioService.getYomTovSound();
+    final alarmVolume = await _audioService.getAlarmVolume();
 
     setState(() {
       _earlyReminderSound = earlySound;
       _yomTovSound = yomTovSound;
+      _alarmVolume = alarmVolume;
       _isLoading = false;
     });
   }
@@ -98,6 +102,12 @@ class _SoundScreenState extends State<SoundScreen> {
                 children: [
                   const SizedBox(height: 8),
 
+                  // Volume Control Section (Android only)
+                  if (Platform.isAndroid) ...[
+                    _buildVolumeSection(),
+                    const SizedBox(height: 24),
+                  ],
+
                   // Early Reminder Section (Music only - selectable)
                   _buildEarlyReminderSection(),
 
@@ -120,6 +130,69 @@ class _SoundScreenState extends State<SoundScreen> {
                 ],
               ),
       ),
+    );
+  }
+
+  Widget _buildVolumeSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildSectionHeader(
+          title: isHebrew ? 'עוצמת קול' : 'Alarm Volume',
+          subtitle: isHebrew
+              ? 'חל על כל צלילי ההתראה'
+              : 'Applies to all alarm sounds',
+          icon: Icons.volume_up,
+        ),
+        const SizedBox(height: 8),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF8F8F8),
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Row(
+            children: [
+              Icon(Icons.volume_mute, color: Colors.grey[400], size: 20),
+              Expanded(
+                child: Slider(
+                  value: _alarmVolume,
+                  min: 0.1,
+                  max: 1.0,
+                  divisions: 9,
+                  activeColor: const Color(0xFFE8B923),
+                  inactiveColor: const Color(0xFFE8B923).withValues(alpha: 0.2),
+                  onChanged: (value) {
+                    setState(() => _alarmVolume = value);
+                  },
+                  onChangeEnd: (value) async {
+                    await _audioService.setAlarmVolume(value);
+                    // Play a brief preview at the new volume
+                    await _audioService.previewSound(
+                      SoundOption.candleLightingSound.id,
+                    );
+                    await Future.delayed(const Duration(seconds: 2));
+                    await _audioService.stop();
+                  },
+                ),
+              ),
+              Icon(Icons.volume_up, color: const Color(0xFFE8B923), size: 20),
+              const SizedBox(width: 8),
+              SizedBox(
+                width: 36,
+                child: Text(
+                  '${(_alarmVolume * 100).round()}%',
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF1A1A1A),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 
