@@ -777,73 +777,97 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
     );
   }
 
-  Widget _buildLocationDetectButton() {
+  Widget _buildTravelLocationBanner() {
     return GestureDetector(
       onTap: _isDetectingLocation ? null : _detectLocationWithReschedule,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
-          color: const Color(0xFFFFFBEB),
+          gradient: LinearGradient(
+            begin: isHebrew ? Alignment.centerRight : Alignment.centerLeft,
+            end: isHebrew ? Alignment.centerLeft : Alignment.centerRight,
+            colors: [
+              const Color(0xFFE8B923).withValues(alpha: 0.08),
+              const Color(0xFFE8B923).withValues(alpha: 0.02),
+            ],
+          ),
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: const Color(0xFFE8B923).withValues(alpha: 0.4),
+            color: const Color(0xFFE8B923).withValues(alpha: 0.2),
+            width: 0.5,
           ),
         ),
         child: Row(
+          textDirection: isHebrew ? TextDirection.rtl : TextDirection.ltr,
           children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: const Color(0xFFE8B923).withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: _isDetectingLocation
-                  ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Color(0xFFE8B923),
-                      ),
-                    )
-                  : const Icon(
-                      Icons.my_location,
-                      size: 20,
+            _isDetectingLocation
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 1.5,
                       color: Color(0xFFE8B923),
                     ),
-            ),
-            const SizedBox(width: 12),
+                  )
+                : const Icon(
+                    Icons.flight_takeoff_rounded,
+                    size: 18,
+                    color: Color(0xFFE8B923),
+                  ),
+            const SizedBox(width: 10),
             Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    _location?.displayName ?? (isHebrew ? 'זהה מיקום' : 'Detect Location'),
-                    style: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: Color(0xFF1A1A1A),
-                    ),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    isHebrew
-                        ? 'לחץ לעדכון המיקום שלך'
-                        : 'Tap to update your location',
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: Colors.grey[500],
-                    ),
-                  ),
-                ],
+              child: Text(
+                _isDetectingLocation
+                    ? (isHebrew ? 'מזהה מיקום...' : 'Detecting...')
+                    : (isHebrew ? 'נוסע/ת?' : 'Travelling?'),
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                  color: const Color(0xFF1A1A1A).withValues(alpha: 0.6),
+                  letterSpacing: 0.3,
+                ),
               ),
             ),
-            Icon(
-              Icons.refresh,
-              size: 20,
-              color: Colors.grey[400],
-            ),
+            if (_location != null && !_isDetectingLocation) ...[
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1A1A1A).withValues(alpha: 0.06),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  textDirection: isHebrew ? TextDirection.rtl : TextDirection.ltr,
+                  children: [
+                    Icon(
+                      Icons.location_on,
+                      size: 12,
+                      color: const Color(0xFFE8B923).withValues(alpha: 0.8),
+                    ),
+                    const SizedBox(width: 4),
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 120),
+                      child: Text(
+                        _location!.cityName ?? _location!.displayName,
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: const Color(0xFF1A1A1A).withValues(alpha: 0.7),
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                        maxLines: 1,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 6),
+              Icon(
+                Icons.chevron_right_rounded,
+                size: 16,
+                color: Colors.grey[350],
+              ),
+            ],
           ],
         ),
       ),
@@ -871,9 +895,9 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
       child: ListView(
         padding: const EdgeInsets.symmetric(horizontal: 24),
         children: [
-          const SizedBox(height: 16),
-          _buildLocationDetectButton(),
-          const SizedBox(height: 16),
+          const SizedBox(height: 8),
+          _buildTravelLocationBanner(),
+          const SizedBox(height: 12),
           _buildNextCandleLighting(_candleLightings.first),
           const SizedBox(height: 32),
           if (_candleLightings.length > 1) ...[
