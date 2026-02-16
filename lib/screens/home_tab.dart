@@ -64,8 +64,10 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
     // Re-check permissions when app resumes (every time app is opened or brought to foreground)
     if (state == AppLifecycleState.resumed) {
       debugPrint('HomeTab: App resumed/opened, checking permissions');
+      // Reset throttle so the check is never skipped after returning from settings
+      _lastPermissionCheck = null;
       // Use a small delay to ensure the app is fully active
-      Future.delayed(const Duration(milliseconds: 300), () {
+      Future.delayed(const Duration(milliseconds: 500), () {
         if (mounted) {
           _checkPermissions();
         }
@@ -757,9 +759,9 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
               if (_batteryOptimizationDisabled != true) {
                 await NativeAlarmService.requestDisableBatteryOptimization();
               }
-              // Re-check permissions after a delay
-              await Future.delayed(const Duration(seconds: 1));
-              await _checkPermissions();
+              // Reset throttle so the permission check runs when the user
+              // returns from system settings (via didChangeAppLifecycleState)
+              _lastPermissionCheck = null;
             },
             child: Text(
               isHebrew ? 'פתח' : 'Open',

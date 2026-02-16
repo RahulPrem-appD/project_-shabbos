@@ -181,13 +181,6 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
           ],
         ),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text(
-              isHebrew ? 'אחר כך' : 'Later',
-              style: TextStyle(color: Colors.grey[600]),
-            ),
-          ),
           ElevatedButton(
             onPressed: () async {
               Navigator.pop(context);
@@ -255,6 +248,13 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
     bool newExactAlarm = true;
     if (Platform.isAndroid) {
       newExactAlarm = await NativeAlarmService.canScheduleExactAlarms();
+    }
+
+    // Force HomeTab to rebuild and re-check permissions
+    if (mounted) {
+      setState(() {
+        _refreshKey = UniqueKey();
+      });
     }
 
     if (newNotifStatus.isGranted && newLocStatus.isGranted && newExactAlarm) {
