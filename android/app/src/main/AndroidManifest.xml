@@ -56,6 +56,17 @@
             </intent-filter>
         </activity>
         
+        <!-- Alarm activity for volume key control during alarm playback -->
+        <activity
+            android:name=".AlarmActivity"
+            android:exported="false"
+            android:launchMode="singleTop"
+            android:theme="@android:style/Theme.NoTitleBar.Fullscreen"
+            android:showWhenLocked="true"
+            android:turnScreenOn="true"
+            android:excludeFromRecents="true"
+            android:taskAffinity=".alarm" />
+
         <!-- Flutter Local Notifications receivers -->
         <receiver 
             android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationReceiver"

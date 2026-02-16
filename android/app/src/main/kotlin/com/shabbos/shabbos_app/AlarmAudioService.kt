@@ -206,7 +206,11 @@ class AlarmAudioService : Service() {
         writeDebugLog("AlarmAudioService.kt:onDestroy", "Service destroying - cleaning up resources")
         releaseMediaPlayer()
         releaseWakeLock()
-        Log.d(TAG, "✓ Cleanup complete")
+        // Notify AlarmActivity to dismiss itself
+        sendBroadcast(Intent(AlarmActivity.ACTION_ALARM_DONE).apply {
+            setPackage(packageName)
+        })
+        Log.d(TAG, "✓ Cleanup complete, ALARM_DONE broadcast sent")
         Log.d(TAG, "========================================")
         writeDebugLog("AlarmAudioService.kt:onDestroy", "Service destroyed - cleanup complete")
         super.onDestroy()
@@ -266,70 +270,32 @@ class AlarmAudioService : Service() {
             // Get audio manager FIRST
             audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
             
-            // CRITICAL: Ensure alarm stream volume is up and not muted
-            // Even with USAGE_ALARM, we need to check/adjust volume
+            // Set system alarm stream volume based on user's preference (0.1 to 1.0)
+            // This allows hardware volume keys to control the sound during playback
             val maxVolume = audioManager!!.getStreamMaxVolume(AudioManager.STREAM_ALARM)
             val currentVolume = audioManager!!.getStreamVolume(AudioManager.STREAM_ALARM)
-            val isMuted = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                audioManager!!.isStreamMute(AudioManager.STREAM_ALARM)
-            } else {
-                currentVolume == 0
-            }
-            
-            Log.d(TAG, "Alarm stream volume: $currentVolume / $maxVolume (muted: $isMuted)")
-            writeDebugLog("AlarmAudioService.kt:volumeCheck", "Alarm stream volume check", mapOf(
+            val targetVolume = Math.max(1, Math.round(volume * maxVolume))
+
+            Log.d(TAG, "Alarm stream: current=$currentVolume, max=$maxVolume, target=$targetVolume (user pref: $volume)")
+            writeDebugLog("AlarmAudioService.kt:volumeCheck", "Setting alarm stream volume", mapOf(
                 "currentVolume" to currentVolume,
                 "maxVolume" to maxVolume,
-                "isMuted" to isMuted
+                "targetVolume" to targetVolume,
+                "userPref" to volume
             ))
-            
-            if (isMuted || currentVolume == 0) {
-                Log.w(TAG, "⚠️ Alarm stream is muted or volume is 0!")
-                Log.w(TAG, "⚠️ Attempting to unmute and set volume...")
-                writeDebugLog("AlarmAudioService.kt:volumeCheck", "WARNING: Alarm stream muted or volume is 0", mapOf(
-                    "currentVolume" to currentVolume,
-                    "isMuted" to isMuted,
-                    "action" to "attempting_to_fix"
+
+            try {
+                audioManager!!.setStreamVolume(
+                    AudioManager.STREAM_ALARM,
+                    targetVolume,
+                    0  // No flags — don't show system volume UI
+                )
+                Log.d(TAG, "✓ Set alarm stream volume to $targetVolume / $maxVolume")
+            } catch (e: SecurityException) {
+                Log.e(TAG, "✗ Cannot set alarm stream volume: ${e.message}")
+                writeDebugLog("AlarmAudioService.kt:volumeCheck", "Cannot set alarm stream volume", mapOf(
+                    "error" to (e.message ?: "unknown")
                 ))
-                
-                // Try to unmute (requires MODIFY_AUDIO_SETTINGS permission)
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                    try {
-                        audioManager!!.adjustStreamVolume(
-                            AudioManager.STREAM_ALARM,
-                            AudioManager.ADJUST_UNMUTE,
-                            0
-                        )
-                        Log.d(TAG, "✓ Attempted to unmute alarm stream")
-                    } catch (e: SecurityException) {
-                        Log.e(TAG, "✗ Cannot unmute: Missing MODIFY_AUDIO_SETTINGS permission")
-                        writeDebugLog("AlarmAudioService.kt:volumeCheck", "Cannot unmute - permission denied", mapOf(
-                            "error" to "SecurityException",
-                            "permission" to "MODIFY_AUDIO_SETTINGS"
-                        ))
-                    }
-                }
-                
-                // Set volume to maximum (requires MODIFY_AUDIO_SETTINGS permission)
-                try {
-                    audioManager!!.setStreamVolume(
-                        AudioManager.STREAM_ALARM,
-                        maxVolume,
-                        0
-                    )
-                    Log.d(TAG, "✓ Set alarm stream volume to maximum: $maxVolume")
-                    writeDebugLog("AlarmAudioService.kt:volumeCheck", "Set alarm stream volume to maximum", mapOf(
-                        "maxVolume" to maxVolume
-                    ))
-                } catch (e: SecurityException) {
-                    Log.e(TAG, "✗ Cannot set volume: Missing MODIFY_AUDIO_SETTINGS permission")
-                    Log.e(TAG, "✗ User must manually enable alarm volume in system settings")
-                    writeDebugLog("AlarmAudioService.kt:volumeCheck", "Cannot set volume - permission denied", mapOf(
-                        "error" to "SecurityException",
-                        "userActionRequired" to true,
-                        "action" to "enable_alarm_volume_manually"
-                    ))
-                }
             }
             
             // Request audio focus
@@ -410,9 +376,10 @@ class AlarmAudioService : Service() {
                 )
                 Log.d(TAG, "✓ Audio attributes set (with AUDIBILITY_ENFORCED flag)")
                 
-                // Set volume based on user preference (0.1 to 1.0)
-                setVolume(volume, volume)
-                Log.d(TAG, "✓ MediaPlayer volume set to $volume")
+                // Set MediaPlayer volume to max — actual volume is controlled via alarm stream
+                // This allows hardware volume keys to adjust alarm volume in real-time
+                setVolume(1.0f, 1.0f)
+                Log.d(TAG, "✓ MediaPlayer volume set to 1.0 (stream volume controls actual level)")
                 
                 setOnPreparedListener {
                     Log.d(TAG, "========================================")

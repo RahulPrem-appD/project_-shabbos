@@ -999,36 +999,33 @@ class AlarmReceiver : BroadcastReceiver() {
             // Check if this is an Issur Melacha notification (uses default sound)
             val isIssurMelacha = soundId == "default"
             
-            // Create intent that will wake up the screen and show the app
-            val intent = Intent(context, MainActivity::class.java).apply {
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
-                action = "android.intent.action.MAIN"
-                addCategory("android.intent.category.LAUNCHER")
-                // Add flags to wake screen and show on top
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
+            // Create intent to open AlarmActivity (volume keys control alarm stream)
+            val intent = Intent(context, AlarmActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                putExtra(AlarmActivity.EXTRA_TITLE, title)
+                putExtra(AlarmActivity.EXTRA_BODY, body)
             }
-            
+
             val pendingIntentFlags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                 PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
             } else {
                 PendingIntent.FLAG_UPDATE_CURRENT
             }
-            
+
             val pendingIntent = PendingIntent.getActivity(
                 context,
                 id,
                 intent,
                 pendingIntentFlags
             )
-            
-            // Create full screen intent with wake-up flags for maximum visibility
-            val fullScreenIntent = Intent(context, MainActivity::class.java).apply {
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
-                action = "android.intent.action.MAIN"
-                addCategory("android.intent.category.LAUNCHER")
+
+            // Create full screen intent to show AlarmActivity on lock screen
+            val fullScreenIntent = Intent(context, AlarmActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                putExtra(AlarmActivity.EXTRA_TITLE, title)
+                putExtra(AlarmActivity.EXTRA_BODY, body)
             }
-            
+
             val fullScreenPendingIntent = PendingIntent.getActivity(
                 context,
                 id + 10000, // Use different ID to avoid conflicts
