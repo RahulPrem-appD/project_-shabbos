@@ -6,6 +6,7 @@ import '../models/candle_lighting.dart';
 import '../services/location_service.dart';
 import '../services/notification_service.dart';
 import '../services/audio_service.dart';
+import '../services/native_alarm_service.dart';
 import 'upcoming_notifications_screen.dart';
 import 'diagnostic_report_screen.dart';
 
@@ -288,6 +289,16 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
                             ? 'כל יום בשעה 20:00 ו-20:20'
                             : 'Every day at 8:00 PM & 8:20 PM',
                         onTap: _scheduleDailyTests,
+                      ),
+                      _buildActionTile(
+                        icon: Icons.timer,
+                        title: isHebrew
+                            ? 'שופר בעוד דקה'
+                            : 'Shofar in 1 Minute',
+                        subtitle: isHebrew
+                            ? 'תזמן התראה עם שופר בעוד 60 שניות'
+                            : 'Schedule shofar notification in 60 seconds',
+                        onTap: _scheduleOneMinuteShofar,
                       ),
                     ],
                   ),
@@ -1041,6 +1052,78 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
                 ? 'שגיאה בהגדרת התראות: $e'
                 : 'Error scheduling notifications: $e',
           ),
+          backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
+  /// Schedule a shofar notification in 1 minute for testing
+  Future<void> _scheduleOneMinuteShofar() async {
+    try {
+      await _notificationService.initialize();
+      await _notificationService.requestPermissions();
+
+      final scheduledTime = DateTime.now().add(const Duration(minutes: 1));
+      final soundId = _audioService.getCandleLightingSound();
+
+      // Cancel any previous 1-min test
+      if (Platform.isAndroid) {
+        await NativeAlarmService.cancelAlarm(995);
+
+        final success = await NativeAlarmService.scheduleAlarm(
+          id: 995,
+          scheduledTime: scheduledTime,
+          title: isHebrew ? '🧪 בדיקה: שופר!' : '🧪 TEST: Shofar!',
+          body: isHebrew ? 'התראת בדיקה - דקה אחת' : 'Test notification - 1 minute',
+          isPreNotification: false,
+          soundId: soundId,
+        );
+
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                Icon(
+                  success ? Icons.check_circle : Icons.error,
+                  color: Colors.white,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    success
+                        ? (isHebrew
+                            ? 'שופר יצלצל ב-${scheduledTime.hour}:${scheduledTime.minute.toString().padLeft(2, '0')}:${scheduledTime.second.toString().padLeft(2, '0')}'
+                            : 'Shofar scheduled at ${scheduledTime.hour}:${scheduledTime.minute.toString().padLeft(2, '0')}:${scheduledTime.second.toString().padLeft(2, '0')}')
+                        : (isHebrew ? 'שגיאה בתזמון' : 'Failed to schedule'),
+                  ),
+                ),
+              ],
+            ),
+            backgroundColor: success ? Colors.green : Colors.red,
+            duration: const Duration(seconds: 3),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      } else {
+        // iOS: use sendTestNotification as fallback since native alarms are Android-only
+        await _notificationService.sendTestNotification();
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(isHebrew ? 'התראה נשלחה (iOS)' : 'Notification sent (iOS)'),
+            backgroundColor: Colors.green,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(isHebrew ? 'שגיאה: $e' : 'Error: $e'),
           backgroundColor: Colors.red,
           behavior: SnackBarBehavior.floating,
         ),
