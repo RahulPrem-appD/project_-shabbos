@@ -777,9 +777,70 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
     );
   }
 
+  void _showTravelInfoDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            const Icon(
+              Icons.info_outline,
+              color: Color(0xFFE8B923),
+              size: 28,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                isHebrew ? 'שים לב בנסיעה' : 'Travelling Reminder',
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ],
+        ),
+        content: Text(
+          isHebrew
+              ? 'כשאתה נוסע, המיקום שלך משתנה ועמו זמן השקיעה והדלקת הנרות. '
+                'כדי לקבל את הזמנים הנכונים למקום שאתה נמצא בו, '
+                'לחץ על הכפתור למטה כדי לעדכן את המיקום שלך.'
+              : 'When you\'re travelling, your location changes and so does the '
+                'sunset time and candle lighting time. '
+                'To get the correct times for where you are, '
+                'tap the button below to update your location.',
+          style: const TextStyle(fontSize: 14, height: 1.5),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(isHebrew ? 'סגור' : 'Close'),
+          ),
+          ElevatedButton.icon(
+            onPressed: () {
+              Navigator.pop(context);
+              _detectLocationWithReschedule();
+            },
+            icon: const Icon(Icons.my_location, size: 18),
+            label: Text(isHebrew ? 'עדכן מיקום' : 'Update Location'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF1A1A1A),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildTravelLocationBanner() {
     return GestureDetector(
       onTap: _isDetectingLocation ? null : _detectLocationWithReschedule,
+      onLongPress: _isDetectingLocation ? null : _showTravelInfoDialog,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
@@ -830,7 +891,7 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
             ),
             if (!_isDetectingLocation) ...[
               Icon(
-                Icons.chevron_right_rounded,
+                Icons.refresh_rounded,
                 size: 16,
                 color: Colors.grey[350],
               ),

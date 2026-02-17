@@ -25,6 +25,8 @@ class AlarmAudioService : Service() {
         private const val NOTIFICATION_ID = 1001
         
         
+        const val ACTION_STOP_ALARM = "com.shabbos.shabbos_app.STOP_ALARM"
+
         private const val EXTRA_SOUND_ID = "sound_id"
         private const val EXTRA_TITLE = "title"
         private const val EXTRA_BODY = "body"
@@ -48,6 +50,8 @@ class AlarmAudioService : Service() {
     private var audioFocusRequest: AudioFocusRequest? = null
     private var audioManager: AudioManager? = null
     private var wakeLock: PowerManager.WakeLock? = null
+    private var initialAlarmVolume: Int = -1
+    private var volumeReceiver: android.content.BroadcastReceiver? = null
     
     /**
      * Helper function to write logs to debug_logs.txt for diagnostic reports
@@ -85,6 +89,14 @@ class AlarmAudioService : Service() {
     }
     
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        // Handle dismiss action from notification button
+        if (intent?.action == ACTION_STOP_ALARM) {
+            Log.d(TAG, "Received STOP_ALARM action — dismissing alarm from notification")
+            writeDebugLog("AlarmAudioService.kt:onStartCommand", "STOP_ALARM action received from notification button")
+            stopSelf()
+            return START_NOT_STICKY
+        }
+
         Log.d(TAG, "========================================")
         Log.d(TAG, "onStartCommand called")
         Log.d(TAG, "Intent: ${intent?.action}")
@@ -204,6 +216,7 @@ class AlarmAudioService : Service() {
         Log.d(TAG, "AlarmAudioService.onDestroy() called")
         Log.d(TAG, "Cleaning up resources...")
         writeDebugLog("AlarmAudioService.kt:onDestroy", "Service destroying - cleaning up resources")
+        unregisterVolumeReceiver()
         releaseMediaPlayer()
         releaseWakeLock()
         // Notify AlarmActivity to dismiss itself
@@ -290,6 +303,7 @@ class AlarmAudioService : Service() {
                     targetVolume,
                     0  // No flags — don't show system volume UI
                 )
+                initialAlarmVolume = targetVolume
                 Log.d(TAG, "✓ Set alarm stream volume to $targetVolume / $maxVolume")
             } catch (e: SecurityException) {
                 Log.e(TAG, "✗ Cannot set alarm stream volume: ${e.message}")
@@ -297,7 +311,10 @@ class AlarmAudioService : Service() {
                     "error" to (e.message ?: "unknown")
                 ))
             }
-            
+
+            // Listen for volume key presses — silence alarm like an incoming call
+            registerVolumeReceiver()
+
             // Request audio focus
             val audioFocusResult = requestAudioFocus()
             
@@ -371,10 +388,9 @@ class AlarmAudioService : Service() {
                     AudioAttributes.Builder()
                         .setUsage(AudioAttributes.USAGE_ALARM)
                         .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
-                        .setFlags(AudioAttributes.FLAG_AUDIBILITY_ENFORCED) // Ensure sound plays even in silent mode
                         .build()
                 )
-                Log.d(TAG, "✓ Audio attributes set (with AUDIBILITY_ENFORCED flag)")
+                Log.d(TAG, "✓ Audio attributes set")
                 
                 // Set MediaPlayer volume to max — actual volume is controlled via alarm stream
                 // This allows hardware volume keys to adjust alarm volume in real-time
@@ -659,6 +675,42 @@ class AlarmAudioService : Service() {
         }
     }
     
+    private fun registerVolumeReceiver() {
+        volumeReceiver = object : android.content.BroadcastReceiver() {
+            override fun onReceive(context: Context?, intent: Intent?) {
+                if (intent?.action == "android.media.VOLUME_CHANGED_ACTION") {
+                    val streamType = intent.getIntExtra("android.media.EXTRA_VOLUME_STREAM_TYPE", -1)
+                    if (streamType == AudioManager.STREAM_ALARM) {
+                        val newVolume = audioManager?.getStreamVolume(AudioManager.STREAM_ALARM) ?: return
+                        Log.d(TAG, "Volume changed: initial=$initialAlarmVolume, new=$newVolume")
+                        if (initialAlarmVolume > 0 && newVolume < initialAlarmVolume) {
+                            Log.d(TAG, "Volume pressed down — silencing alarm (like incoming call)")
+                            writeDebugLog("AlarmAudioService.kt:volumeReceiver", "Silencing alarm via volume key", mapOf(
+                                "initialVolume" to initialAlarmVolume,
+                                "newVolume" to newVolume
+                            ))
+                            stopSelf()
+                        }
+                    }
+                }
+            }
+        }
+        val filter = android.content.IntentFilter("android.media.VOLUME_CHANGED_ACTION")
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(volumeReceiver, filter, RECEIVER_EXPORTED)
+        } else {
+            registerReceiver(volumeReceiver, filter)
+        }
+        Log.d(TAG, "✓ Volume change receiver registered")
+    }
+
+    private fun unregisterVolumeReceiver() {
+        volumeReceiver?.let {
+            try { unregisterReceiver(it) } catch (_: Exception) {}
+            volumeReceiver = null
+        }
+    }
+
     private fun releaseMediaPlayer() {
         mediaPlayer?.let { player ->
             try {
@@ -745,6 +797,21 @@ class AlarmAudioService : Service() {
             }
         )
         
+        // Dismiss action — stops alarm audio from the notification
+        val stopIntent = Intent(this, AlarmAudioService::class.java).apply {
+            action = ACTION_STOP_ALARM
+        }
+        val stopPendingIntent = PendingIntent.getService(
+            this,
+            9999,
+            stopIntent,
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+            } else {
+                PendingIntent.FLAG_UPDATE_CURRENT
+            }
+        )
+
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle(title)
             .setContentText(body)
@@ -753,9 +820,10 @@ class AlarmAudioService : Service() {
             .setOngoing(false)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setSound(null)
-            .setVisibility(NotificationCompat.VISIBILITY_SECRET) // Hide on lock screen
-            .setShowWhen(false) // Don't show timestamp
-            .setCategory(NotificationCompat.CATEGORY_SERVICE) // Mark as service notification
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .setShowWhen(false)
+            .setCategory(NotificationCompat.CATEGORY_SERVICE)
+            .addAction(R.drawable.ic_notification, "Dismiss", stopPendingIntent)
             .build()
     }
 }

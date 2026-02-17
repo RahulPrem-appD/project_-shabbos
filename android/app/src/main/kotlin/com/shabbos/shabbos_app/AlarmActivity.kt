@@ -13,6 +13,7 @@ import android.os.Bundle
 import android.util.Log
 import android.util.TypedValue
 import android.view.Gravity
+import android.view.KeyEvent
 import android.view.View
 import android.view.WindowManager
 import android.view.animation.*
@@ -78,6 +79,25 @@ class AlarmActivity : Activity() {
         } else {
             registerReceiver(alarmDoneReceiver, filter)
         }
+    }
+
+    private var isSilenced = false
+
+    override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
+        if (!isSilenced && (keyCode == KeyEvent.KEYCODE_VOLUME_DOWN ||
+                            keyCode == KeyEvent.KEYCODE_VOLUME_UP ||
+                            keyCode == KeyEvent.KEYCODE_HEADSETHOOK)) {
+            silenceAlarm()
+            return true
+        }
+        return super.onKeyDown(keyCode, event)
+    }
+
+    private fun silenceAlarm() {
+        if (isSilenced) return
+        isSilenced = true
+        Log.d(TAG, "Silencing alarm via hardware key (like incoming call)")
+        stopService(Intent(this, AlarmAudioService::class.java))
     }
 
     override fun onDestroy() {

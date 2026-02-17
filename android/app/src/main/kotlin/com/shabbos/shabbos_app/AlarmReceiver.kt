@@ -1033,6 +1033,17 @@ class AlarmReceiver : BroadcastReceiver() {
                 pendingIntentFlags
             )
             
+            // Dismiss action — stops alarm audio from notification button
+            val stopIntent = Intent(context, AlarmAudioService::class.java).apply {
+                action = AlarmAudioService.ACTION_STOP_ALARM
+            }
+            val stopPendingIntent = PendingIntent.getService(
+                context,
+                id + 20000,
+                stopIntent,
+                pendingIntentFlags
+            )
+
             // Build notification - use MAX priority for all critical alarms
             // CRITICAL: Use PRIORITY_MAX to ensure notification appears as heads-up
             val builder = NotificationCompat.Builder(context, CHANNEL_ID)
@@ -1048,6 +1059,7 @@ class AlarmReceiver : BroadcastReceiver() {
                 .setContentIntent(pendingIntent)
                 .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
                 .setDefaults(NotificationCompat.DEFAULT_VIBRATE or NotificationCompat.DEFAULT_LIGHTS)
+                .addAction(R.drawable.ic_notification, "Dismiss", stopPendingIntent)
                 .setShowWhen(true) // Always show timestamp
                 .setWhen(System.currentTimeMillis()) // Set to current time
             
