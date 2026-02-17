@@ -50,33 +50,40 @@ With this app, the feeling of welcoming Shabbat can be right at your fingertips 
 
   // Dedication text
   static const String dedicationEn =
-      '''This app is dedicated to the loving and blessed memory of my father,
-Shmuel Hirsh ben Mordechai Menachem Mendel ז״ל,
-my mother, Betty bas Yechiel ע״ה,
-and my wife's father, Levi ben Ephraim ז״ל,
-who was very careful about taking in Shabbat on time.
+      '''This app is dedicated to the loving and blessed memory of
 
-My dear and beloved friends' parents:
+My father
+Shmuel Hirsh ben Mordechai ז״ל
+my mother
+Betty bas Yechiel ע״ה
+
+My wife's father,
+Levi ben Ephraim ז״ל
+and my wife's mother
+Shentsha Greena bas Tzvi Aryeh ע"ה
+who were very careful about taking in Shabbat on time
+
+My dear and beloved friends' parents
 Mordechai ben Aaron HaCohen ז״ל
 Yenta bat Avraham HaLevy ז״ל
 
-May their neshamos continue to rise higher and higher in Gan Eden,
-and may they be meilitzei tov for their entire family
-and for all of Klal Yisrael.''';
+May their neshamos continue to rise higher and higher in Gan Eden, and may they be meilitzei tov for their entire family and for all of Klal Yisrael.''';
 
   static const String dedicationHe =
-      '''אפליקציה זו מוקדשת לזכרם האוהב והמבורך של
-אבי, שמואל הירש בן מרדכי מנחם מנדל ז״ל,
+      '''אפלקציה זו מוקדשת לזכרם האוהב והמבורך של
+אבי, שמואל הירש בן מרדכי ז״ל,
 אמי, בטי בת יחיאל ע״ה,
-וחמי, לוי בן אפרים ז״ל, שהיה מדקדק מאוד בקבלת השבת בזמן.
+וחמי וחמותי
+לוי בן אפרים ז״ל
+שענטשא גרינא בת צבי אריה ע"ה
+שהיו מדקדקים מאוד בקבלת השבת בזמן
 
-הורי ידידי היקר והאהוב
+הורי ידידי היקר והאהוב:
 מרדכי בן אהרן הכהן ז״ל
 ינטה בת אברהם הלוי ז״ל
 
 יהי רצון שנשמותיהם ימשיכו לעלות מעלה מעלה בגן עדן,
-ויהיו מליצי יושר בעד כל משפחתם
-ובעבור כל ישראל.''';
+ויהיו מליצי יושר בעד כל משפחתם ובעבור כל ישראל''';
 
   // Credits text (without developer name - added separately as clickable link)
   static const String creditsEn = '''Music & Sound
@@ -195,6 +202,7 @@ Users are encouraged to always double-check candle-lighting times with reliable 
                       isHebrew
                           ? 'התראת הדלקת נרות לשבת וליום טוב'
                           : 'Candle Lighting Alert for Shabbat and Yom Tov',
+                      textDirection: isHebrew ? TextDirection.rtl : TextDirection.ltr,
                       style: TextStyle(fontSize: 14, color: Colors.grey[500]),
                       textAlign: TextAlign.center,
                     ),
@@ -300,6 +308,7 @@ Users are encouraged to always double-check candle-lighting times with reliable 
 
                     Text(
                       isHebrew ? 'אברהם ונשמח' : 'Avraham Venismach',
+                      textDirection: isHebrew ? TextDirection.rtl : TextDirection.ltr,
                       style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w500,
@@ -319,6 +328,7 @@ Users are encouraged to always double-check candle-lighting times with reliable 
   }
 
   Widget _buildHeader() {
+    final textDirection = isHebrew ? TextDirection.rtl : TextDirection.ltr;
     return Builder(
       builder: (context) => Container(
         padding: EdgeInsetsDirectional.fromSTEB(
@@ -328,10 +338,12 @@ Users are encouraged to always double-check candle-lighting times with reliable 
           8,
         ),
         child: Row(
+          textDirection: textDirection,
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text(
               isHebrew ? 'אודות' : 'About',
+              textDirection: textDirection,
               style: const TextStyle(
                 fontSize: 28,
                 fontWeight: FontWeight.w700,
@@ -353,6 +365,7 @@ Users are encouraged to always double-check candle-lighting times with reliable 
     Color? borderColor,
     bool centered = false,
   }) {
+    final textDirection = isHebrew ? TextDirection.rtl : TextDirection.ltr;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(24),
@@ -370,11 +383,13 @@ Users are encouraged to always double-check candle-lighting times with reliable 
             mainAxisAlignment: centered
                 ? MainAxisAlignment.center
                 : MainAxisAlignment.start,
+            textDirection: textDirection,
             children: [
               Icon(icon, size: 20, color: iconColor),
               const SizedBox(width: 8),
               Text(
                 title,
+                textDirection: textDirection,
                 style: const TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.w600,
@@ -390,6 +405,7 @@ Users are encouraged to always double-check candle-lighting times with reliable 
           const SizedBox(height: 16),
           Text(
             content,
+            textDirection: textDirection,
             textAlign: centered ? TextAlign.center : TextAlign.start,
             style: TextStyle(
               fontSize: 14,
@@ -403,6 +419,7 @@ Users are encouraged to always double-check candle-lighting times with reliable 
   }
 
   Widget _buildCreditsSection(bool isHebrew) {
+    final textDirection = isHebrew ? TextDirection.rtl : TextDirection.ltr;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(24),
@@ -414,11 +431,13 @@ Users are encouraged to always double-check candle-lighting times with reliable 
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
+            textDirection: textDirection,
             children: [
               const Icon(Icons.music_note, size: 20, color: Color(0xFF5C6BC0)),
               const SizedBox(width: 8),
               Text(
                 isHebrew ? 'קרדיטים' : 'Credits',
+                textDirection: textDirection,
                 style: const TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.w600,
@@ -430,6 +449,7 @@ Users are encouraged to always double-check candle-lighting times with reliable 
           const SizedBox(height: 16),
           Text(
             isHebrew ? creditsHe : creditsEn,
+            textDirection: textDirection,
             style: TextStyle(
               fontSize: 14,
               color: Colors.grey[700],
@@ -441,9 +461,11 @@ Users are encouraged to always double-check candle-lighting times with reliable 
           GestureDetector(
             onTap: _launchDeveloperUrl,
             child: Row(
+              textDirection: textDirection,
               children: [
                 Text(
                   isHebrew ? '• פיתוח האפליקציה: ' : '• App developed by ',
+                  textDirection: textDirection,
                   style: TextStyle(
                     fontSize: 14,
                     color: Colors.grey[700],
@@ -506,6 +528,7 @@ Users are encouraged to always double-check candle-lighting times with reliable 
   }
 
   Widget _buildCreatorSection(bool isHebrew) {
+    final textDirection = isHebrew ? TextDirection.rtl : TextDirection.ltr;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(24),
@@ -520,11 +543,13 @@ Users are encouraged to always double-check candle-lighting times with reliable 
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
+            textDirection: textDirection,
             children: [
               const Icon(Icons.person, size: 20, color: Color(0xFF4CAF50)),
               const SizedBox(width: 8),
               Text(
                 isHebrew ? 'היוצר' : 'The Creator',
+                textDirection: textDirection,
                 style: const TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.w600,
@@ -536,6 +561,7 @@ Users are encouraged to always double-check candle-lighting times with reliable 
           const SizedBox(height: 16),
           Text(
             isHebrew ? 'אפליקציית שבת!!' : 'The Shabbos!! App',
+            textDirection: textDirection,
             style: const TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w600,
@@ -545,6 +571,7 @@ Users are encouraged to always double-check candle-lighting times with reliable 
           const SizedBox(height: 4),
           Text(
             isHebrew ? 'נוצרה על ידי אברהם ונשמח' : 'Created by Avraham Venismach',
+            textDirection: textDirection,
             style: TextStyle(
               fontSize: 14,
               color: Colors.grey[700],
@@ -553,6 +580,7 @@ Users are encouraged to always double-check candle-lighting times with reliable 
           const SizedBox(height: 20),
           Text(
             isHebrew ? 'השירותים שלי:' : 'My Services:',
+            textDirection: textDirection,
             style: const TextStyle(
               fontSize: 15,
               fontWeight: FontWeight.w600,
@@ -586,18 +614,21 @@ Users are encouraged to always double-check candle-lighting times with reliable 
     required String url,
     required IconData icon,
   }) {
+    final textDirection = isHebrew ? TextDirection.rtl : TextDirection.ltr;
     return InkWell(
       onTap: () => _launchUrl(url),
       borderRadius: BorderRadius.circular(8),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
         child: Row(
+          textDirection: textDirection,
           children: [
             Icon(icon, size: 16, color: const Color(0xFF4CAF50)),
             const SizedBox(width: 8),
             Expanded(
               child: Text(
                 title,
+                textDirection: textDirection,
                 style: TextStyle(
                   fontSize: 14,
                   color: Colors.grey[700],

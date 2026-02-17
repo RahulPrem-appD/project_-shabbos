@@ -838,66 +838,101 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
   }
 
   Widget _buildTravelLocationBanner() {
+    final textDirection = isHebrew ? TextDirection.rtl : TextDirection.ltr;
+    final locationName = _location?.displayName ?? '';
     return GestureDetector(
       onTap: _isDetectingLocation ? null : _detectLocationWithReschedule,
       onLongPress: _isDetectingLocation ? null : _showTravelInfoDialog,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: isHebrew ? Alignment.centerRight : Alignment.centerLeft,
-            end: isHebrew ? Alignment.centerLeft : Alignment.centerRight,
-            colors: [
-              const Color(0xFFE8B923).withValues(alpha: 0.08),
-              const Color(0xFFE8B923).withValues(alpha: 0.02),
-            ],
-          ),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: const Color(0xFFE8B923).withValues(alpha: 0.2),
-            width: 0.5,
-          ),
-        ),
-        child: Row(
-          textDirection: isHebrew ? TextDirection.rtl : TextDirection.ltr,
-          children: [
+      child: Column(
+        children: [
+          Text(
             _isDetectingLocation
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 1.5,
-                      color: Color(0xFFE8B923),
-                    ),
-                  )
-                : const Icon(
-                    Icons.flight_takeoff_rounded,
-                    size: 18,
-                    color: Color(0xFFE8B923),
-                  ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                _isDetectingLocation
-                    ? (isHebrew ? 'מזהה מיקום...' : 'Detecting...')
-                    : (isHebrew ? 'נוסע/ת?' : 'Travelling?'),
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w500,
-                  color: const Color(0xFF1A1A1A).withValues(alpha: 0.6),
-                  letterSpacing: 0.3,
-                ),
+                ? (isHebrew ? 'מזהה מיקום...' : 'Detecting...')
+                : (isHebrew ? 'נוסע/ת?' : 'Traveling?'),
+            textDirection: textDirection,
+            style: const TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w700,
+              color: Color(0xFF1A1A1A),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            decoration: BoxDecoration(
+              color: const Color(0xFFE8B923).withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: const Color(0xFFE8B923).withValues(alpha: 0.2),
+                width: 0.5,
               ),
             ),
-            if (!_isDetectingLocation) ...[
-              Icon(
-                Icons.refresh_rounded,
-                size: 16,
-                color: Colors.grey[350],
-              ),
-            ],
-          ],
-        ),
+            child: Row(
+              textDirection: textDirection,
+              children: [
+                _isDetectingLocation
+                    ? const SizedBox(
+                        width: 32,
+                        height: 32,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Color(0xFFE8B923),
+                        ),
+                      )
+                    : Container(
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFE8B923).withValues(alpha: 0.15),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.my_location,
+                          size: 20,
+                          color: Color(0xFFE8B923),
+                        ),
+                      ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: isHebrew
+                        ? CrossAxisAlignment.end
+                        : CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        locationName,
+                        textDirection: textDirection,
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF1A1A1A),
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        isHebrew
+                            ? 'הקש לעדכון המיקום'
+                            : 'Tap to update your location',
+                        textDirection: textDirection,
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: Colors.grey[500],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                if (!_isDetectingLocation)
+                  Icon(
+                    Icons.refresh_rounded,
+                    size: 20,
+                    color: Colors.grey[400],
+                  ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
