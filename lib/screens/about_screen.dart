@@ -130,7 +130,7 @@ This app is intended as a helpful reminder and enhancement of the Shabbat and Yo
 Users are encouraged to always double-check candle-lighting times with reliable local sources and follow their community's accepted customs, or consult a Rav for Halacha L'ma'aseh.''';
 
   static const String disclaimerHe =
-      '''האפליקציה משתמשת בזמני הדלקת נרות המסופקים על ידי HebCal. למרות שזמנים אלו מדויקים בדרך כלל, ייתכנו הבדלים קלים בהתאם למיקום ולמנהג, ובמקרים מסוימים סטייה של דקה או שתיים.
+      '''האפליקציה משתמשת בזמני הדלקת נרות המסופקים על ידי \u2066HebCal\u2069. למרות שזמנים אלו מדויקים בדרך כלל, ייתכנו הבדלים קלים בהתאם למיקום ולמנהג, ובמקרים מסוימים סטייה של דקה או שתיים.
 
 האפליקציה נועדה לשמש כתזכורת וכהעצמה לחוויית שבת ויום טוב, ואינה מהווה פסיקה הלכתית מחייבת.
 
