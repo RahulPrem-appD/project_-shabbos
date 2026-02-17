@@ -307,7 +307,7 @@ class AlarmActivity : Activity() {
         }
 
         val btn = TextView(this).apply {
-            text = "שבת שלום  ✦  Good Shabbos"
+            text = "שקט  ✦  Silence"
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
             setTextColor(dark)
             typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)

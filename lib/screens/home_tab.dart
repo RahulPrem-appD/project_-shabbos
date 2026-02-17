@@ -828,40 +828,7 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
                 ),
               ),
             ),
-            if (_location != null && !_isDetectingLocation) ...[
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF1A1A1A).withValues(alpha: 0.06),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  textDirection: isHebrew ? TextDirection.rtl : TextDirection.ltr,
-                  children: [
-                    Icon(
-                      Icons.location_on,
-                      size: 12,
-                      color: const Color(0xFFE8B923).withValues(alpha: 0.8),
-                    ),
-                    const SizedBox(width: 4),
-                    ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 120),
-                      child: Text(
-                        _location!.cityName ?? _location!.displayName,
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: const Color(0xFF1A1A1A).withValues(alpha: 0.7),
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                        maxLines: 1,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 6),
+            if (!_isDetectingLocation) ...[
               Icon(
                 Icons.chevron_right_rounded,
                 size: 16,
