@@ -17,15 +17,17 @@ import android.os.IBinder
 import android.os.PowerManager
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import androidx.media.app.NotificationCompat.MediaStyle
 
 class AlarmAudioService : Service() {
     companion object {
         private const val TAG = "ShabbosAlarmAudioService"
-        private const val CHANNEL_ID = "shabbos_audio_service"
+        private const val CHANNEL_ID = "shabbos_audio_service_v2" // v2: IMPORTANCE_DEFAULT + VISIBILITY_PUBLIC for visible dismiss button
         private const val NOTIFICATION_ID = 1001
         
         
         const val ACTION_STOP_ALARM = "com.shabbos.shabbos_app.STOP_ALARM"
+        const val EXTRA_NOTIFICATION_ID = "notification_id" // AlarmReceiver's notification ID to cancel on stop
 
         private const val EXTRA_SOUND_ID = "sound_id"
         private const val EXTRA_TITLE = "title"
@@ -52,6 +54,7 @@ class AlarmAudioService : Service() {
     private var wakeLock: PowerManager.WakeLock? = null
     private var initialAlarmVolume: Int = -1
     private var volumeReceiver: android.content.BroadcastReceiver? = null
+    private var alarmNotificationId: Int = -1 // AlarmReceiver's notification ID — cancelled on stop
     
     /**
      * Helper function to write logs to debug_logs.txt for diagnostic reports
@@ -89,10 +92,13 @@ class AlarmAudioService : Service() {
     }
     
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        // Handle dismiss action from notification button
+        // Handle dismiss action from notification button or swipe-to-dismiss
         if (intent?.action == ACTION_STOP_ALARM) {
             Log.d(TAG, "Received STOP_ALARM action — dismissing alarm from notification")
             writeDebugLog("AlarmAudioService.kt:onStartCommand", "STOP_ALARM action received from notification button")
+            // Update notification ID in case this is a fresh service start from the dismiss intent
+            val dismissNotifId = intent.getIntExtra(EXTRA_NOTIFICATION_ID, -1)
+            if (dismissNotifId != -1) alarmNotificationId = dismissNotifId
             stopSelf()
             return START_NOT_STICKY
         }
@@ -112,6 +118,7 @@ class AlarmAudioService : Service() {
         val soundId = intent?.getStringExtra(EXTRA_SOUND_ID) ?: "rav_shalom_shofar"
         val title = intent?.getStringExtra(EXTRA_TITLE) ?: "שבת שלום!"
         val body = intent?.getStringExtra(EXTRA_BODY) ?: "Time to light candles 🕯️🕯️"
+        alarmNotificationId = intent?.getIntExtra(EXTRA_NOTIFICATION_ID, -1) ?: -1
 
         // Read alarm volume from Flutter SharedPreferences (stored as string to avoid type mismatch)
         val flutterPrefs = getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
@@ -127,25 +134,6 @@ class AlarmAudioService : Service() {
         // This must work even when app hasn't been opened for weeks
         createNotificationChannel()
         
-        // #region agent log
-        try {
-            val logData = org.json.JSONObject().apply {
-                put("timestamp", System.currentTimeMillis())
-                put("location", "AlarmAudioService.kt:onStartCommand")
-                put("message", "Service started to play audio")
-                put("sessionId", "debug-session")
-                put("runId", "run1")
-                put("hypothesisId", "C")
-                put("data", org.json.JSONObject().apply {
-                    put("soundId", soundId)
-                    put("title", title)
-                })
-            }
-            java.io.File(getExternalFilesDir(null), "debug_logs.txt").appendText("${logData.toString()}\n")
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to write debug log: ${e.message}")
-        }
-        // #endregion
         
         // Acquire wake lock to keep device awake during playback
         val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
@@ -219,6 +207,22 @@ class AlarmAudioService : Service() {
         unregisterVolumeReceiver()
         releaseMediaPlayer()
         releaseWakeLock()
+
+        // Remove the foreground service notification (ID=1001)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            stopForeground(STOP_FOREGROUND_REMOVE)
+        } else {
+            @Suppress("DEPRECATION")
+            stopForeground(true)
+        }
+
+        // Also cancel the AlarmReceiver's notification so it doesn't linger after sound stops
+        if (alarmNotificationId != -1) {
+            val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            nm.cancel(alarmNotificationId)
+            Log.d(TAG, "✓ Cancelled alarm notification ID: $alarmNotificationId")
+        }
+
         // Notify AlarmActivity to dismiss itself
         sendBroadcast(Intent(AlarmActivity.ACTION_ALARM_DONE).apply {
             setPackage(packageName)
@@ -281,12 +285,12 @@ class AlarmAudioService : Service() {
             Log.d(TAG, "Is retry: $isRetry")
             
             // Get audio manager FIRST
-            audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
-            
+            audioManager = getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+
             // Set system alarm stream volume based on user's preference (0.1 to 1.0)
             // This allows hardware volume keys to control the sound during playback
-            val maxVolume = audioManager!!.getStreamMaxVolume(AudioManager.STREAM_ALARM)
-            val currentVolume = audioManager!!.getStreamVolume(AudioManager.STREAM_ALARM)
+            val maxVolume = audioManager?.getStreamMaxVolume(AudioManager.STREAM_ALARM) ?: 15
+            val currentVolume = audioManager?.getStreamVolume(AudioManager.STREAM_ALARM) ?: 0
             val targetVolume = Math.max(1, Math.round(volume * maxVolume))
 
             Log.d(TAG, "Alarm stream: current=$currentVolume, max=$maxVolume, target=$targetVolume (user pref: $volume)")
@@ -298,7 +302,7 @@ class AlarmAudioService : Service() {
             ))
 
             try {
-                audioManager!!.setStreamVolume(
+                audioManager?.setStreamVolume(
                     AudioManager.STREAM_ALARM,
                     targetVolume,
                     0  // No flags — don't show system volume UI
@@ -320,25 +324,6 @@ class AlarmAudioService : Service() {
             
             Log.d(TAG, "Audio focus result: $audioFocusResult")
             
-            // #region agent log
-            try {
-                val logData = org.json.JSONObject().apply {
-                    put("timestamp", System.currentTimeMillis())
-                    put("location", "AlarmAudioService.kt:playSoundFromAsset")
-                    put("message", "Audio focus requested in service")
-                    put("sessionId", "debug-session")
-                    put("runId", "run1")
-                    put("hypothesisId", "C")
-                    put("data", org.json.JSONObject().apply {
-                        put("audioFocusResult", audioFocusResult)
-                        put("assetPath", assetPath)
-                    })
-                }
-                java.io.File(getExternalFilesDir(null), "debug_logs.txt").appendText("${logData.toString()}\n")
-            } catch (e: Exception) {
-                Log.e(TAG, "Failed to write debug log: ${e.message}")
-            }
-            // #endregion
             
             if (audioFocusResult != AudioManager.AUDIOFOCUS_REQUEST_GRANTED) {
                 Log.e(TAG, "✗ Audio focus DENIED: $audioFocusResult")
@@ -480,53 +465,29 @@ class AlarmAudioService : Service() {
                         
                         // Verify it's actually playing after a short delay
                         android.os.Handler(mainLooper).postDelayed({
-                            val stillPlaying = isPlaying
-                            val currentPos = currentPosition
-                            Log.d(TAG, "Playback verification (500ms later):")
-                            Log.d(TAG, "  Still playing: $stillPlaying")
-                            Log.d(TAG, "  Position: $currentPos ms")
-                            
-                            if (!stillPlaying && currentPos == 0) {
-                                Log.e(TAG, "✗ ERROR: MediaPlayer is NOT playing after 500ms!")
-                                Log.e(TAG, "✗ Position is still 0 - playback never started")
-                                Log.e(TAG, "✗ Possible causes:")
-                                Log.e(TAG, "  - Audio focus was lost")
-                                Log.e(TAG, "  - MediaPlayer error occurred")
-                                Log.e(TAG, "  - Audio system issue")
-                            } else if (stillPlaying) {
-                                Log.d(TAG, "✓ Playback confirmed - audio is playing at position $currentPos ms")
-                                writeDebugLog("AlarmAudioService.kt:playback", "Playback confirmed after 500ms", mapOf(
-                                    "isPlaying" to stillPlaying,
-                                    "position" to currentPos
-                                ))
-                            } else {
-                                Log.w(TAG, "⚠️ Playback stopped but position is $currentPos ms (might have completed quickly)")
-                                writeDebugLog("AlarmAudioService.kt:playback", "Playback stopped but position > 0", mapOf(
-                                    "isPlaying" to stillPlaying,
-                                    "position" to currentPos
-                                ))
+                            try {
+                                val stillPlaying = isPlaying
+                                val currentPos = currentPosition
+                                Log.d(TAG, "Playback verification (500ms later):")
+                                Log.d(TAG, "  Still playing: $stillPlaying")
+                                Log.d(TAG, "  Position: $currentPos ms")
+
+                                if (!stillPlaying && currentPos == 0) {
+                                    Log.e(TAG, "✗ ERROR: MediaPlayer is NOT playing after 500ms!")
+                                } else if (stillPlaying) {
+                                    Log.d(TAG, "✓ Playback confirmed - audio is playing at position $currentPos ms")
+                                    writeDebugLog("AlarmAudioService.kt:playback", "Playback confirmed after 500ms", mapOf(
+                                        "isPlaying" to stillPlaying,
+                                        "position" to currentPos
+                                    ))
+                                } else {
+                                    Log.w(TAG, "⚠️ Playback stopped but position is $currentPos ms (completed quickly)")
+                                }
+                            } catch (e: IllegalStateException) {
+                                Log.d(TAG, "Playback verification skipped — MediaPlayer already released")
                             }
                         }, 500)
                         
-                        // #region agent log
-                        try {
-                            val logData = org.json.JSONObject().apply {
-                                put("timestamp", System.currentTimeMillis())
-                                put("location", "AlarmAudioService.kt:onPrepared")
-                                put("message", "MediaPlayer started in service")
-                                put("sessionId", "debug-session")
-                                put("runId", "run1")
-                                put("hypothesisId", "C")
-                                put("data", org.json.JSONObject().apply {
-                                    put("isPlaying", nowPlaying)
-                                    put("position", position)
-                                })
-                            }
-                            java.io.File(getExternalFilesDir(null), "debug_logs.txt").appendText("${logData.toString()}\n")
-                        } catch (e: Exception) {
-                            Log.e(TAG, "Failed to write debug log: ${e.message}")
-                        }
-                        // #endregion
                     } catch (e: Exception) {
                         Log.e(TAG, "✗ CRITICAL ERROR starting playback: ${e.message}", e)
                         e.printStackTrace()
@@ -767,17 +728,17 @@ class AlarmAudioService : Service() {
             val channel = NotificationChannel(
                 CHANNEL_ID,
                 "Alarm Audio Service",
-                NotificationManager.IMPORTANCE_LOW
+                NotificationManager.IMPORTANCE_DEFAULT
             ).apply {
-                description = "Plays alarm sounds"
+                description = "Plays alarm sounds — use Dismiss to stop"
                 setSound(null, null)
-                setShowBadge(false) // Don't show badge for background service notification
-                lockscreenVisibility = Notification.VISIBILITY_SECRET // Hide on lock screen to avoid confusion
+                setShowBadge(false)
+                lockscreenVisibility = Notification.VISIBILITY_PUBLIC // Show dismiss button on lock screen
             }
             
             val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             notificationManager.createNotificationChannel(channel)
-            Log.d(TAG, "Foreground service notification channel created (LOW importance, hidden)")
+            Log.d(TAG, "Foreground service notification channel created (DEFAULT importance, dismiss button visible)")
         }
     }
     
@@ -800,6 +761,7 @@ class AlarmAudioService : Service() {
         // Dismiss action — stops alarm audio from the notification
         val stopIntent = Intent(this, AlarmAudioService::class.java).apply {
             action = ACTION_STOP_ALARM
+            putExtra(EXTRA_NOTIFICATION_ID, alarmNotificationId) // Pass ID so cancel works even on fresh start
         }
         val stopPendingIntent = PendingIntent.getService(
             this,
@@ -818,12 +780,14 @@ class AlarmAudioService : Service() {
             .setSmallIcon(R.drawable.ic_notification)
             .setContentIntent(pendingIntent)
             .setOngoing(false)
-            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .setSound(null)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setShowWhen(false)
             .setCategory(NotificationCompat.CATEGORY_SERVICE)
             .addAction(R.drawable.ic_notification, "Dismiss", stopPendingIntent)
+            .setDeleteIntent(stopPendingIntent) // Swiping away also stops alarm
+            .setStyle(MediaStyle().setShowActionsInCompactView(0)) // Show dismiss in compact view
             .build()
     }
 }

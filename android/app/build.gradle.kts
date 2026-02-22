@@ -46,9 +46,12 @@ android {
 
 dependencies {
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
-    
+
     // WorkManager for alarm health monitoring ("install and forget" functionality)
     implementation("androidx.work:work-runtime-ktx:2.9.0")
+
+    // Media library for MediaStyle notifications (shows dismiss button in compact/heads-up view)
+    implementation("androidx.media:media:1.7.0")
 }
 
 flutter {

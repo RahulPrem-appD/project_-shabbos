@@ -245,27 +245,6 @@ class AlarmScheduler(private val context: Context) {
                 return false
             }
             
-            // #region agent log
-            try {
-                val logData = org.json.JSONObject().apply {
-                    put("timestamp", System.currentTimeMillis())
-                    put("location", "AlarmScheduler.kt:81")
-                    put("message", "Alarm scheduled internally")
-                    put("sessionId", "debug-session")
-                    put("runId", "run1")
-                    put("hypothesisId", "E")
-                    put("data", org.json.JSONObject().apply {
-                        put("alarmId", id)
-                        put("scheduledTime", timestampMillis)
-                        put("soundId", soundId)
-                        put("isPreNotification", isPreNotification)
-                    })
-                }
-                java.io.File(context.getExternalFilesDir(null), "debug_logs.txt").appendText("${logData.toString()}\n")
-            } catch (e: Exception) {
-                Log.e(TAG, "Failed to write debug log: ${e.message}")
-            }
-            // #endregion
             
             // Save alarm data for persistence (survives device restart)
             try {
@@ -463,7 +442,8 @@ class AlarmScheduler(private val context: Context) {
                         ))
                         false
                     }
-                    
+                    if (scheduled) rescheduledCount++
+
                 } else {
                     Log.d(TAG, "Skipping expired alarm #$id (was scheduled for ${Date(timestampMillis)})")
                     expiredCount++
@@ -724,28 +704,6 @@ class AlarmScheduler(private val context: Context) {
             alarmScheduled = false
         }
         
-        // #region agent log
-        try {
-            val logData = org.json.JSONObject().apply {
-                put("timestamp", System.currentTimeMillis())
-                put("location", "AlarmScheduler.kt:262")
-                put("message", "Alarm scheduling method called")
-                put("sessionId", "debug-session")
-                put("runId", "run1")
-                put("hypothesisId", "E")
-                put("data", org.json.JSONObject().apply {
-                    put("alarmId", id)
-                    put("schedulingMethod", schedulingMethod)
-                    put("hasExactPermission", hasExactPermission)
-                    put("alarmScheduled", alarmScheduled)
-                    put("androidVersion", Build.VERSION.SDK_INT)
-                })
-            }
-            java.io.File(context.getExternalFilesDir(null), "debug_logs.txt").appendText("${logData.toString()}\n")
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to write debug log: ${e.message}")
-        }
-        // #endregion
         
         return alarmScheduled
     }

@@ -92,10 +92,10 @@
             android:enabled="true" />
         
         <!-- Custom Alarm Receiver for reliable background notifications -->
-        <!-- Note: No intent-filter needed - we use explicit intents with class name -->
-        <receiver 
+        <!-- exported=false: only this app's explicit PendingIntents (via AlarmManager) can trigger it -->
+        <receiver
             android:name=".AlarmReceiver"
-            android:exported="true"
+            android:exported="false"
             android:enabled="true">
         </receiver>
         

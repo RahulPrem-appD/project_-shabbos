@@ -131,7 +131,7 @@ class AlarmHealthWorker(
                     context,
                     id,
                     intent,
-                    if (Build.VERSION.SDK_INT >= 23) {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                         PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_NO_CREATE
                     } else {
                         PendingIntent.FLAG_NO_CREATE
@@ -229,7 +229,7 @@ class AlarmHealthWorker(
                 context,
                 0,
                 intent,
-                if (Build.VERSION.SDK_INT >= 23) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                     PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
                 } else {
                     PendingIntent.FLAG_UPDATE_CURRENT
@@ -268,7 +268,7 @@ class AlarmHealthWorker(
                 context,
                 0,
                 intent,
-                if (Build.VERSION.SDK_INT >= 23) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                     PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
                 } else {
                     PendingIntent.FLAG_UPDATE_CURRENT

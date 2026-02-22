@@ -2,6 +2,7 @@ package com.shabbos.shabbos_app
 
 import android.animation.ValueAnimator
 import android.app.Activity
+import android.app.NotificationManager
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -32,12 +33,14 @@ class AlarmActivity : Activity() {
         const val ACTION_ALARM_DONE = "com.shabbos.shabbos_app.ALARM_DONE"
         const val EXTRA_TITLE = "title"
         const val EXTRA_BODY = "body"
+        const val EXTRA_NOTIFICATION_ID = "notification_id"
     }
 
     private val animators = mutableListOf<ValueAnimator>()
     private var flameView: FlameCanvasView? = null
     private var particleView: ParticleCanvasView? = null
     private var glowView: GlowView? = null
+    private var notificationId: Int = -1
 
     private val alarmDoneReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -68,6 +71,7 @@ class AlarmActivity : Activity() {
 
         val title = intent?.getStringExtra(EXTRA_TITLE) ?: "שבת שלום!"
         val body = intent?.getStringExtra(EXTRA_BODY) ?: ""
+        notificationId = intent?.getIntExtra(EXTRA_NOTIFICATION_ID, -1) ?: -1
 
         buildUI(title, body)
         startAnimations()
@@ -98,6 +102,16 @@ class AlarmActivity : Activity() {
         isSilenced = true
         Log.d(TAG, "Silencing alarm via hardware key (like incoming call)")
         stopService(Intent(this, AlarmAudioService::class.java))
+        cancelAlarmNotification()
+        finish()
+    }
+
+    private fun cancelAlarmNotification() {
+        if (notificationId != -1) {
+            val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            nm.cancel(notificationId)
+            Log.d(TAG, "Cancelled alarm notification ID: $notificationId")
+        }
     }
 
     override fun onDestroy() {
@@ -342,6 +356,7 @@ class AlarmActivity : Activity() {
             setOnClickListener {
                 Log.d(TAG, "Good Shabbos button pressed, stopping audio service")
                 stopService(Intent(this@AlarmActivity, AlarmAudioService::class.java))
+                cancelAlarmNotification()
                 finish()
             }
         }
