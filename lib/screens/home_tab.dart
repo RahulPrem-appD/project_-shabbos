@@ -960,6 +960,22 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
         children: [
           const SizedBox(height: 8),
           _buildTravelLocationBanner(),
+          Padding(
+            padding: const EdgeInsets.only(top: 10, bottom: 4),
+            child: Text(
+              isHebrew
+                  ? 'מנהגי המקום עשויים להיות שונים, ויש לנהוג לפיהם כאשר הם ידועים.'
+                  : 'Local community customs may differ and should be followed when known.',
+              textDirection: isHebrew ? TextDirection.rtl : TextDirection.ltr,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 11,
+                color: Colors.grey[400],
+                fontStyle: FontStyle.italic,
+                height: 1.3,
+              ),
+            ),
+          ),
           const SizedBox(height: 12),
           _buildNextCandleLighting(_candleLightings.first),
           const SizedBox(height: 32),
