@@ -169,6 +169,53 @@ class MainActivity: FlutterActivity() {
                     val alarms = alarmScheduler.getScheduledAlarms()
                     result.success(alarms)
                 }
+                "canDrawOverlays" -> {
+                    val canDraw = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                        Settings.canDrawOverlays(this)
+                    } else {
+                        true
+                    }
+                    result.success(canDraw)
+                }
+                "requestOverlayPermission" -> {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
+                        try {
+                            val intent = Intent(
+                                Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                                Uri.parse("package:$packageName")
+                            )
+                            startActivity(intent)
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Failed to request overlay permission: ${e.message}")
+                            openAppSettings()
+                        }
+                    }
+                    result.success(true)
+                }
+                "canUseFullScreenIntent" -> {
+                    val canUse = if (Build.VERSION.SDK_INT >= 34) {
+                        val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+                        notificationManager.canUseFullScreenIntent()
+                    } else {
+                        true
+                    }
+                    result.success(canUse)
+                }
+                "requestFullScreenIntentPermission" -> {
+                    if (Build.VERSION.SDK_INT >= 34) {
+                        try {
+                            val intent = Intent(
+                                Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT,
+                                Uri.parse("package:$packageName")
+                            )
+                            startActivity(intent)
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Failed to request full screen intent permission: ${e.message}")
+                            openAppSettings()
+                        }
+                    }
+                    result.success(true)
+                }
                 else -> {
                     result.notImplemented()
                 }

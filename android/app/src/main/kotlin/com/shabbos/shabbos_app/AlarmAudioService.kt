@@ -188,6 +188,35 @@ class AlarmAudioService : Service() {
             // Try to continue anyway - audio might still play
         }
         
+        // CRITICAL: Launch AlarmActivity as fallback from foreground service
+        // This ensures the popup appears even if the direct launch from AlarmReceiver
+        // was blocked by the OS (e.g., OEM restrictions, Android 10+ background limits).
+        // Foreground services have their own exemption to start activities.
+        // Skip for silent/default sounds — those don't need the full-screen alarm popup.
+        if (soundId != "silent") {
+            try {
+                val alarmActivityIntent = Intent(this, AlarmActivity::class.java).apply {
+                    setFlags(Intent.FLAG_ACTIVITY_NEW_TASK or
+                            Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                    putExtra(AlarmActivity.EXTRA_TITLE, title)
+                    putExtra(AlarmActivity.EXTRA_BODY, body)
+                    putExtra(AlarmActivity.EXTRA_NOTIFICATION_ID, alarmNotificationId)
+                }
+                startActivity(alarmActivityIntent)
+                Log.d(TAG, "✓ AlarmActivity launched from foreground service (fallback)")
+                writeDebugLog("AlarmAudioService.kt:launchActivity", "AlarmActivity launched from foreground service", mapOf(
+                    "title" to title,
+                    "notificationId" to alarmNotificationId
+                ))
+            } catch (e: Exception) {
+                Log.e(TAG, "✗ Failed to launch AlarmActivity from service: ${e.message}")
+                writeDebugLog("AlarmAudioService.kt:launchActivity", "Failed to launch AlarmActivity from service", mapOf(
+                    "error" to (e.message ?: "unknown")
+                ))
+                // AlarmActivity will still be available via fullScreenIntent on the notification
+            }
+        }
+
         // Play the sound
         Log.d(TAG, "Calling playSound($soundId) at volume $alarmVolume...")
         playSound(soundId, alarmVolume)

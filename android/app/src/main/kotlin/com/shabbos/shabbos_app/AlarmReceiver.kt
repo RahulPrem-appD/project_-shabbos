@@ -220,8 +220,39 @@ class AlarmReceiver : BroadcastReceiver() {
             }
             
             
+            // CRITICAL: Directly launch AlarmActivity FIRST for maximum reliability
+            // This ensures the full-screen popup with dismiss button ALWAYS appears,
+            // regardless of notification system behavior on the device.
+            // We're in a BroadcastReceiver triggered by AlarmManager PendingIntent,
+            // which grants us permission to start activities from background on Android 10+.
+            if (soundId != "silent") {
+                try {
+                    val alarmActivityIntent = Intent(context, AlarmActivity::class.java).apply {
+                        flags = Intent.FLAG_ACTIVITY_NEW_TASK or
+                                Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                                Intent.FLAG_ACTIVITY_SINGLE_TOP
+                        putExtra(AlarmActivity.EXTRA_TITLE, title)
+                        putExtra(AlarmActivity.EXTRA_BODY, body)
+                        putExtra(AlarmActivity.EXTRA_NOTIFICATION_ID, notificationId)
+                    }
+                    context.startActivity(alarmActivityIntent)
+                    Log.d(TAG, "✓ AlarmActivity launched directly from AlarmReceiver")
+                    writeDebugLog(context, "AlarmReceiver.kt:launchActivity", "AlarmActivity launched directly", mapOf(
+                        "notificationId" to notificationId,
+                        "title" to title
+                    ))
+                } catch (e: Exception) {
+                    Log.e(TAG, "✗ Failed to launch AlarmActivity directly: ${e.message}")
+                    writeDebugLog(context, "AlarmReceiver.kt:launchActivity", "Failed to launch AlarmActivity directly", mapOf(
+                        "error" to (e.message ?: "unknown"),
+                        "fallback" to "fullScreenIntent on notification"
+                    ))
+                    // Will fall back to fullScreenIntent on the notification
+                }
+            }
+
             // Play custom sound using foreground service (works when app is closed)
-            
+
             // Start foreground service to play audio (ensures it works when app is closed)
             // CRITICAL: This must work even when app hasn't been opened for weeks
             val serviceIntent = Intent(context, AlarmAudioService::class.java).apply {
@@ -515,6 +546,10 @@ class AlarmReceiver : BroadcastReceiver() {
 
                 // MediaStyle ensures dismiss button is visible in compact/heads-up view
                 builder.setStyle(MediaStyle().setShowActionsInCompactView(0))
+
+                // Full screen intent for pre-notifications too — ensures popup on lock screen
+                builder.setFullScreenIntent(fullScreenPendingIntent, true)
+                Log.d(TAG, "✓ Full screen intent enabled for pre-notification")
             } else {
                 builder.setContentText(body)
                     .setWhen(System.currentTimeMillis())
@@ -523,10 +558,8 @@ class AlarmReceiver : BroadcastReceiver() {
                 // MediaStyle ensures dismiss button is visible in compact/heads-up view
                 builder.setStyle(MediaStyle().setShowActionsInCompactView(0))
 
-                // Use full screen intent for ALL critical notifications to ensure visibility
-                // This makes the notification appear as a heads-up even if screen is locked
-                // The full screen intent will wake the screen and show the app
-                builder.setFullScreenIntent(fullScreenPendingIntent, true) // true = high priority, show even on lock screen
+                // Full screen intent to wake screen and show AlarmActivity on lock screen
+                builder.setFullScreenIntent(fullScreenPendingIntent, true)
                 Log.d(TAG, "✓ Full screen intent enabled for maximum visibility (will wake screen)")
             }
             

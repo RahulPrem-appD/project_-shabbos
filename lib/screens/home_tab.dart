@@ -38,6 +38,8 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
   // Permission status
   bool? _exactAlarmGranted;
   bool? _batteryOptimizationDisabled;
+  bool? _overlayPermissionGranted;
+  bool? _fullScreenIntentGranted;
   DateTime? _lastPermissionCheck;
 
   bool get isHebrew => widget.locale == 'he';
@@ -97,21 +99,29 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
     if (Platform.isAndroid) {
       final exactAlarm = await NativeAlarmService.canScheduleExactAlarms();
       final batteryOptimization = await NativeAlarmService.isIgnoringBatteryOptimizations();
-      
+      final overlayPermission = await NativeAlarmService.canDrawOverlays();
+      final fullScreenIntent = await NativeAlarmService.canUseFullScreenIntent();
+
       if (mounted) {
         setState(() {
           _exactAlarmGranted = exactAlarm;
           _batteryOptimizationDisabled = batteryOptimization;
+          _overlayPermissionGranted = overlayPermission;
+          _fullScreenIntentGranted = fullScreenIntent;
         });
       }
-      
+
       debugPrint('HomeTab: Exact alarm permission: $exactAlarm');
       debugPrint('HomeTab: Battery optimization disabled: $batteryOptimization');
+      debugPrint('HomeTab: Overlay permission: $overlayPermission');
+      debugPrint('HomeTab: Full screen intent: $fullScreenIntent');
     } else {
       if (mounted) {
         setState(() {
-          _exactAlarmGranted = true; // iOS doesn't need this
-          _batteryOptimizationDisabled = true; // iOS doesn't have this
+          _exactAlarmGranted = true;
+          _batteryOptimizationDisabled = true;
+          _overlayPermissionGranted = true;
+          _fullScreenIntentGranted = true;
         });
       }
     }
@@ -535,8 +545,9 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
       child: Column(
         children: [
           _buildHeader(),
-          if (Platform.isAndroid && 
-              (_exactAlarmGranted != true || _batteryOptimizationDisabled != true))
+          if (Platform.isAndroid &&
+              (_exactAlarmGranted != true || _batteryOptimizationDisabled != true ||
+               _overlayPermissionGranted != true || _fullScreenIntentGranted != true))
             _buildPermissionBanner(),
           Expanded(child: _buildBody()),
         ],
@@ -665,11 +676,12 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
     
     // Show banner if permissions are null (not yet checked) or if either is false
     // Only hide if both are explicitly true
-    if (_exactAlarmGranted == true && _batteryOptimizationDisabled == true) {
+    if (_exactAlarmGranted == true && _batteryOptimizationDisabled == true &&
+        _overlayPermissionGranted == true && _fullScreenIntentGranted == true) {
       debugPrint('HomeTab: All permissions granted, hiding banner');
       return const SizedBox.shrink();
     }
-    
+
     // If permissions haven't been checked yet, show banner
     if (_exactAlarmGranted == null || _batteryOptimizationDisabled == null) {
       debugPrint('HomeTab: Permissions not yet checked, showing banner');
@@ -681,6 +693,12 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
     }
     if (_batteryOptimizationDisabled != true) {
       missingPermissions.add(isHebrew ? 'אופטימיזציית סוללה' : 'Battery Optimization');
+    }
+    if (_overlayPermissionGranted != true) {
+      missingPermissions.add(isHebrew ? 'הצגה מעל אפליקציות' : 'Display Over Apps');
+    }
+    if (_fullScreenIntentGranted != true) {
+      missingPermissions.add(isHebrew ? 'התראות מסך מלא' : 'Full Screen Alerts');
     }
 
     // If no specific permissions are missing but we're here, show generic message
@@ -755,9 +773,12 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
             onPressed: () async {
               if (_exactAlarmGranted != true) {
                 await NativeAlarmService.requestExactAlarmPermission();
-              }
-              if (_batteryOptimizationDisabled != true) {
+              } else if (_batteryOptimizationDisabled != true) {
                 await NativeAlarmService.requestDisableBatteryOptimization();
+              } else if (_overlayPermissionGranted != true) {
+                await NativeAlarmService.requestOverlayPermission();
+              } else if (_fullScreenIntentGranted != true) {
+                await NativeAlarmService.requestFullScreenIntentPermission();
               }
               // Reset throttle so the permission check runs when the user
               // returns from system settings (via didChangeAppLifecycleState)

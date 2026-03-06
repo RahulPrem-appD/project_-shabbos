@@ -209,7 +209,7 @@ class AlarmScheduler(private val context: Context) {
             } else {
                 PendingIntent.FLAG_UPDATE_CURRENT
             }
-            
+
             val pendingIntent = PendingIntent.getBroadcast(
                 context,
                 id,
@@ -233,6 +233,9 @@ class AlarmScheduler(private val context: Context) {
             }
             
             // Schedule the alarm internally - this returns true if successful
+            // Use setAlarmClock() for all alarms to grant a guaranteed exemption from
+            // background activity launch restrictions. This ensures AlarmActivity popup
+            // can appear even when the app is closed, for every notification type.
             val internalSuccess = scheduleAlarmInternal(actualScheduledTime, pendingIntent, id)
             if (!internalSuccess) {
                 Log.e(TAG, "scheduleAlarmInternal returned false for alarm #$id")
@@ -612,53 +615,35 @@ class AlarmScheduler(private val context: Context) {
     private fun scheduleAlarmInternal(timestampMillis: Long, pendingIntent: PendingIntent, id: Int): Boolean {
         var alarmScheduled = false
         var schedulingMethod = "unknown"
-        var hasExactPermission = false
-        
+
         try {
+            // CRITICAL: Always use setAlarmClock() on Android 5.0+.
+            // setAlarmClock() provides a GUARANTEED exemption from Android's background
+            // activity launch restrictions (Android 10+), which means the BroadcastReceiver
+            // and foreground service CAN start AlarmActivity even when the app is closed.
+            // This applies to ALL notification types (main alarms, pre-notifications, etc.)
             when {
-                Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
-                    // Android 12+:
-                    // We intentionally prefer setExactAndAllowWhileIdle over setAlarmClock because
-                    // setAlarmClock can behave inconsistently across OEMs when scheduling many alarms.
-                    hasExactPermission = alarmManager.canScheduleExactAlarms()
-                    if (hasExactPermission) {
-                        Log.d(TAG, "Using setExactAndAllowWhileIdle (Android 12+)")
-                        schedulingMethod = "setExactAndAllowWhileIdle"
-                        alarmManager.setExactAndAllowWhileIdle(
-                            AlarmManager.RTC_WAKEUP,
-                            timestampMillis,
-                            pendingIntent
-                        )
-                        alarmScheduled = true
-                    } else {
-                        Log.w(TAG, "No exact alarm permission! Using setAndAllowWhileIdle")
-                        writeDebugLog(context, "AlarmScheduler.kt:scheduleAlarmInternal", "WARNING: No exact alarm permission", mapOf(
-                            "alarmId" to id,
-                            "fallbackMethod" to "setAndAllowWhileIdle"
-                        ))
-                        schedulingMethod = "setAndAllowWhileIdle"
-                        alarmManager.setAndAllowWhileIdle(
-                            AlarmManager.RTC_WAKEUP,
-                            timestampMillis,
-                            pendingIntent
-                        )
-                        alarmScheduled = true
-                    }
-                }
-                Build.VERSION.SDK_INT >= Build.VERSION_CODES.M -> {
-                    // Android 6.0 - 11: Use setExactAndAllowWhileIdle
-                    Log.d(TAG, "Using setExactAndAllowWhileIdle (Android 6-11)")
-                    schedulingMethod = "setExactAndAllowWhileIdle"
-                    alarmManager.setExactAndAllowWhileIdle(
-                        AlarmManager.RTC_WAKEUP,
-                        timestampMillis,
-                        pendingIntent
+                Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP -> {
+                    val showIntent = PendingIntent.getActivity(
+                        context,
+                        id + 50000,
+                        Intent(context, MainActivity::class.java).apply {
+                            flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                        },
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+                        } else {
+                            PendingIntent.FLAG_UPDATE_CURRENT
+                        }
                     )
+                    val alarmClockInfo = AlarmManager.AlarmClockInfo(timestampMillis, showIntent)
+                    Log.d(TAG, "Using setAlarmClock (background activity exemption enabled)")
+                    schedulingMethod = "setAlarmClock"
+                    alarmManager.setAlarmClock(alarmClockInfo, pendingIntent)
                     alarmScheduled = true
                 }
                 Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT -> {
-                    // Android 4.4 - 5.1: Use setExact
-                    Log.d(TAG, "Using setExact (Android 4.4-5.1)")
+                    Log.d(TAG, "Using setExact (Android 4.4)")
                     schedulingMethod = "setExact"
                     alarmManager.setExact(
                         AlarmManager.RTC_WAKEUP,
@@ -668,7 +653,6 @@ class AlarmScheduler(private val context: Context) {
                     alarmScheduled = true
                 }
                 else -> {
-                    // Android < 4.4: Use set
                     Log.d(TAG, "Using set (Android <4.4)")
                     schedulingMethod = "set"
                     alarmManager.set(
@@ -690,7 +674,6 @@ class AlarmScheduler(private val context: Context) {
                         put("alarmId", id)
                         put("timestampMillis", timestampMillis)
                         put("schedulingMethod", schedulingMethod)
-                        put("hasExactPermission", hasExactPermission)
                         put("androidVersion", Build.VERSION.SDK_INT)
                         put("error", e.toString())
                     })

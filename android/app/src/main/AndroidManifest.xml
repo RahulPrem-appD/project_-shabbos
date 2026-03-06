@@ -17,6 +17,9 @@
     
     <!-- Full screen intent for alarm-style notifications -->
     <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+
+    <!-- Overlay permission for launching alarm popup on restricted OEMs -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     
     <!-- Foreground service for reliability -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />

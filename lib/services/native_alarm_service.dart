@@ -163,6 +163,50 @@ class NativeAlarmService {
     }
   }
 
+  /// Check if the app has overlay (draw over other apps) permission
+  static Future<bool> canDrawOverlays() async {
+    if (!Platform.isAndroid) return true;
+    try {
+      final result = await _channel.invokeMethod('canDrawOverlays');
+      return result as bool? ?? false;
+    } catch (e) {
+      debugPrint('NativeAlarmService: Error checking overlay permission: $e');
+      return false;
+    }
+  }
+
+  /// Request overlay (draw over other apps) permission
+  static Future<void> requestOverlayPermission() async {
+    if (!Platform.isAndroid) return;
+    try {
+      await _channel.invokeMethod('requestOverlayPermission');
+    } catch (e) {
+      debugPrint('NativeAlarmService: Error requesting overlay permission: $e');
+    }
+  }
+
+  /// Check if the app can use full screen intents (Android 14+)
+  static Future<bool> canUseFullScreenIntent() async {
+    if (!Platform.isAndroid) return true;
+    try {
+      final result = await _channel.invokeMethod('canUseFullScreenIntent');
+      return result as bool? ?? false;
+    } catch (e) {
+      debugPrint('NativeAlarmService: Error checking full screen intent permission: $e');
+      return false;
+    }
+  }
+
+  /// Request full screen intent permission (Android 14+)
+  static Future<void> requestFullScreenIntentPermission() async {
+    if (!Platform.isAndroid) return;
+    try {
+      await _channel.invokeMethod('requestFullScreenIntentPermission');
+    } catch (e) {
+      debugPrint('NativeAlarmService: Error requesting full screen intent permission: $e');
+    }
+  }
+
   /// Read Android debug logs from device
   static Future<String?> readDebugLogs() async {
     if (!Platform.isAndroid) {
