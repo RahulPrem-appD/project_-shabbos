@@ -1,7 +1,9 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'main_shell.dart';
+import 'permission_wizard_screen.dart';
 
 class SplashScreen extends StatefulWidget {
   final String locale;
@@ -173,12 +175,18 @@ class _SplashScreenState extends State<SplashScreen>
       ),
     );
 
+    final prefs = await SharedPreferences.getInstance();
+    final wizardDone = prefs.getBool('permissions_wizard_complete') ?? false;
+
+    if (!mounted) return;
+
+    final Widget destination = wizardDone
+        ? MainShell(locale: widget.locale, onLocaleChanged: widget.onLocaleChanged)
+        : PermissionWizardScreen(locale: widget.locale, onLocaleChanged: widget.onLocaleChanged);
+
     Navigator.of(context).pushReplacement(
       PageRouteBuilder(
-        pageBuilder: (_, __, ___) => MainShell(
-          locale: widget.locale,
-          onLocaleChanged: widget.onLocaleChanged,
-        ),
+        pageBuilder: (_, __, ___) => destination,
         transitionDuration: const Duration(milliseconds: 900),
         transitionsBuilder: (_, animation, __, child) {
           return FadeTransition(

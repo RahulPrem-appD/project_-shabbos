@@ -1,7 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'home_tab.dart';
 import 'about_screen.dart';
 import 'settings_screen.dart';
@@ -34,10 +33,7 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    // Check permissions after the first frame
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _checkAndRequestPermissions();
-    });
+    // Wizard handles first-launch permissions; no initState check needed.
   }
 
   @override
@@ -55,25 +51,12 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
   }
 
   Future<void> _checkAndRequestPermissions() async {
-    final prefs = await SharedPreferences.getInstance();
-
-    // Check if we've already completed initial permission setup
-    final hasCompletedSetup =
-        prefs.getBool('permissions_setup_complete') ?? false;
+    // This method runs only on app resume (after wizard has handled first launch).
+    // It re-checks live permission status in case the user revoked a permission.
 
     if (Platform.isIOS) {
-      // On iOS, permission_handler doesn't always report correctly
-      // Only show dialog on first launch, then let users manage in Settings
-      if (!hasCompletedSetup) {
-        // First launch - request permissions
-        await NotificationService().requestPermissions();
-        await Permission.locationWhenInUse.request();
-
-        // Mark setup as complete
-        await prefs.setBool('permissions_setup_complete', true);
-        debugPrint('MainShell: iOS first launch - permissions requested');
-      }
-      // Don't show dialog on iOS after first launch
+      // On iOS, permission_handler doesn't always report correctly after first launch.
+      // Wizard handled first-launch requests; skip re-requesting on resume.
       return;
     }
 

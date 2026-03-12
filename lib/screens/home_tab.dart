@@ -7,7 +7,6 @@ import '../services/hebcal_service.dart';
 import '../services/location_service.dart';
 import '../services/notification_service.dart';
 import '../services/native_alarm_service.dart';
-import '../services/preferences_service.dart';
 
 class HomeTab extends StatefulWidget {
   final String locale;
@@ -27,14 +26,13 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
   final HebcalService _hebcalService = HebcalService();
   final LocationService _locationService = LocationService();
   final NotificationService _notificationService = NotificationService();
-  final PreferencesService _preferencesService = PreferencesService();
 
   List<CandleLighting> _candleLightings = [];
   LocationInfo? _location;
   bool _isLoading = true;
   bool _isDetectingLocation = false;
   String? _error;
-  
+
   // Permission status
   bool? _exactAlarmGranted;
   bool? _batteryOptimizationDisabled;
@@ -77,7 +75,6 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
     }
   }
 
-
   Future<void> _init() async {
     await _notificationService.initialize();
     await _checkPermissions();
@@ -87,20 +84,24 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
   Future<void> _checkPermissions() async {
     // Avoid checking too frequently (max once per 2 seconds)
     final now = DateTime.now();
-    if (_lastPermissionCheck != null && 
+    if (_lastPermissionCheck != null &&
         now.difference(_lastPermissionCheck!).inSeconds < 2) {
-      debugPrint('HomeTab: Skipping permission check (checked ${now.difference(_lastPermissionCheck!).inSeconds}s ago)');
+      debugPrint(
+        'HomeTab: Skipping permission check (checked ${now.difference(_lastPermissionCheck!).inSeconds}s ago)',
+      );
       return;
     }
     _lastPermissionCheck = now;
 
     debugPrint('HomeTab: ===== Checking permissions =====');
-    
+
     if (Platform.isAndroid) {
       final exactAlarm = await NativeAlarmService.canScheduleExactAlarms();
-      final batteryOptimization = await NativeAlarmService.isIgnoringBatteryOptimizations();
+      final batteryOptimization =
+          await NativeAlarmService.isIgnoringBatteryOptimizations();
       final overlayPermission = await NativeAlarmService.canDrawOverlays();
-      final fullScreenIntent = await NativeAlarmService.canUseFullScreenIntent();
+      final fullScreenIntent =
+          await NativeAlarmService.canUseFullScreenIntent();
 
       if (mounted) {
         setState(() {
@@ -112,7 +113,9 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
       }
 
       debugPrint('HomeTab: Exact alarm permission: $exactAlarm');
-      debugPrint('HomeTab: Battery optimization disabled: $batteryOptimization');
+      debugPrint(
+        'HomeTab: Battery optimization disabled: $batteryOptimization',
+      );
       debugPrint('HomeTab: Overlay permission: $overlayPermission');
       debugPrint('HomeTab: Full screen intent: $fullScreenIntent');
     } else {
@@ -148,45 +151,47 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
       // Check permission status first
       LocationPermission permission = await Geolocator.checkPermission();
       debugPrint('HomeTab: Current location permission: $permission');
-      
+
       // Only request if not already granted
       if (permission == LocationPermission.denied) {
         debugPrint('HomeTab: Requesting location permission...');
         permission = await Geolocator.requestPermission();
         debugPrint('HomeTab: Permission result: $permission');
       }
-      
-      if (permission == LocationPermission.whileInUse || 
+
+      if (permission == LocationPermission.whileInUse ||
           permission == LocationPermission.always) {
         // Get current location
         debugPrint('HomeTab: Getting current location...');
         final location = await _locationService.getCurrentLocation();
-        
+
         if (location != null) {
           // Save and enable GPS
           await _locationService.saveLocation(location);
           await _locationService.setUseGps(true);
-          
+
           // Reload data with new location
           await _loadData();
-          
+
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Text(
-                  isHebrew 
+                  isHebrew
                       ? '✓ מיקום זוהה: ${location.displayName}'
                       : '✓ Location detected: ${location.displayName}',
                 ),
                 backgroundColor: Colors.green,
                 behavior: SnackBarBehavior.floating,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
               ),
             );
           }
         } else {
           setState(() {
-            _error = isHebrew 
+            _error = isHebrew
                 ? 'לא ניתן לזהות מיקום. נסה שוב.'
                 : 'Could not detect location. Please try again.';
           });
@@ -206,7 +211,7 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
     } catch (e) {
       debugPrint('HomeTab: Error detecting location: $e');
       setState(() {
-        _error = isHebrew 
+        _error = isHebrew
             ? 'שגיאה בזיהוי מיקום: $e'
             : 'Error detecting location: $e';
       });
@@ -238,7 +243,9 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
               ),
               backgroundColor: Colors.red[400],
               behavior: SnackBarBehavior.floating,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
             ),
           );
         }
@@ -259,12 +266,16 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
           await _locationService.setUseGps(true);
 
           // Check if location meaningfully changed
-          final locationChanged = oldLocation == null ||
+          final locationChanged =
+              oldLocation == null ||
               oldLocation.cityName != newLocation.cityName ||
               _distanceKm(
-                    oldLocation.latitude, oldLocation.longitude,
-                    newLocation.latitude, newLocation.longitude,
-                  ) > 5;
+                    oldLocation.latitude,
+                    oldLocation.longitude,
+                    newLocation.latitude,
+                    newLocation.longitude,
+                  ) >
+                  5;
 
           if (locationChanged) {
             // Force reschedule: reload data and schedule notifications
@@ -288,7 +299,9 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
                   ),
                   backgroundColor: Colors.green,
                   behavior: SnackBarBehavior.floating,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
                 ),
               );
             }
@@ -302,7 +315,9 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
                         : 'Location unchanged: ${newLocation.displayName}',
                   ),
                   behavior: SnackBarBehavior.floating,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
                 ),
               );
             }
@@ -318,7 +333,9 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
                 ),
                 backgroundColor: Colors.red[400],
                 behavior: SnackBarBehavior.floating,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
               ),
             );
           }
@@ -338,7 +355,9 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
               ),
               backgroundColor: Colors.red[400],
               behavior: SnackBarBehavior.floating,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
             ),
           );
         }
@@ -349,13 +368,13 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              isHebrew
-                  ? 'שגיאה בזיהוי מיקום'
-                  : 'Error detecting location',
+              isHebrew ? 'שגיאה בזיהוי מיקום' : 'Error detecting location',
             ),
             backgroundColor: Colors.red[400],
             behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
           ),
         );
       }
@@ -408,59 +427,6 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
     );
   }
 
-  Future<void> _showTravelTipIfNeeded() async {
-    final hasSeenTip = await _preferencesService.hasSeenTravelTip();
-    if (hasSeenTip) return;
-    if (!mounted) return;
-
-    await showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Row(
-          children: [
-            const Icon(
-              Icons.flight_takeoff,
-              color: Color(0xFFE8B923),
-              size: 28,
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                isHebrew ? '?נוסע/ת' : 'Travelling?',
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-          ],
-        ),
-        content: Text(
-          isHebrew
-              ? 'כשאתה נוסע לעיר אחרת, עדכן את המיקום שלך בהגדרות או לחץ על כפתור המיקום בדף הבית כדי שההתראות יגיעו בזמן הנכון של הדלקת נרות במיקום שלך.'
-              : 'When you travel to a different city, update your location in Settings or tap the location button on the home page so notifications arrive at the correct candle lighting time for your location.',
-          style: const TextStyle(fontSize: 14, height: 1.5),
-        ),
-        actions: [
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF1A1A1A),
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-            ),
-            child: Text(isHebrew ? 'הבנתי' : 'Got it'),
-          ),
-        ],
-      ),
-    );
-
-    await _preferencesService.setTravelTipSeen();
-  }
 
   Future<void> _loadData() async {
     setState(() {
@@ -501,7 +467,9 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
         });
 
         // Only reschedule notifications if needed (not every app open)
-        final needsRescheduling = await _checkIfNotificationsNeedRescheduling(futureTimes);
+        final needsRescheduling = await _checkIfNotificationsNeedRescheduling(
+          futureTimes,
+        );
         if (needsRescheduling) {
           debugPrint('HomeTab: Rescheduling notifications (needed)');
           await _notificationService.scheduleNotifications(
@@ -509,14 +477,14 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
             locale: widget.locale,
           );
         } else {
-          debugPrint('HomeTab: Notifications already scheduled, skipping reschedule');
+          debugPrint(
+            'HomeTab: Notifications already scheduled, skipping reschedule',
+          );
         }
 
         // Check and start Live Activity for iOS if within pre-notification window
         await _notificationService.checkAndStartLiveActivity(futureTimes);
 
-        // Show travel tip dialog on first launch
-        _showTravelTipIfNeeded();
       } else {
         setState(() {
           _isLoading = false;
@@ -546,8 +514,10 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
         children: [
           _buildHeader(),
           if (Platform.isAndroid &&
-              (_exactAlarmGranted != true || _batteryOptimizationDisabled != true ||
-               _overlayPermissionGranted != true || _fullScreenIntentGranted != true))
+              (_exactAlarmGranted != true ||
+                  _batteryOptimizationDisabled != true ||
+                  _overlayPermissionGranted != true ||
+                  _fullScreenIntentGranted != true))
             _buildPermissionBanner(),
           Expanded(child: _buildBody()),
         ],
@@ -598,7 +568,9 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
   Widget _buildHeader() {
     final titleColumn = Expanded(
       child: Column(
-        crossAxisAlignment: isHebrew ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+        crossAxisAlignment: isHebrew
+            ? CrossAxisAlignment.end
+            : CrossAxisAlignment.start,
         children: [
           Text(
             isHebrew ? 'שבת!!' : 'Shabbos!!',
@@ -640,11 +612,7 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
                       ),
                     )
                   else
-                    Icon(
-                      Icons.my_location,
-                      size: 14,
-                      color: Colors.grey[400],
-                    ),
+                    Icon(Icons.my_location, size: 14, color: Colors.grey[400]),
                 ],
               ),
             ),
@@ -660,8 +628,14 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         textDirection: isHebrew ? TextDirection.rtl : TextDirection.ltr,
         children: isHebrew
-            ? [languageButton, titleColumn] // RTL: button on left, title on right
-            : [titleColumn, languageButton], // LTR: title on left, button on right
+            ? [
+                languageButton,
+                titleColumn,
+              ] // RTL: button on left, title on right
+            : [
+                titleColumn,
+                languageButton,
+              ], // LTR: title on left, button on right
       ),
     );
   }
@@ -671,13 +645,17 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
       debugPrint('HomeTab: Not Android, skipping permission banner');
       return const SizedBox.shrink();
     }
-    
-    debugPrint('HomeTab: Permission status - exactAlarm: $_exactAlarmGranted, batteryOptimization: $_batteryOptimizationDisabled');
-    
+
+    debugPrint(
+      'HomeTab: Permission status - exactAlarm: $_exactAlarmGranted, batteryOptimization: $_batteryOptimizationDisabled',
+    );
+
     // Show banner if permissions are null (not yet checked) or if either is false
     // Only hide if both are explicitly true
-    if (_exactAlarmGranted == true && _batteryOptimizationDisabled == true &&
-        _overlayPermissionGranted == true && _fullScreenIntentGranted == true) {
+    if (_exactAlarmGranted == true &&
+        _batteryOptimizationDisabled == true &&
+        _overlayPermissionGranted == true &&
+        _fullScreenIntentGranted == true) {
       debugPrint('HomeTab: All permissions granted, hiding banner');
       return const SizedBox.shrink();
     }
@@ -692,21 +670,31 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
       missingPermissions.add(isHebrew ? 'התראות מדויקות' : 'Exact Alarms');
     }
     if (_batteryOptimizationDisabled != true) {
-      missingPermissions.add(isHebrew ? 'אופטימיזציית סוללה' : 'Battery Optimization');
+      missingPermissions.add(
+        isHebrew ? 'אופטימיזציית סוללה' : 'Battery Optimization',
+      );
     }
     if (_overlayPermissionGranted != true) {
-      missingPermissions.add(isHebrew ? 'הצגה מעל אפליקציות' : 'Display Over Apps');
+      missingPermissions.add(
+        isHebrew ? 'הצגה מעל אפליקציות' : 'Display Over Apps',
+      );
     }
     if (_fullScreenIntentGranted != true) {
-      missingPermissions.add(isHebrew ? 'התראות מסך מלא' : 'Full Screen Alerts');
+      missingPermissions.add(
+        isHebrew ? 'התראות מסך מלא' : 'Full Screen Alerts',
+      );
     }
 
     // If no specific permissions are missing but we're here, show generic message
     if (missingPermissions.isEmpty) {
-      missingPermissions.add(isHebrew ? 'הרשאות נדרשות' : 'Permissions Required');
+      missingPermissions.add(
+        isHebrew ? 'הרשאות נדרשות' : 'Permissions Required',
+      );
     }
 
-    debugPrint('HomeTab: Showing permission banner for: ${missingPermissions.join(', ')}');
+    debugPrint(
+      'HomeTab: Showing permission banner for: ${missingPermissions.join(', ')}',
+    );
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
@@ -714,7 +702,9 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
       decoration: BoxDecoration(
         color: const Color(0xFFFFF3CD),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFE8B923).withValues(alpha: 0.3)),
+        border: Border.all(
+          color: const Color(0xFFE8B923).withValues(alpha: 0.3),
+        ),
       ),
       child: Row(
         children: [
@@ -746,22 +736,21 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
                     ),
                     children: [
                       TextSpan(
-                        text: 'To make sure Shabbat and Yom Tov alerts arrive on time\n\n',
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                        ),
+                        text:
+                            'To make sure Shabbat and Yom Tov alerts arrive on time\n\n',
+                        style: const TextStyle(fontWeight: FontWeight.bold),
                       ),
                       const TextSpan(
                         text: 'Android may pause this app to save battery.\n\n',
                       ),
                       const TextSpan(
-                        text: 'Please allow the Shabbos App to run normally so alerts play at the correct time.\n\n',
+                        text:
+                            'Please allow the Shabbos App to run normally so alerts play at the correct time.\n\n',
                       ),
                       TextSpan(
-                        text: 'This only applies to the Shabbos App and does not affect any other apps or phone settings.',
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                        ),
+                        text:
+                            'This only applies to the Shabbos App and does not affect any other apps or phone settings.',
+                        style: const TextStyle(fontWeight: FontWeight.bold),
                       ),
                     ],
                   ),
@@ -798,86 +787,26 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
     );
   }
 
-  void _showTravelInfoDialog() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Row(
-          children: [
-            const Icon(
-              Icons.info_outline,
-              color: Color(0xFFE8B923),
-              size: 28,
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                isHebrew ? 'שים לב בנסיעה' : 'Travelling Reminder',
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-          ],
-        ),
-        content: Text(
-          isHebrew
-              ? 'כשאתה נוסע, המיקום שלך משתנה ועמו זמן השקיעה והדלקת הנרות. '
-                'כדי לקבל את הזמנים הנכונים למקום שאתה נמצא בו, '
-                'לחץ על הכפתור למטה כדי לעדכן את המיקום שלך.'
-              : 'When you\'re travelling, your location changes and so does the '
-                'sunset time and candle lighting time. '
-                'To get the correct times for where you are, '
-                'tap the button below to update your location.',
-          style: const TextStyle(fontSize: 14, height: 1.5),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text(isHebrew ? 'סגור' : 'Close'),
-          ),
-          ElevatedButton.icon(
-            onPressed: () {
-              Navigator.pop(context);
-              _detectLocationWithReschedule();
-            },
-            icon: const Icon(Icons.my_location, size: 18),
-            label: Text(isHebrew ? 'עדכן מיקום' : 'Update Location'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF1A1A1A),
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 
   Widget _buildTravelLocationBanner() {
     final textDirection = isHebrew ? TextDirection.rtl : TextDirection.ltr;
     final locationName = _location?.displayName ?? '';
     return GestureDetector(
       onTap: _isDetectingLocation ? null : _detectLocationWithReschedule,
-      onLongPress: _isDetectingLocation ? null : _showTravelInfoDialog,
       child: Column(
         children: [
-          Text(
-            _isDetectingLocation
-                ? (isHebrew ? 'מזהה מיקום...' : 'Detecting...')
-                : (isHebrew ? 'נוסע/ת?' : 'Traveling?'),
-            textDirection: textDirection,
-            style: const TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w700,
-              color: Color(0xFF1A1A1A),
+          if (_isDetectingLocation) ...[
+            Text(
+              isHebrew ? 'מזהה מיקום...' : 'Detecting...',
+              textDirection: textDirection,
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF1A1A1A),
+              ),
             ),
-          ),
-          const SizedBox(height: 8),
+            const SizedBox(height: 8),
+          ],
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
             decoration: BoxDecoration(
@@ -904,7 +833,9 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
                         width: 40,
                         height: 40,
                         decoration: BoxDecoration(
-                          color: const Color(0xFFE8B923).withValues(alpha: 0.15),
+                          color: const Color(
+                            0xFFE8B923,
+                          ).withValues(alpha: 0.15),
                           shape: BoxShape.circle,
                         ),
                         child: const Icon(
@@ -936,10 +867,7 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
                             ? 'הקש לעדכון המיקום'
                             : 'Tap to update your location',
                         textDirection: textDirection,
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: Colors.grey[500],
-                        ),
+                        style: TextStyle(fontSize: 13, color: Colors.grey[500]),
                       ),
                     ],
                   ),
@@ -986,7 +914,7 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
             child: Text(
               isHebrew
                   ? 'מנהגי המקום עשויים להיות שונים, ויש לנהוג לפיהם כאשר הם ידועים.'
-                  : 'Local community customs may differ and should be followed when known.',
+                  : 'Local customs may differ and should be followed when known.',
               textDirection: isHebrew ? TextDirection.rtl : TextDirection.ltr,
               textAlign: TextAlign.center,
               style: TextStyle(
@@ -1013,9 +941,7 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
             ..._candleLightings
                 .skip(1)
                 .take(5)
-                .map(
-                  (lighting) => _buildUpcomingCard(lighting),
-                ),
+                .map((lighting) => _buildUpcomingCard(lighting)),
           ],
           const SizedBox(height: 100),
         ],
@@ -1027,13 +953,16 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
     final timeFormat = DateFormat('h:mm a'); // 12-hour format with AM/PM
 
     // Use Hebrew date when in Hebrew mode, otherwise use English date format
-    final dateString = (isHebrew && lighting.hebrewDate != null && lighting.hebrewDate!.isNotEmpty)
+    final dateString =
+        (isHebrew &&
+            lighting.hebrewDate != null &&
+            lighting.hebrewDate!.isNotEmpty)
         ? lighting.hebrewDate!
         : DateFormat('EEEE, MMM d').format(lighting.date);
 
     final now = DateTime.now();
     final diff = lighting.candleLightingTime.difference(now);
-    
+
     // Calculate days, hours, and minutes correctly
     final days = diff.inDays;
     // Hours remaining after subtracting full days (modulo 24)
@@ -1044,7 +973,7 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
     String countdown;
     if (days > 0) {
       // Always show days, hours, and minutes when days > 0
-      countdown = isHebrew 
+      countdown = isHebrew
           ? '$days ימים $hours שעות $minutes דק\''
           : '$days d ${hours}h ${minutes}m';
     } else if (hours > 0) {
@@ -1193,7 +1122,10 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
     final timeFormat = DateFormat('h:mm a'); // 12-hour format with AM/PM
 
     // Use Hebrew date when in Hebrew mode
-    final dateString = (isHebrew && lighting.hebrewDate != null && lighting.hebrewDate!.isNotEmpty)
+    final dateString =
+        (isHebrew &&
+            lighting.hebrewDate != null &&
+            lighting.hebrewDate!.isNotEmpty)
         ? lighting.hebrewDate!
         : DateFormat('EEE, MMM d').format(lighting.date);
 
@@ -1274,7 +1206,7 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
               style: TextStyle(fontSize: 16, color: Colors.grey[600]),
             ),
             const SizedBox(height: 32),
-            
+
             // Detect Location Button
             ElevatedButton.icon(
               onPressed: _isDetectingLocation ? null : _detectLocation,
@@ -1292,20 +1224,26 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
                 _isDetectingLocation
                     ? (isHebrew ? 'מזהה...' : 'Detecting...')
                     : (isHebrew ? 'זהה מיקום אוטומטית' : 'Detect My Location'),
-                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF1A1A1A),
                 foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 14,
+                ),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),
               ),
             ),
-            
+
             const SizedBox(height: 16),
-            
+
             Text(
               isHebrew
                   ? 'או עבור להגדרות לבחירת מיקום ידנית'
@@ -1338,13 +1276,15 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
   /// Check if notifications need rescheduling
   /// Returns true if notifications are missing or don't match expected schedule
   /// Returns false if notifications are already properly scheduled
-  Future<bool> _checkIfNotificationsNeedRescheduling(List<CandleLighting> expectedTimes) async {
+  Future<bool> _checkIfNotificationsNeedRescheduling(
+    List<CandleLighting> expectedTimes,
+  ) async {
     try {
       debugPrint('HomeTab: Checking if notifications need rescheduling...');
-      
+
       // Get currently scheduled notifications/alarms
       List<Map<String, dynamic>> scheduledAlarms = [];
-      
+
       if (Platform.isAndroid) {
         scheduledAlarms = await NativeAlarmService.getScheduledAlarms();
       } else {
@@ -1353,64 +1293,77 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
         debugPrint('HomeTab: iOS - always rescheduling for simplicity');
         return true;
       }
-      
+
       // Filter out test notifications (996, 997, 998)
       final realAlarms = scheduledAlarms.where((alarm) {
         final id = alarm['id'] as int;
         return id != 996 && id != 997 && id != 998;
       }).toList();
-      
-      debugPrint('HomeTab: Found ${realAlarms.length} real alarms scheduled (excluding tests)');
-      debugPrint('HomeTab: Expected ${expectedTimes.take(10).length * 2} alarms (pre + issur for each event)');
-      
+
+      debugPrint(
+        'HomeTab: Found ${realAlarms.length} real alarms scheduled (excluding tests)',
+      );
+      debugPrint(
+        'HomeTab: Expected ${expectedTimes.take(10).length * 2} alarms (pre + issur for each event)',
+      );
+
       // Calculate expected number of alarms (pre-notification + issur melacha for each event)
-      final expectedCount = expectedTimes.take(10).length * 2; // 2 per event (pre + issur)
-      
+      final expectedCount =
+          expectedTimes.take(10).length * 2; // 2 per event (pre + issur)
+
       // If count doesn't match, reschedule
       if (realAlarms.length != expectedCount) {
         debugPrint('HomeTab: Alarm count mismatch - need rescheduling');
         return true;
       }
-      
+
       // Check if the scheduled times roughly match expected times
       // We'll check the first few alarms to see if they're scheduled correctly
       final now = DateTime.now();
       final preMinutes = await _notificationService.getPreNotificationMinutes();
-      
+
       for (int i = 0; i < expectedTimes.take(3).length; i++) {
-        final expectedPreTime = expectedTimes[i].candleLightingTime.subtract(Duration(minutes: preMinutes));
+        final expectedPreTime = expectedTimes[i].candleLightingTime.subtract(
+          Duration(minutes: preMinutes),
+        );
         final expectedCandleTime = expectedTimes[i].candleLightingTime;
-        
+
         // Skip if times are in the past
         if (expectedPreTime.isBefore(now)) continue;
-        
+
         // Find alarms that match these times (within 5 minutes tolerance)
         final matchingPreAlarm = realAlarms.any((alarm) {
-          final scheduledTime = DateTime.fromMillisecondsSinceEpoch(alarm['timestampMillis'] as int);
+          final scheduledTime = DateTime.fromMillisecondsSinceEpoch(
+            alarm['timestampMillis'] as int,
+          );
           final diff = scheduledTime.difference(expectedPreTime).abs();
           return diff.inMinutes < 5;
         });
-        
+
         final matchingCandleAlarm = realAlarms.any((alarm) {
-          final scheduledTime = DateTime.fromMillisecondsSinceEpoch(alarm['timestampMillis'] as int);
+          final scheduledTime = DateTime.fromMillisecondsSinceEpoch(
+            alarm['timestampMillis'] as int,
+          );
           final diff = scheduledTime.difference(expectedCandleTime).abs();
           return diff.inMinutes < 5;
         });
-        
+
         if (!matchingPreAlarm || !matchingCandleAlarm) {
-          debugPrint('HomeTab: Alarm times don\'t match expected - need rescheduling');
+          debugPrint(
+            'HomeTab: Alarm times don\'t match expected - need rescheduling',
+          );
           return true;
         }
       }
-      
-      debugPrint('HomeTab: Notifications are properly scheduled - no rescheduling needed');
+
+      debugPrint(
+        'HomeTab: Notifications are properly scheduled - no rescheduling needed',
+      );
       return false;
-      
     } catch (e) {
       debugPrint('HomeTab: Error checking notifications: $e');
       // On error, reschedule to be safe
       return true;
     }
   }
-
 }
