@@ -175,6 +175,22 @@ class NativeAlarmService {
     }
   }
 
+  /// Check if the overlay permission settings page is available on this device.
+  /// Returns false on devices where the OS restricts overlay permission entirely.
+  static Future<bool> isOverlaySettingsAvailable() async {
+    if (!Platform.isAndroid) return true;
+    try {
+      final result =
+          await _channel.invokeMethod('isOverlaySettingsAvailable');
+      return result as bool? ?? true;
+    } catch (e) {
+      debugPrint(
+        'NativeAlarmService: Error checking overlay settings availability: $e',
+      );
+      return true; // Assume available if check fails
+    }
+  }
+
   /// Request overlay (draw over other apps) permission
   static Future<void> requestOverlayPermission() async {
     if (!Platform.isAndroid) return;

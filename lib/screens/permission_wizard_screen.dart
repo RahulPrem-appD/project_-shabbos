@@ -108,11 +108,11 @@ final _allSteps = <PermissionStep>[
     titleEn: 'Alarm Screen',
     titleHe: 'מסך התראה',
     descriptionEn:
-        'The candle lighting alarm shows a full-screen overlay when your phone is locked. Tap Grant to open Settings.',
+        'Allows the alarm screen to appear over other apps for maximum reliability. Tap Grant to open Settings.',
     descriptionHe:
-        'התראת ההדלקה מוצגת על המסך גם כשהטלפון נעול. לחץ הענק כדי לפתוח הגדרות.',
-    whyEn: 'Without this, the alarm won\'t show on a locked screen.',
-    whyHe: 'ללא הרשאה, ההתראה לא תוצג על מסך נעול.',
+        'מאפשר למסך ההתראה להופיע מעל אפליקציות אחרות לאמינות מרבית. לחץ הענק כדי לפתוח הגדרות.',
+    whyEn: 'Adds an extra layer of reliability for alarm display.',
+    whyHe: 'מוסיף שכבת אמינות נוספת להצגת ההתראה.',
   ),
   const PermissionStep(
     type: PermissionStepType.fullScreenIntent,
@@ -284,7 +284,13 @@ class _PermissionWizardScreenState extends State<PermissionWizardScreen>
       case PermissionStepType.batteryOptimization:
         return NativeAlarmService.isIgnoringBatteryOptimizations();
       case PermissionStepType.overlay:
-        return NativeAlarmService.canDrawOverlays();
+        final overlayGranted = await NativeAlarmService.canDrawOverlays();
+        if (!overlayGranted) {
+          final available =
+              await NativeAlarmService.isOverlaySettingsAvailable();
+          if (!available) return true; // Auto-skip on restricted devices
+        }
+        return overlayGranted;
       case PermissionStepType.fullScreenIntent:
         return NativeAlarmService.canUseFullScreenIntent();
     }

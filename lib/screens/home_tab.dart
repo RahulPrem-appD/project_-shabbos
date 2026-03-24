@@ -37,6 +37,7 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
   bool? _exactAlarmGranted;
   bool? _batteryOptimizationDisabled;
   bool? _overlayPermissionGranted;
+  bool _overlaySettingsAvailable = true;
   bool? _fullScreenIntentGranted;
   DateTime? _lastPermissionCheck;
 
@@ -100,6 +101,8 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
       final batteryOptimization =
           await NativeAlarmService.isIgnoringBatteryOptimizations();
       final overlayPermission = await NativeAlarmService.canDrawOverlays();
+      final overlayAvailable = overlayPermission ||
+          await NativeAlarmService.isOverlaySettingsAvailable();
       final fullScreenIntent =
           await NativeAlarmService.canUseFullScreenIntent();
 
@@ -108,6 +111,7 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
           _exactAlarmGranted = exactAlarm;
           _batteryOptimizationDisabled = batteryOptimization;
           _overlayPermissionGranted = overlayPermission;
+          _overlaySettingsAvailable = overlayAvailable;
           _fullScreenIntentGranted = fullScreenIntent;
         });
       }
@@ -516,7 +520,8 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
           if (Platform.isAndroid &&
               (_exactAlarmGranted != true ||
                   _batteryOptimizationDisabled != true ||
-                  _overlayPermissionGranted != true ||
+                  (_overlayPermissionGranted != true &&
+                      _overlaySettingsAvailable) ||
                   _fullScreenIntentGranted != true))
             _buildPermissionBanner(),
           Expanded(child: _buildBody()),
@@ -654,7 +659,7 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
     // Only hide if both are explicitly true
     if (_exactAlarmGranted == true &&
         _batteryOptimizationDisabled == true &&
-        _overlayPermissionGranted == true &&
+        (_overlayPermissionGranted == true || !_overlaySettingsAvailable) &&
         _fullScreenIntentGranted == true) {
       debugPrint('HomeTab: All permissions granted, hiding banner');
       return const SizedBox.shrink();
@@ -674,7 +679,7 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
         isHebrew ? 'אופטימיזציית סוללה' : 'Battery Optimization',
       );
     }
-    if (_overlayPermissionGranted != true) {
+    if (_overlayPermissionGranted != true && _overlaySettingsAvailable) {
       missingPermissions.add(
         isHebrew ? 'הצגה מעל אפליקציות' : 'Display Over Apps',
       );
@@ -764,7 +769,8 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
                 await NativeAlarmService.requestExactAlarmPermission();
               } else if (_batteryOptimizationDisabled != true) {
                 await NativeAlarmService.requestDisableBatteryOptimization();
-              } else if (_overlayPermissionGranted != true) {
+              } else if (_overlayPermissionGranted != true &&
+                  _overlaySettingsAvailable) {
                 await NativeAlarmService.requestOverlayPermission();
               } else if (_fullScreenIntentGranted != true) {
                 await NativeAlarmService.requestFullScreenIntentPermission();

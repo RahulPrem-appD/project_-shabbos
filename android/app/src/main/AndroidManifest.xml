@@ -94,6 +94,12 @@
             android:exported="false"
             android:enabled="true" />
         
+        <!-- Generic notification dismiss receiver for informational notifications -->
+        <receiver
+            android:name=".NotificationDismissReceiver"
+            android:exported="false"
+            android:enabled="true" />
+
         <!-- Custom Alarm Receiver for reliable background notifications -->
         <!-- exported=false: only this app's explicit PendingIntents (via AlarmManager) can trigger it -->
         <receiver

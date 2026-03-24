@@ -28,6 +28,7 @@ class AlarmAudioService : Service() {
         
         const val ACTION_STOP_ALARM = "com.shabbos.shabbos_app.STOP_ALARM"
         const val EXTRA_NOTIFICATION_ID = "notification_id" // AlarmReceiver's notification ID to cancel on stop
+        private const val MAX_REPOST_COUNT = 4 // 4 × 15s = 1 minute of heads-up reposts
 
         private const val EXTRA_SOUND_ID = "sound_id"
         private const val EXTRA_TITLE = "title"
@@ -55,6 +56,10 @@ class AlarmAudioService : Service() {
     private var initialAlarmVolume: Int = -1
     private var volumeReceiver: android.content.BroadcastReceiver? = null
     private var alarmNotificationId: Int = -1 // AlarmReceiver's notification ID — cancelled on stop
+    private var headsUpHandler: android.os.Handler? = null
+    private var headsUpRunnable: Runnable? = null
+    private var lastNotificationTitle: String = ""
+    private var lastNotificationBody: String = ""
     
     /**
      * Helper function to write logs to debug_logs.txt for diagnostic reports
@@ -220,7 +225,15 @@ class AlarmAudioService : Service() {
         // Play the sound
         Log.d(TAG, "Calling playSound($soundId) at volume $alarmVolume...")
         playSound(soundId, alarmVolume)
-        
+
+        // Start periodic heads-up re-posting so the dismiss option stays visible
+        // on OEMs that collapse or hide notification action buttons.
+        // Cancel any existing timer first to prevent duplicate loops on re-delivery.
+        stopHeadsUpReposting()
+        lastNotificationTitle = title
+        lastNotificationBody = body
+        startHeadsUpReposting()
+
         Log.d(TAG, "========================================")
         // Return START_STICKY to ensure service restarts if killed
         return START_STICKY
@@ -228,11 +241,104 @@ class AlarmAudioService : Service() {
     
     override fun onBind(intent: Intent?): IBinder? = null
     
+    /**
+     * Periodically re-posts the AlarmReceiver notification as heads-up.
+     * Uses the alarm channel ("shabbos_alerts" / IMPORTANCE_MAX) so the re-post actually
+     * triggers a heads-up on the screen, unlike the service channel (IMPORTANCE_DEFAULT)
+     * which would just update silently.
+     *
+     * Capped at [MAX_REPOST_COUNT] reposts to avoid excessive heads-up alerts.
+     * Preserves fullScreenIntent so the FSI path isn't weakened after a repost.
+     */
+    private var repostCount = 0
+
+    private fun startHeadsUpReposting() {
+        if (alarmNotificationId == -1) return // No alarm notification to repost
+        repostCount = 0
+
+        headsUpHandler = android.os.Handler(android.os.Looper.getMainLooper())
+        headsUpRunnable = object : Runnable {
+            override fun run() {
+                if (repostCount >= MAX_REPOST_COUNT) {
+                    Log.d(TAG, "Heads-up repost limit reached ($MAX_REPOST_COUNT), stopping")
+                    return
+                }
+                repostCount++
+
+                try {
+                    val pendingIntentFlags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                        PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+                    } else {
+                        PendingIntent.FLAG_UPDATE_CURRENT
+                    }
+
+                    val stopIntent = Intent(this@AlarmAudioService, AlarmAudioService::class.java).apply {
+                        action = ACTION_STOP_ALARM
+                        putExtra(EXTRA_NOTIFICATION_ID, alarmNotificationId)
+                    }
+                    val stopPendingIntent = PendingIntent.getService(
+                        this@AlarmAudioService,
+                        alarmNotificationId + 20000,
+                        stopIntent,
+                        pendingIntentFlags
+                    )
+
+                    // Preserve fullScreenIntent so the FSI path isn't weakened after repost
+                    val fullScreenIntent = Intent(this@AlarmAudioService, AlarmActivity::class.java).apply {
+                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                        putExtra(AlarmActivity.EXTRA_TITLE, lastNotificationTitle)
+                        putExtra(AlarmActivity.EXTRA_BODY, lastNotificationBody)
+                        putExtra(AlarmActivity.EXTRA_NOTIFICATION_ID, alarmNotificationId)
+                    }
+                    val fullScreenPendingIntent = PendingIntent.getActivity(
+                        this@AlarmAudioService,
+                        alarmNotificationId + 10000,
+                        fullScreenIntent,
+                        pendingIntentFlags
+                    )
+
+                    // Re-post on the ALARM channel (IMPORTANCE_MAX) to trigger heads-up
+                    val notification = NotificationCompat.Builder(this@AlarmAudioService, "shabbos_alerts")
+                        .setSmallIcon(R.drawable.ic_notification)
+                        .setContentTitle(lastNotificationTitle)
+                        .setContentText(lastNotificationBody)
+                        .setPriority(NotificationCompat.PRIORITY_MAX)
+                        .setCategory(NotificationCompat.CATEGORY_ALARM)
+                        .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+                        .setContentIntent(stopPendingIntent)
+                        .setAutoCancel(true)
+                        .setSound(null)
+                        .addAction(R.drawable.ic_notification, "Dismiss", stopPendingIntent)
+                        .setDeleteIntent(stopPendingIntent)
+                        .setFullScreenIntent(fullScreenPendingIntent, true)
+                        .setStyle(MediaStyle().setShowActionsInCompactView(0))
+                        .setOnlyAlertOnce(false) // Allow heads-up on each repost
+                        .build()
+
+                    val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+                    nm.notify(alarmNotificationId, notification)
+                    Log.d(TAG, "Re-posted alarm notification as heads-up ($repostCount/$MAX_REPOST_COUNT, ID: $alarmNotificationId)")
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to re-post heads-up notification: ${e.message}")
+                }
+                headsUpHandler?.postDelayed(this, 15_000)
+            }
+        }
+        headsUpHandler?.postDelayed(headsUpRunnable!!, 15_000)
+    }
+
+    private fun stopHeadsUpReposting() {
+        headsUpRunnable?.let { headsUpHandler?.removeCallbacks(it) }
+        headsUpHandler = null
+        headsUpRunnable = null
+    }
+
     override fun onDestroy() {
         Log.d(TAG, "========================================")
         Log.d(TAG, "AlarmAudioService.onDestroy() called")
         Log.d(TAG, "Cleaning up resources...")
         writeDebugLog("AlarmAudioService.kt:onDestroy", "Service destroying - cleaning up resources")
+        stopHeadsUpReposting()
         unregisterVolumeReceiver()
         releaseMediaPlayer()
         releaseWakeLock()
@@ -803,11 +909,14 @@ class AlarmAudioService : Service() {
             }
         )
 
+        // NOTE: contentIntent is set to stopPendingIntent so tapping the notification
+        // body itself silences the alarm — critical for OEMs that hide action buttons
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle(title)
             .setContentText(body)
             .setSmallIcon(R.drawable.ic_notification)
-            .setContentIntent(pendingIntent)
+            .setContentIntent(stopPendingIntent) // Tap notification body to silence alarm
+            .setAutoCancel(true)
             .setOngoing(false)
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .setSound(null)

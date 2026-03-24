@@ -473,7 +473,7 @@ class AlarmReceiver : BroadcastReceiver() {
                 pendingIntentFlags
             )
             
-            // Dismiss action — stops alarm audio from notification button
+            // Dismiss action — stops alarm audio from notification button or tap
             val stopIntent = Intent(context, AlarmAudioService::class.java).apply {
                 action = AlarmAudioService.ACTION_STOP_ALARM
                 putExtra(AlarmAudioService.EXTRA_NOTIFICATION_ID, id) // So service can cancel this notification on stop
@@ -487,6 +487,8 @@ class AlarmReceiver : BroadcastReceiver() {
 
             // Build notification - use MAX priority for all critical alarms
             // CRITICAL: Use PRIORITY_MAX to ensure notification appears as heads-up
+            // NOTE: contentIntent is set to stopPendingIntent so tapping the notification
+            // body itself silences the alarm — this is critical for OEMs that hide action buttons
             val builder = NotificationCompat.Builder(context, CHANNEL_ID)
                 .setSmallIcon(R.drawable.ic_notification)
                 .setContentTitle(title)
@@ -495,9 +497,9 @@ class AlarmReceiver : BroadcastReceiver() {
                 .setCategory(if (isIssurMelacha) NotificationCompat.CATEGORY_REMINDER else NotificationCompat.CATEGORY_ALARM)
                 .setSound(null) // No system sound - we play our own
                 .setVibrate(longArrayOf(0, 500, 250, 500))
-                .setAutoCancel(isIssurMelacha) // Issur Melacha can be dismissed, others stay
+                .setAutoCancel(true) // Allow tap-to-dismiss on all alarm types
                 .setOngoing(isPreNotification && candleLightingTime > 0) // Make it sticky for countdown
-                .setContentIntent(pendingIntent)
+                .setContentIntent(stopPendingIntent) // Tap notification body to silence alarm
                 .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
                 .setDefaults(NotificationCompat.DEFAULT_VIBRATE or NotificationCompat.DEFAULT_LIGHTS)
                 .addAction(R.drawable.ic_notification, "Dismiss", stopPendingIntent)

@@ -175,10 +175,50 @@ class MainActivity: FlutterActivity() {
                     } else {
                         true
                     }
+                    // Clear the "attempted" flag if permission was granted,
+                    // so isOverlaySettingsAvailable resets correctly
+                    if (canDraw) {
+                        getSharedPreferences("overlay_permission_state", Context.MODE_PRIVATE)
+                            .edit().putBoolean("overlay_attempted", false).apply()
+                    }
                     result.success(canDraw)
+                }
+                "isOverlaySettingsAvailable" -> {
+                    val available = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                        // 1. Check if the standard overlay settings intent resolves
+                        val intent = Intent(
+                            Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                            Uri.parse("package:$packageName")
+                        )
+                        val intentResolves = intent.resolveActivity(packageManager) != null
+
+                        // 2. Check for Android Go / low-RAM devices that restrict overlay
+                        val am = getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager
+                        val isLowRam = am.isLowRamDevice
+
+                        // 3. Check if a previous overlay request attempt was made but
+                        //    the permission is still denied — indicates the toggle is
+                        //    likely hidden or grayed out on this device
+                        val prefs = getSharedPreferences("overlay_permission_state", Context.MODE_PRIVATE)
+                        val previouslyAttempted = prefs.getBoolean("overlay_attempted", false)
+                        val stillDenied = !Settings.canDrawOverlays(this)
+                        val attemptedButFailed = previouslyAttempted && stillDenied
+
+                        val isAvailable = intentResolves && !isLowRam && !attemptedButFailed
+                        Log.d(TAG, "Overlay settings available: $isAvailable (intentResolves=$intentResolves, isLowRam=$isLowRam, attemptedButFailed=$attemptedButFailed)")
+                        isAvailable
+                    } else {
+                        true // Pre-M doesn't need overlay permission
+                    }
+                    result.success(available)
                 }
                 "requestOverlayPermission" -> {
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
+                        // Record that the user attempted to grant overlay permission.
+                        // If they return and it's still denied, isOverlaySettingsAvailable
+                        // will treat it as restricted (toggle likely hidden/grayed out).
+                        getSharedPreferences("overlay_permission_state", Context.MODE_PRIVATE)
+                            .edit().putBoolean("overlay_attempted", true).apply()
                         try {
                             val intent = Intent(
                                 Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
@@ -186,8 +226,10 @@ class MainActivity: FlutterActivity() {
                             )
                             startActivity(intent)
                         } catch (e: Exception) {
-                            Log.e(TAG, "Failed to request overlay permission: ${e.message}")
-                            openAppSettings()
+                            Log.e(TAG, "Standard overlay intent failed: ${e.message}")
+                            if (!tryManufacturerOverlayIntent()) {
+                                openAppSettings()
+                            }
                         }
                     }
                     result.success(true)
@@ -335,7 +377,53 @@ class MainActivity: FlutterActivity() {
             Log.e(TAG, "Failed to open app settings", e)
         }
     }
-    
+
+    private fun tryManufacturerOverlayIntent(): Boolean {
+        val manufacturer = Build.MANUFACTURER.lowercase()
+        Log.d(TAG, "Trying manufacturer-specific overlay intent for: $manufacturer")
+
+        try {
+            when (manufacturer) {
+                "xiaomi", "redmi", "poco" -> {
+                    val intent = Intent("miui.intent.action.APP_PERM_EDITOR")
+                    intent.setClassName(
+                        "com.miui.securitycenter",
+                        "com.miui.permcenter.permissions.PermissionsEditorActivity"
+                    )
+                    intent.putExtra("extra_pkgname", packageName)
+                    startActivity(intent)
+                    Log.d(TAG, "Launched MIUI permission editor")
+                    return true
+                }
+                "oppo", "realme", "oneplus" -> {
+                    val intent = Intent()
+                    intent.setClassName(
+                        "com.coloros.safecenter",
+                        "com.coloros.safecenter.permission.floatwindow.FloatWindowListActivity"
+                    )
+                    startActivity(intent)
+                    Log.d(TAG, "Launched ColorOS float window settings")
+                    return true
+                }
+                "vivo" -> {
+                    val intent = Intent()
+                    intent.setClassName(
+                        "com.vivo.permissionmanager",
+                        "com.vivo.permissionmanager.activity.SoftPermissionDetailActivity"
+                    )
+                    intent.putExtra("packagename", packageName)
+                    startActivity(intent)
+                    Log.d(TAG, "Launched Vivo permission manager")
+                    return true
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Manufacturer-specific overlay intent failed: ${e.message}")
+        }
+
+        return false
+    }
+
     private fun verifySoundAssets() {
         Log.d(TAG, "========================================")
         Log.d(TAG, "Verifying sound assets...")

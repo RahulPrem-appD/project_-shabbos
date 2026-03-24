@@ -219,23 +219,30 @@ class AlarmHealthWorker(
     private fun showAlarmsClearedNotification(context: Context, count: Int) {
         try {
             val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            
+
+            val pendingIntentFlags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+            } else {
+                PendingIntent.FLAG_UPDATE_CURRENT
+            }
+
             // Create intent to open app
             val intent = Intent(context, MainActivity::class.java).apply {
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
             }
-            
+
             val pendingIntent = PendingIntent.getActivity(
-                context,
-                0,
-                intent,
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                    PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-                } else {
-                    PendingIntent.FLAG_UPDATE_CURRENT
-                }
+                context, 0, intent, pendingIntentFlags
             )
-            
+
+            // Dismiss action — cancels this notification
+            val dismissIntent = Intent(context, NotificationDismissReceiver::class.java).apply {
+                putExtra(NotificationDismissReceiver.EXTRA_NOTIFICATION_ID, 9999)
+            }
+            val dismissPendingIntent = PendingIntent.getBroadcast(
+                context, 9999, dismissIntent, pendingIntentFlags
+            )
+
             // Create high-priority notification
             val notification = NotificationCompat.Builder(context, "shabbos_alerts")
                 .setSmallIcon(R.drawable.ic_notification)
@@ -245,8 +252,10 @@ class AlarmHealthWorker(
                 .setAutoCancel(true)
                 .setContentIntent(pendingIntent)
                 .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+                .addAction(R.drawable.ic_notification, "Dismiss", dismissPendingIntent)
+                .setDeleteIntent(dismissPendingIntent)
                 .build()
-            
+
             notificationManager.notify(9999, notification)
             Log.d(TAG, "✓ Warning notification shown to user")
             
@@ -258,23 +267,30 @@ class AlarmHealthWorker(
     private fun showAlarmsRestoredNotification(context: Context, count: Int) {
         try {
             val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            
+
+            val pendingIntentFlags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+            } else {
+                PendingIntent.FLAG_UPDATE_CURRENT
+            }
+
             // Create intent to open app
             val intent = Intent(context, MainActivity::class.java).apply {
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
             }
-            
+
             val pendingIntent = PendingIntent.getActivity(
-                context,
-                0,
-                intent,
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                    PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-                } else {
-                    PendingIntent.FLAG_UPDATE_CURRENT
-                }
+                context, 0, intent, pendingIntentFlags
             )
-            
+
+            // Dismiss action — cancels this notification
+            val dismissIntent = Intent(context, NotificationDismissReceiver::class.java).apply {
+                putExtra(NotificationDismissReceiver.EXTRA_NOTIFICATION_ID, 9998)
+            }
+            val dismissPendingIntent = PendingIntent.getBroadcast(
+                context, 9998, dismissIntent, pendingIntentFlags
+            )
+
             val notification = NotificationCompat.Builder(context, "shabbos_alerts")
                 .setSmallIcon(R.drawable.ic_notification)
                 .setContentTitle("✅ Alarms Restored")
@@ -283,8 +299,10 @@ class AlarmHealthWorker(
                 .setAutoCancel(true)
                 .setContentIntent(pendingIntent)
                 .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+                .addAction(R.drawable.ic_notification, "Dismiss", dismissPendingIntent)
+                .setDeleteIntent(dismissPendingIntent)
                 .build()
-            
+
             notificationManager.notify(9998, notification)
             Log.d(TAG, "✓ Success notification shown to user")
             
