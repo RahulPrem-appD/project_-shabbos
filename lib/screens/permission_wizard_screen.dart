@@ -240,6 +240,27 @@ class _PermissionWizardScreenState extends State<PermissionWizardScreen>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) async {
+    if (state == AppLifecycleState.resumed &&
+        _currentIndex < _steps.length &&
+        _steps[_currentIndex].type == PermissionStepType.batteryOptimization &&
+        !_isGranting &&
+        !_isCurrentGranted) {
+      // Battery optimization changes can apply with delay on some OEMs.
+      // Re-check automatically on resume so users don't need to tap Try Again.
+      final granted = await _checkCurrentPermission();
+      if (!mounted || !granted) return;
+      setState(() {
+        _isGranting = false;
+        _isCurrentGranted = true;
+        _isDenied = false;
+        _isPermanentlyDenied = false;
+      });
+      _successController.forward(from: 0);
+      await Future.delayed(const Duration(milliseconds: 700));
+      if (mounted) _advanceToNext();
+      return;
+    }
+
     if (state == AppLifecycleState.resumed && _waitingForResume) {
       _waitingForResume = false;
       final granted = await _checkCurrentPermission();
@@ -346,8 +367,7 @@ class _PermissionWizardScreenState extends State<PermissionWizardScreen>
         break;
       case PermissionStepType.batteryOptimization:
         await NativeAlarmService.requestDisableBatteryOptimization();
-        await Future.delayed(const Duration(milliseconds: 300));
-        granted = await NativeAlarmService.isIgnoringBatteryOptimizations();
+        granted = await _waitForBatteryOptimizationGrant();
         break;
       default:
         break;
@@ -382,6 +402,17 @@ class _PermissionWizardScreenState extends State<PermissionWizardScreen>
       default:
         break;
     }
+  }
+
+  Future<bool> _waitForBatteryOptimizationGrant() async {
+    // On some devices this state updates asynchronously after returning
+    // from system UI, so poll briefly before showing "Try Again".
+    for (int i = 0; i < 10; i++) {
+      final granted = await NativeAlarmService.isIgnoringBatteryOptimizations();
+      if (granted) return true;
+      await Future.delayed(const Duration(milliseconds: 500));
+    }
+    return false;
   }
 
   void _advanceToNext() {
