@@ -1,7 +1,9 @@
+import 'dart:io';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../services/native_alarm_service.dart';
 import 'main_shell.dart';
 import 'permission_wizard_screen.dart';
 
@@ -21,6 +23,9 @@ class SplashScreen extends StatefulWidget {
 
 class _SplashScreenState extends State<SplashScreen>
     with TickerProviderStateMixin {
+  /// Persists [PackageInfo.firstInstallTime] to detect backup-restored prefs on a new install.
+  static const _kBootstrapInstallMsKey = 'bootstrap_apk_first_install_ms';
+
   // Animation Controllers
   late AnimationController _masterController;
   late AnimationController _flameController1;
@@ -176,6 +181,7 @@ class _SplashScreenState extends State<SplashScreen>
     );
 
     final prefs = await SharedPreferences.getInstance();
+    await _reconcileWizardBootstrapWithInstall(prefs);
     final wizardDone = prefs.getBool('permissions_wizard_complete') ?? false;
 
     if (!mounted) return;
@@ -199,6 +205,28 @@ class _SplashScreenState extends State<SplashScreen>
         },
       ),
     );
+  }
+
+  Future<void> _reconcileWizardBootstrapWithInstall(SharedPreferences prefs) async {
+    if (!Platform.isAndroid) return;
+    try {
+      final nativeMs = await NativeAlarmService.getFirstInstallTimeMillis();
+      if (nativeMs == null || nativeMs <= 0) return;
+      final saved = prefs.getInt(_kBootstrapInstallMsKey);
+      if (saved == null) {
+        await prefs.setInt(_kBootstrapInstallMsKey, nativeMs);
+        return;
+      }
+      if (saved != nativeMs) {
+        await prefs.setBool('permissions_wizard_complete', false);
+        await prefs.setInt(_kBootstrapInstallMsKey, nativeMs);
+        debugPrint(
+          'SplashScreen: Reset permissions wizard (install id mismatch; likely restored backup)',
+        );
+      }
+    } catch (e) {
+      debugPrint('SplashScreen: install bootstrap reconcile skipped: $e');
+    }
   }
 
   @override

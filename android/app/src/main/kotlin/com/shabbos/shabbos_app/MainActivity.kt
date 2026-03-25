@@ -258,6 +258,16 @@ class MainActivity: FlutterActivity() {
                     }
                     result.success(true)
                 }
+                "getFirstInstallTimeMillis" -> {
+                    try {
+                        @Suppress("DEPRECATION")
+                        val info = packageManager.getPackageInfo(packageName, 0)
+                        result.success(info.firstInstallTime)
+                    } catch (e: Exception) {
+                        Log.e(TAG, "getFirstInstallTimeMillis failed: ${e.message}")
+                        result.success(0L)
+                    }
+                }
                 else -> {
                     result.notImplemented()
                 }

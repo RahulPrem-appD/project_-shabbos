@@ -191,6 +191,22 @@ class NativeAlarmService {
     }
   }
 
+  /// Android: package first install time (ms since epoch). Used to detect backup-restored
+  /// SharedPreferences vs a fresh install on this device. Returns null on non-Android.
+  static Future<int?> getFirstInstallTimeMillis() async {
+    if (!Platform.isAndroid) return null;
+    try {
+      final result = await _channel.invokeMethod('getFirstInstallTimeMillis');
+      if (result == null) return null;
+      if (result is int) return result;
+      if (result is num) return result.toInt();
+      return int.tryParse(result.toString());
+    } catch (e) {
+      debugPrint('NativeAlarmService: Error reading first install time: $e');
+      return null;
+    }
+  }
+
   /// Request overlay (draw over other apps) permission
   static Future<void> requestOverlayPermission() async {
     if (!Platform.isAndroid) return;
