@@ -861,6 +861,17 @@ class NotificationService {
 
       _addDiagnosticLog('Processing: ${lighting.displayName} at ${lighting.candleLightingTime}');
 
+      if (_shouldSkipYomTovAlertsForEvent(lighting, candleLightings)) {
+        debugPrint(
+          'NotificationService: ✗ SKIPPED all notifications for ${lighting.displayName} - follow-on Yom Tov candle lighting',
+        );
+        _addDiagnosticLog(
+          '✗ SKIPPED all notifications for ${lighting.displayName} - follow-on Yom Tov candle lighting',
+        );
+        skipped += 2;
+        continue;
+      }
+
       // Calculate pre-notification time (preMinutes before candle lighting)
       final preTime = lighting.candleLightingTime.subtract(Duration(minutes: preMinutes));
       final candleTime = lighting.candleLightingTime;
@@ -1139,6 +1150,46 @@ class NotificationService {
 
     debugPrint('NotificationService: ✓ Alarm at $alarmTime is allowed');
     return true;
+  }
+
+  /// Do not alert for Yom Tov candle lighting when the user is already coming
+  /// from a candle-lighting event on the immediately previous calendar day.
+  ///
+  /// This suppresses diaspora second-day Yom Tov alerts while still showing the
+  /// event in the UI, and it also avoids Saturday-night Yom Tov alerts when the
+  /// user is already in Shabbat.
+  bool _shouldSkipYomTovAlertsForEvent(
+    CandleLighting lighting,
+    List<CandleLighting> allEvents,
+  ) {
+    if (!lighting.isYomTov) return false;
+
+    final lightingDay = DateTime(
+      lighting.candleLightingTime.year,
+      lighting.candleLightingTime.month,
+      lighting.candleLightingTime.day,
+    );
+
+    for (final otherEvent in allEvents) {
+      if (identical(otherEvent, lighting)) continue;
+
+      final otherDay = DateTime(
+        otherEvent.candleLightingTime.year,
+        otherEvent.candleLightingTime.month,
+        otherEvent.candleLightingTime.day,
+      );
+      final dayDiff = lightingDay.difference(otherDay).inDays;
+
+      if (dayDiff == 1 &&
+          otherEvent.candleLightingTime.isBefore(lighting.candleLightingTime)) {
+        debugPrint(
+          'NotificationService: Skipping alerts for ${lighting.displayName} - prior candle lighting on previous day (${otherEvent.displayName}) means user is already in Shabbat/Yom Tov',
+        );
+        return true;
+      }
+    }
+
+    return false;
   }
 
   bool _isSameDay(DateTime a, DateTime b) {

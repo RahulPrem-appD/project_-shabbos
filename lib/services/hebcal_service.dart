@@ -85,6 +85,8 @@ class HebcalService {
       // Set language parameter based on locale
       // From Hebcal API: use 'h' for Hebrew, 's' for Sephardic transliteration (English)
       final language = locale == 'he' ? 'h' : 's';
+      final useIsraelHolidaySchedule =
+          tz != null && tz.toLowerCase() == 'asia/jerusalem';
 
       final queryParams = {
         'cfg': 'json',
@@ -95,7 +97,6 @@ class HebcalService {
         'start': _formatDate(startDate),
         'end': _formatDate(endDate),
         'yt': 'H', // Yom Tov type
-        'i': 'on', // Yom Tov info
         'maj': 'on', // Major holidays
         's': 'on', // Parasha (Torah portion)
         'ss': 'on', // Special Shabbatot
@@ -107,6 +108,10 @@ class HebcalService {
         'ue': 'off', // User events off
         'd': 'on', // Include Gregorian dates with Hebrew dates
       };
+
+      if (useIsraelHolidaySchedule) {
+        queryParams['i'] = 'on'; // Israel holiday schedule
+      }
 
       // Add timezone if available
       if (tz != null && tz.isNotEmpty) {
@@ -373,6 +378,8 @@ class HebcalService {
       if (candleDateStr == null) continue;
 
       final candleDate = _parseHebcalDate(candleDateStr);
+      final candleDay =
+          DateTime(candleDate.year, candleDate.month, candleDate.day);
 
       // Find the corresponding Havdalah
       DateTime? havdalahDate;
@@ -381,7 +388,8 @@ class HebcalService {
         if (havdalahDateStr == null) continue;
 
         final hDate = _parseHebcalDate(havdalahDateStr);
-        final daysDiff = hDate.difference(candleDate).inDays;
+        final havdalahDay = DateTime(hDate.year, hDate.month, hDate.day);
+        final daysDiff = havdalahDay.difference(candleDay).inDays;
 
         // Havdalah should be 1-3 days after candle lighting
         if (daysDiff >= 1 && daysDiff <= 3) {
@@ -392,8 +400,12 @@ class HebcalService {
             final otherCandleDateStr = otherCandle['date'] as String?;
             if (otherCandleDateStr == null) continue;
             final otherCandleDate = _parseHebcalDate(otherCandleDateStr);
-            if (otherCandleDate.isAfter(candleDate) &&
-                otherCandleDate.isBefore(hDate)) {
+            final otherDay = DateTime(
+              otherCandleDate.year,
+              otherCandleDate.month,
+              otherCandleDate.day,
+            );
+            if (otherDay.isAfter(candleDay) && otherDay.isBefore(havdalahDay)) {
               hasIntermediateCandles = true;
               break;
             }
@@ -414,16 +426,18 @@ class HebcalService {
       final candleDateKey = _formatDate(candleDate);
 
       // Check for holiday on same day or next day
+      final candleDateTime = DateTime(candleDate.year, candleDate.month, candleDate.day);
       for (final holidayItem in holidayEvents) {
         final holidayDateStr = holidayItem['date'] as String?;
         if (holidayDateStr == null) continue;
 
         final holidayDate = _parseHebcalDate(holidayDateStr);
         final holidayDateKey = _formatDate(holidayDate);
+        final holidayDateTime = DateTime(holidayDate.year, holidayDate.month, holidayDate.day);
+        final daysDiff = holidayDateTime.difference(candleDateTime).inDays;
 
-        // Holiday can be on same day or next day (since Shabbat starts Friday evening)
-        if (holidayDateKey == candleDateKey ||
-            holidayDate.difference(candleDate).inDays == 1) {
+        // Holiday can be on same day or next day (since candle lighting is in the evening before)
+        if (holidayDateKey == candleDateKey || daysDiff == 1) {
           if (holidayItem['yomtov'] == true) {
             // For Yom Tov:
             // Hebrew: title has Hebrew with nikud
@@ -474,7 +488,6 @@ class HebcalService {
 
         // Parasha is typically on Saturday (day after candle lighting on Friday)
         // Check if parasha date matches candle date OR is the next calendar day
-        final candleDateTime = DateTime(candleDate.year, candleDate.month, candleDate.day);
         final parashaDateTime = DateTime(parashaDate.year, parashaDate.month, parashaDate.day);
         final daysDiff = parashaDateTime.difference(candleDateTime).inDays;
 
