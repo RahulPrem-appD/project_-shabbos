@@ -239,7 +239,7 @@ class LocationService {
       2: 'Asia/Jerusalem',
       3: 'Europe/Moscow',
       4: 'Asia/Dubai',
-      5: 'Asia/Karachi',
+      5: 'Asia/Kolkata',
       6: 'Asia/Dhaka',
       7: 'Asia/Bangkok',
       8: 'Asia/Shanghai',

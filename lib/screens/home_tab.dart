@@ -507,22 +507,13 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
-    // Check permissions every time the widget is built (when tab becomes visible)
-    // This ensures permissions are checked every time the app opens or user navigates to home tab
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _checkPermissions();
-    });
-
     return SafeArea(
       child: Column(
         children: [
           _buildHeader(),
           if (Platform.isAndroid &&
               (_exactAlarmGranted != true ||
-                  _batteryOptimizationDisabled != true ||
-                  (_overlayPermissionGranted != true &&
-                      _overlaySettingsAvailable) ||
-                  _fullScreenIntentGranted != true))
+                  _batteryOptimizationDisabled != true))
             _buildPermissionBanner(),
           Expanded(child: _buildBody()),
         ],
@@ -658,9 +649,7 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
     // Show banner if permissions are null (not yet checked) or if either is false
     // Only hide if both are explicitly true
     if (_exactAlarmGranted == true &&
-        _batteryOptimizationDisabled == true &&
-        (_overlayPermissionGranted == true || !_overlaySettingsAvailable) &&
-        _fullScreenIntentGranted == true) {
+        _batteryOptimizationDisabled == true) {
       debugPrint('HomeTab: All permissions granted, hiding banner');
       return const SizedBox.shrink();
     }
@@ -677,16 +666,6 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
     if (_batteryOptimizationDisabled != true) {
       missingPermissions.add(
         isHebrew ? 'אופטימיזציית סוללה' : 'Battery Optimization',
-      );
-    }
-    if (_overlayPermissionGranted != true && _overlaySettingsAvailable) {
-      missingPermissions.add(
-        isHebrew ? 'הצגה מעל אפליקציות' : 'Display Over Apps',
-      );
-    }
-    if (_fullScreenIntentGranted != true) {
-      missingPermissions.add(
-        isHebrew ? 'התראות מסך מלא' : 'Full Screen Alerts',
       );
     }
 
@@ -946,7 +925,6 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
             const SizedBox(height: 16),
             ..._candleLightings
                 .skip(1)
-                .take(5)
                 .map((lighting) => _buildUpcomingCard(lighting)),
           ],
           const SizedBox(height: 100),

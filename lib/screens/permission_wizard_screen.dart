@@ -29,6 +29,7 @@ class PermissionStep {
   final PermissionStepType type;
   final PermissionGrantMode grantMode;
   final IconData icon;
+  final bool isOptional;
   final String titleEn;
   final String titleHe;
   final String descriptionEn;
@@ -40,6 +41,7 @@ class PermissionStep {
     required this.type,
     required this.grantMode,
     required this.icon,
+    this.isOptional = false,
     required this.titleEn,
     required this.titleHe,
     required this.descriptionEn,
@@ -105,6 +107,7 @@ final _allSteps = <PermissionStep>[
     type: PermissionStepType.overlay,
     grantMode: PermissionGrantMode.opensSettings,
     icon: Icons.layers_outlined,
+    isOptional: true,
     titleEn: 'Alarm Screen',
     titleHe: 'מסך התראה',
     descriptionEn:
@@ -118,6 +121,7 @@ final _allSteps = <PermissionStep>[
     type: PermissionStepType.fullScreenIntent,
     grantMode: PermissionGrantMode.opensSettings,
     icon: Icons.fullscreen_outlined,
+    isOptional: true,
     titleEn: 'Full-Screen Alerts',
     titleHe: 'התראות מסך מלא',
     descriptionEn:
@@ -282,7 +286,19 @@ class _PermissionWizardScreenState extends State<PermissionWizardScreen>
   // ── Business logic (unchanged) ──────────────
 
   List<PermissionStep> _buildSteps() {
-    if (Platform.isAndroid) return List.of(_allSteps);
+    if (Platform.isAndroid) {
+      PermissionStep step(PermissionStepType type) =>
+          _allSteps.firstWhere((s) => s.type == type);
+
+      return [
+        step(PermissionStepType.notifications),
+        step(PermissionStepType.location),
+        step(PermissionStepType.batteryOptimization),
+        step(PermissionStepType.exactAlarms),
+        step(PermissionStepType.overlay),
+        step(PermissionStepType.fullScreenIntent),
+      ];
+    }
     return _allSteps
         .where((s) =>
             s.type == PermissionStepType.notifications ||
@@ -415,6 +431,46 @@ class _PermissionWizardScreenState extends State<PermissionWizardScreen>
     return false;
   }
 
+  bool _isOptionalStep(PermissionStep step) => step.isOptional;
+
+  List<int> _requiredStepIndexes() {
+    final indexes = <int>[];
+    for (int i = 0; i < _steps.length; i++) {
+      if (!_steps[i].isOptional) {
+        indexes.add(i);
+      }
+    }
+    return indexes;
+  }
+
+  int _currentRequiredStepPosition() {
+    if (_currentIndex >= _steps.length) {
+      return _requiredStepIndexes().length;
+    }
+
+    int position = 0;
+    for (int i = 0; i <= _currentIndex && i < _steps.length; i++) {
+      if (!_steps[i].isOptional) {
+        position++;
+      }
+    }
+    return position;
+  }
+
+  bool _isOptionalSectionStart() {
+    if (_currentIndex >= _steps.length) return false;
+    if (!_steps[_currentIndex].isOptional) return false;
+    if (_currentIndex == 0) return true;
+    return !_steps[_currentIndex - 1].isOptional;
+  }
+
+  void _skipOptionalStep() {
+    if (_currentIndex >= _steps.length) return;
+    final step = _steps[_currentIndex];
+    if (!step.isOptional) return;
+    _advanceToNext();
+  }
+
   void _advanceToNext() {
     setState(() {
       _currentIndex++;
@@ -507,14 +563,21 @@ class _PermissionWizardScreenState extends State<PermissionWizardScreen>
   // ── Step stepper ─────────────────────────────
 
   Widget _buildStepper() {
+    if (_currentIndex >= _steps.length) return const SizedBox.shrink();
+
+    final requiredIndexes = _requiredStepIndexes();
+    if (requiredIndexes.isEmpty) return const SizedBox.shrink();
+
+    final currentRequiredPosition = _currentRequiredStepPosition();
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 10, 20, 0),
       child: Row(
-        children: List.generate(_steps.length * 2 - 1, (i) {
+        children: List.generate(requiredIndexes.length * 2 - 1, (i) {
           if (i.isOdd) {
             // Connecting line
             final stepIdx = i ~/ 2;
-            final isDone = stepIdx < _currentIndex;
+            final isDone = stepIdx < currentRequiredPosition;
             return Expanded(
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 400),
@@ -525,9 +588,11 @@ class _PermissionWizardScreenState extends State<PermissionWizardScreen>
           }
           // Step dot
           final stepIdx = i ~/ 2;
-          final step = _steps[stepIdx];
-          final isDone = stepIdx < _currentIndex;
-          final isCurrent = stepIdx == _currentIndex;
+          final step = _steps[requiredIndexes[stepIdx]];
+          final isDone = stepIdx < currentRequiredPosition - 1;
+          final isCurrent =
+              !_steps[_currentIndex].isOptional &&
+              stepIdx == currentRequiredPosition - 1;
 
           return AnimatedContainer(
             duration: const Duration(milliseconds: 400),
@@ -569,6 +634,11 @@ class _PermissionWizardScreenState extends State<PermissionWizardScreen>
 
   Widget _buildStepCounter() {
     if (_currentIndex >= _steps.length) return const SizedBox.shrink();
+
+    final step = _steps[_currentIndex];
+    final requiredTotal = _requiredStepIndexes().length;
+    final isOptional = step.isOptional;
+
     return Padding(
       padding: const EdgeInsets.only(top: 8),
       child: Center(
@@ -579,7 +649,9 @@ class _PermissionWizardScreenState extends State<PermissionWizardScreen>
             borderRadius: BorderRadius.circular(20),
           ),
           child: Text(
-            '${_currentIndex + 1} / ${_steps.length}',
+            isOptional
+                ? (_isHebrew ? 'שלב אופציונלי' : 'Optional step')
+                : '${_currentRequiredStepPosition()} / $requiredTotal',
             style: const TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w700,
@@ -602,6 +674,7 @@ class _PermissionWizardScreenState extends State<PermissionWizardScreen>
     final title = _isHebrew ? step.titleHe : step.titleEn;
     final desc = _isHebrew ? step.descriptionHe : step.descriptionEn;
     final why = _isHebrew ? step.whyHe : step.whyEn;
+    final isOptional = _isOptionalStep(step);
 
     return FadeTransition(
       opacity: _entranceFade,
@@ -611,6 +684,41 @@ class _PermissionWizardScreenState extends State<PermissionWizardScreen>
           padding: const EdgeInsets.fromLTRB(20, 20, 20, 8),
           child: Column(
             children: [
+              if (_isOptionalSectionStart()) ...[
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 8,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF4F4F4),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    _isHebrew
+                        ? 'שלב אופציונלי לאמינות נוספת'
+                        : 'Optional extra reliability',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: _dark,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  _isHebrew
+                      ? 'אפשר לדלג כעת ולסיים את ההגדרה, או להוסיף שכבת אמינות נוספת.'
+                      : 'You can finish setup now, or add one more layer of reliability.',
+                  style: const TextStyle(
+                    fontSize: 13,
+                    color: Color(0xFF666666),
+                    height: 1.4,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 12),
+              ],
               _buildAnimatedIcon(step),
               const SizedBox(height: 24),
               // Content card
@@ -635,6 +743,27 @@ class _PermissionWizardScreenState extends State<PermissionWizardScreen>
                 ),
                 child: Column(
                   children: [
+                    if (isOptional) ...[
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 5,
+                        ),
+                        decoration: BoxDecoration(
+                          color: _gold.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(
+                          _isHebrew ? 'אופציונלי' : 'Optional',
+                          style: const TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: _dark,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                    ],
                     Text(
                       title,
                       style: const TextStyle(
@@ -931,7 +1060,7 @@ class _PermissionWizardScreenState extends State<PermissionWizardScreen>
             ),
             const SizedBox(height: 24),
             Text(
-              _isHebrew ? 'כל ההרשאות אושרו!' : 'All set!',
+              _isHebrew ? 'ההגדרה הושלמה!' : 'Setup complete!',
               style: const TextStyle(
                 fontSize: 26,
                 fontWeight: FontWeight.w800,
@@ -941,8 +1070,8 @@ class _PermissionWizardScreenState extends State<PermissionWizardScreen>
             const SizedBox(height: 10),
             Text(
               _isHebrew
-                  ? 'כעת תקבל התראות מדויקות על הדלקת נרות.'
-                  : 'You\'ll now receive precise candle lighting reminders.',
+                  ? 'ההרשאות החשובות מוכנות, ותוכל לקבל תזכורות להדלקת נרות.'
+                  : 'Your key permissions are ready, so candle lighting reminders can work properly.',
               style: const TextStyle(
                 fontSize: 15,
                 color: Color(0xFF666666),
@@ -961,6 +1090,13 @@ class _PermissionWizardScreenState extends State<PermissionWizardScreen>
   Widget _buildBottomActions() {
     if (_waitingForResume) return _buildWaitingState();
 
+    final step =
+        _currentIndex < _steps.length ? _steps[_currentIndex] : null;
+    final showSkipOptional =
+        step != null &&
+        step.isOptional &&
+        !_isCurrentGranted &&
+        !_isGranting;
     final String label;
     final VoidCallback? onPressed;
 
@@ -1034,6 +1170,20 @@ class _PermissionWizardScreenState extends State<PermissionWizardScreen>
               ),
             ),
           ),
+          if (showSkipOptional) ...[
+            const SizedBox(height: 10),
+            TextButton(
+              onPressed: _skipOptionalStep,
+              child: Text(
+                _isHebrew ? 'דלג לעת עתה' : 'Do this later',
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: _dark,
+                ),
+              ),
+            ),
+          ],
         ],
       ),
     );
