@@ -36,6 +36,7 @@ class PermissionStep {
   final String descriptionHe;
   final String whyEn;
   final String whyHe;
+  final List<String> instructionImageAssets;
 
   const PermissionStep({
     required this.type,
@@ -48,6 +49,7 @@ class PermissionStep {
     required this.descriptionHe,
     required this.whyEn,
     required this.whyHe,
+    this.instructionImageAssets = const [],
   });
 }
 
@@ -116,6 +118,10 @@ final _allSteps = <PermissionStep>[
         'מאפשר למסך ההתראה להופיע מעל אפליקציות אחרות לאמינות מרבית. לחץ הענק כדי לפתוח הגדרות.',
     whyEn: 'Adds an extra layer of reliability for alarm display.',
     whyHe: 'מוסיף שכבת אמינות נוספת להצגת ההתראה.',
+    instructionImageAssets: [
+      'assets/images/onboarding/overlay_list.png',
+      'assets/images/onboarding/overlay_toggle.png',
+    ],
   ),
   const PermissionStep(
     type: PermissionStepType.fullScreenIntent,
@@ -784,6 +790,10 @@ class _PermissionWizardScreenState extends State<PermissionWizardScreen>
                       ),
                       textAlign: TextAlign.center,
                     ),
+                    if (step.instructionImageAssets.isNotEmpty) ...[
+                      const SizedBox(height: 16),
+                      _buildInstructionImages(step.instructionImageAssets),
+                    ],
                     const SizedBox(height: 16),
                     _buildWhyCard(why),
                     const SizedBox(height: 14),
@@ -893,6 +903,74 @@ class _PermissionWizardScreenState extends State<PermissionWizardScreen>
   }
 
   // ── Why card ─────────────────────────────────
+
+  Widget _buildInstructionImages(List<String> assets) {
+    final caption = _isHebrew ? 'מה תראה' : 'What you\'ll see';
+    final imageBorder = Border.all(color: const Color(0xFFE6E6E6));
+
+    Widget buildCard(String asset) {
+      return Container(
+        width: 150,
+        decoration: BoxDecoration(
+          color: Colors.black,
+          borderRadius: BorderRadius.circular(12),
+          border: imageBorder,
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Image.asset(asset, fit: BoxFit.cover),
+      );
+    }
+
+    final single = assets.length == 1;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(
+              Icons.visibility_outlined,
+              size: 14,
+              color: Color(0xFF888888),
+            ),
+            const SizedBox(width: 6),
+            Text(
+              caption,
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF888888),
+                letterSpacing: 0.2,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        if (single)
+          SizedBox(
+            height: 260,
+            child: Center(
+              child: AspectRatio(
+                aspectRatio: 9 / 16,
+                child: buildCard(assets.first),
+              ),
+            ),
+          )
+        else
+          SizedBox(
+            height: 260,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              itemCount: assets.length,
+              separatorBuilder: (_, __) => const SizedBox(width: 10),
+              itemBuilder: (_, i) => buildCard(assets[i]),
+            ),
+          ),
+      ],
+    );
+  }
 
   Widget _buildWhyCard(String why) {
     return Container(
