@@ -1,4 +1,4 @@
-package com.shabbos.shabbos_app
+package app.shabbos.android
 
 import android.app.AlarmManager
 import android.app.NotificationManager
@@ -201,7 +201,7 @@ class AlarmScheduler(private val context: Context) {
                 putExtra("candle_lighting_time", candleLightingTime)
                 putExtra("sound_id", soundId)
                 // Add action to make intent unique
-                action = "com.shabbos.shabbos_app.ALARM_$id"
+                action = "app.shabbos.android.ALARM_$id"
             }
             
             val pendingIntentFlags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
@@ -413,7 +413,7 @@ class AlarmScheduler(private val context: Context) {
                         putExtra("is_pre_notification", isPreNotification)
                         putExtra("candle_lighting_time", candleLightingTime)
                         putExtra("sound_id", soundId)
-                        action = "com.shabbos.shabbos_app.ALARM_$id"
+                        action = "app.shabbos.android.ALARM_$id"
                     }
                     
                     val pendingIntentFlags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
@@ -727,7 +727,7 @@ class AlarmScheduler(private val context: Context) {
             }
             
             val intent = Intent(context, AlarmReceiver::class.java).apply {
-                action = "com.shabbos.shabbos_app.ALARM_$id"
+                action = "app.shabbos.android.ALARM_$id"
             }
             
             val pendingIntentFlags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {

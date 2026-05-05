@@ -1,4 +1,4 @@
-package com.shabbos.shabbos_app
+package app.shabbos.android
 
 import android.content.BroadcastReceiver
 import android.content.Context

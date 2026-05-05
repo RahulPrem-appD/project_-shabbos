@@ -1,4 +1,4 @@
-package com.shabbos.shabbos_app
+package app.shabbos.android
 
 import android.app.AlarmManager
 import android.app.NotificationChannel
@@ -15,7 +15,7 @@ import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 
 class MainActivity: FlutterActivity() {
-    private val CHANNEL = "com.shabbos.shabbos_app/alarms"
+    private val CHANNEL = "app.shabbos.android/alarms"
     private lateinit var alarmScheduler: AlarmScheduler
     
     companion object {

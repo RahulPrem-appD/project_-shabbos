@@ -1,4 +1,4 @@
-package com.shabbos.shabbos_app
+package app.shabbos.android
 
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -261,7 +261,7 @@ class AlarmReceiver : BroadcastReceiver() {
                 putExtra("body", body)
                 putExtra(AlarmAudioService.EXTRA_NOTIFICATION_ID, notificationId) // So service can cancel this notification on stop
                 // Add action to make intent unique and ensure it's delivered
-                action = "com.shabbos.shabbos_app.PLAY_ALARM_SOUND"
+                action = "app.shabbos.android.PLAY_ALARM_SOUND"
             }
             
             try {

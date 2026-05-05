@@ -1,4 +1,4 @@
-package com.shabbos.shabbos_app
+package app.shabbos.android
 
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -124,7 +124,7 @@ class AlarmHealthWorker(
                 
                 // Check if this alarm is still scheduled with AlarmManager
                 val intent = Intent(context, AlarmReceiver::class.java).apply {
-                    action = "com.shabbos.shabbos_app.ALARM_$id"
+                    action = "app.shabbos.android.ALARM_$id"
                 }
                 
                 val pendingIntent = PendingIntent.getBroadcast(

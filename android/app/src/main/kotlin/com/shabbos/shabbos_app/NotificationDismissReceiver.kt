@@ -1,4 +1,4 @@
-package com.shabbos.shabbos_app
+package app.shabbos.android
 
 import android.app.NotificationManager
 import android.content.BroadcastReceiver

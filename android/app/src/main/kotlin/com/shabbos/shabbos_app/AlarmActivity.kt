@@ -1,4 +1,4 @@
-package com.shabbos.shabbos_app
+package app.shabbos.android
 
 import android.animation.ValueAnimator
 import android.app.Activity
@@ -30,7 +30,7 @@ class AlarmActivity : Activity() {
 
     companion object {
         private const val TAG = "ShabbosAlarmActivity"
-        const val ACTION_ALARM_DONE = "com.shabbos.shabbos_app.ALARM_DONE"
+        const val ACTION_ALARM_DONE = "app.shabbos.android.ALARM_DONE"
         const val EXTRA_TITLE = "title"
         const val EXTRA_BODY = "body"
         const val EXTRA_NOTIFICATION_ID = "notification_id"

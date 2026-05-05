@@ -1,4 +1,4 @@
-package com.shabbos.shabbos_app
+package app.shabbos.android
 
 import android.app.Notification
 import android.app.NotificationChannel
@@ -26,7 +26,7 @@ class AlarmAudioService : Service() {
         private const val NOTIFICATION_ID = 1001
         
         
-        const val ACTION_STOP_ALARM = "com.shabbos.shabbos_app.STOP_ALARM"
+        const val ACTION_STOP_ALARM = "app.shabbos.android.STOP_ALARM"
         const val EXTRA_NOTIFICATION_ID = "notification_id" // AlarmReceiver's notification ID to cancel on stop
         private const val MAX_REPOST_COUNT = 4 // 4 × 15s = 1 minute of heads-up reposts
 
