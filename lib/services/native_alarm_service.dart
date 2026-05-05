@@ -4,7 +4,7 @@ import 'package:flutter/services.dart';
 
 class NativeAlarmService {
   static const MethodChannel _channel = MethodChannel(
-    'com.shabbos.shabbos_app/alarms',
+    'app.shabbos.android/alarms',
   );
 
   /// Check if the app can schedule exact alarms (Android 12+)
