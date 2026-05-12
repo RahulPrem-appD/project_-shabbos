@@ -112,6 +112,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           startDate: now,
           endDate: now.add(const Duration(days: 60)),
           timezone: location.timezone,
+          country: location.country,
           locale: widget.locale,
         );
 

@@ -1164,6 +1164,15 @@ class NotificationService {
   ) {
     if (!lighting.isYomTov) return false;
 
+    // Explicit Day-2 flag from the parser is authoritative when present.
+    // Day 1 of Yom Tov: alarms allowed. Day 2 (Diaspora only): alarms blocked.
+    if (lighting.isSecondDayYomTov) {
+      debugPrint(
+        'NotificationService: Skipping alerts for ${lighting.displayName} - flagged as second day of Yom Tov',
+      );
+      return true;
+    }
+
     final lightingDay = DateTime(
       lighting.candleLightingTime.year,
       lighting.candleLightingTime.month,

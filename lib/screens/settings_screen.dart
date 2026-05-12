@@ -560,17 +560,56 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
   void _onGpsChanged(bool value) async {
     setState(() => _useGps = value);
     await _locationService.setUseGps(value);
-    if (value) {
-      final hasPermission = await _locationService.hasLocationPermission();
-      if (!hasPermission) {
-        await _locationService.requestLocationPermission();
+    if (!value) return;
+
+    bool hasPermission = await _locationService.hasLocationPermission();
+    if (!hasPermission) {
+      hasPermission = await _locationService.requestLocationPermission();
+    }
+    if (!hasPermission) {
+      // User declined — roll back the toggle and tell them why nothing happened.
+      setState(() => _useGps = false);
+      await _locationService.setUseGps(false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              isHebrew
+                  ? 'נדרשת הרשאת מיקום כדי להשתמש ב-GPS.'
+                  : 'Location permission is required to use GPS.',
+            ),
+            backgroundColor: Colors.orange[700],
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
       }
-      final location = await _locationService.getCurrentLocation();
-      if (location != null) {
-        await _locationService.saveLocation(location);
-        setState(() => _savedLocation = location);
-        widget.onLocationChanged();
-      }
+      return;
+    }
+
+    final location = await _locationService.getCurrentLocation();
+    if (location != null) {
+      await _locationService.saveLocation(location);
+      setState(() => _savedLocation = location);
+      widget.onLocationChanged();
+      return;
+    }
+
+    // Permission was granted but no fix arrived. Roll back so the user can
+    // retry instead of being left with GPS "on" and no detected location.
+    setState(() => _useGps = false);
+    await _locationService.setUseGps(false);
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            isHebrew
+                ? 'לא ניתן לזהות מיקום. ודא ש-GPS פועל ונסה שוב.'
+                : 'Could not detect location. Make sure GPS is on and try again.',
+          ),
+          backgroundColor: Colors.orange[700],
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
     }
   }
 

@@ -627,6 +627,7 @@ class _SoundScreenState extends State<SoundScreen> {
           startDate: startDate,
           endDate: endDate,
           timezone: location.timezone,
+          country: location.country,
           locale: widget.locale,
         );
 

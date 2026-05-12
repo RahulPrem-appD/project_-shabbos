@@ -6,6 +6,9 @@ class CandleLighting {
   final String? hebrewHolidayName;
   final bool isShabbat;
   final bool isYomTov;
+  // True only for Day 2 of a 2-day (Diaspora) Yom Tov. Always false in Israel.
+  // Drives alarm suppression: Day 1 alarms allowed, Day 2 alarms blocked.
+  final bool isSecondDayYomTov;
   final String? hebrewDate; // Hebrew date string (e.g., "כ״ב כסלו תשפ״ה")
   final String? parasha; // Torah portion name (e.g., "Bereshit")
   final String? hebrewParasha; // Torah portion name in Hebrew (e.g., "בראשית")
@@ -18,6 +21,7 @@ class CandleLighting {
     this.hebrewHolidayName,
     this.isShabbat = false,
     this.isYomTov = false,
+    this.isSecondDayYomTov = false,
     this.hebrewDate,
     this.parasha,
     this.hebrewParasha,

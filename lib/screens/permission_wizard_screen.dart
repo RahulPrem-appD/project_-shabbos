@@ -364,6 +364,18 @@ class _PermissionWizardScreenState extends State<PermissionWizardScreen>
     final step = _steps[_currentIndex];
 
     if (step.grantMode == PermissionGrantMode.opensSettings) {
+      // For the overlay step, pause and show a confirmation sheet so the user
+      // has time to read the on-screen instructions/screenshots before being
+      // dropped into the system Settings activity. Without this pause, users
+      // arrive at the Settings list with no idea what to toggle.
+      if (step.type == PermissionStepType.overlay) {
+        final confirmed = await _showOverlayInstructionSheet();
+        if (!mounted) return;
+        if (confirmed != true) {
+          setState(() => _isGranting = false);
+          return;
+        }
+      }
       setState(() => _waitingForResume = true);
       await _invokeSettingsRequest(step.type);
       return;
@@ -424,6 +436,144 @@ class _PermissionWizardScreenState extends State<PermissionWizardScreen>
       default:
         break;
     }
+  }
+
+  Future<bool?> _showOverlayInstructionSheet() {
+    return showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (sheetCtx) {
+        return Directionality(
+          textDirection: _isHebrew ? TextDirection.rtl : TextDirection.ltr,
+          child: SafeArea(
+            top: false,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFE0E0E0),
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+                  Text(
+                    _isHebrew ? 'לפני שנפתח את ההגדרות' : 'Before we open Settings',
+                    style: const TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w800,
+                      color: _dark,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    _isHebrew
+                        ? 'במסך הבא, מצא את "שבת!!" ברשימה והפעל את המתג.'
+                        : 'On the next screen, find "Shabbos!!" in the list and turn ON the switch.',
+                    style: const TextStyle(
+                      fontSize: 15,
+                      color: Color(0xFF555555),
+                      height: 1.5,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 18),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: SizedBox(
+                      height: 220,
+                      child: Image.asset(
+                        'assets/images/onboarding/overlay_toggle.png',
+                        fit: BoxFit.contain,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 11,
+                    ),
+                    decoration: BoxDecoration(
+                      color: _gold.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: _gold.withValues(alpha: 0.25)),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Icon(
+                          Icons.touch_app_outlined,
+                          size: 18,
+                          color: _gold,
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            _isHebrew
+                                ? 'אנדרואיד יציג רשימת אפליקציות. גלול ומצא את "שבת!!", ואז הפעל את המתג.'
+                                : 'Android shows a list of apps. Scroll to "Shabbos!!", then flip the switch ON.',
+                            style: const TextStyle(
+                              fontSize: 13,
+                              color: Color(0xFF555555),
+                              height: 1.4,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 52,
+                    child: ElevatedButton(
+                      onPressed: () => Navigator.of(sheetCtx).pop(true),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: _dark,
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                      ),
+                      child: Text(
+                        _isHebrew ? 'פתח הגדרות' : 'Open Settings',
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  TextButton(
+                    onPressed: () => Navigator.of(sheetCtx).pop(false),
+                    child: Text(
+                      _isHebrew ? 'ביטול' : 'Cancel',
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF666666),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
   }
 
   Future<bool> _waitForBatteryOptimizationGrant() async {

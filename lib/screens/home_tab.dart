@@ -146,9 +146,27 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
       if (!serviceEnabled) {
         setState(() {
           _error = isHebrew
-              ? 'שירותי המיקום כבויים. אנא הפעל אותם בהגדרות.'
-              : 'Location services are disabled. Please enable them in settings.';
+              ? 'שירותי המיקום כבויים. נפתחות הגדרות המכשיר…'
+              : 'Location services are disabled. Opening device settings…';
         });
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                isHebrew
+                    ? 'הפעל את שירותי המיקום במכשיר ונסה שוב.'
+                    : 'Turn on Location in device settings, then try again.',
+              ),
+              backgroundColor: Colors.orange[700],
+              behavior: SnackBarBehavior.floating,
+              duration: const Duration(seconds: 5),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+          );
+        }
+        await Geolocator.openLocationSettings();
         return;
       }
 
@@ -242,17 +260,19 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
             SnackBar(
               content: Text(
                 isHebrew
-                    ? 'שירותי המיקום כבויים. אנא הפעל אותם בהגדרות.'
-                    : 'Location services are disabled. Please enable them in settings.',
+                    ? 'הפעל את שירותי המיקום במכשיר ונסה שוב.'
+                    : 'Turn on Location in device settings, then try again.',
               ),
-              backgroundColor: Colors.red[400],
+              backgroundColor: Colors.orange[700],
               behavior: SnackBarBehavior.floating,
+              duration: const Duration(seconds: 5),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(8),
               ),
             ),
           );
         }
+        await Geolocator.openLocationSettings();
         return;
       }
 
@@ -458,6 +478,7 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
           startDate: now,
           endDate: now.add(const Duration(days: 60)),
           timezone: location.timezone,
+          country: location.country,
           locale: widget.locale,
         );
 
@@ -1284,16 +1305,25 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
         return id != 996 && id != 997 && id != 998;
       }).toList();
 
+      // Day-2 Yom Tov events get NO alarms (alarms allowed on Day 1 only).
+      // Counting them here would inflate expectedCount, mask stale alarms left
+      // over from older app versions, and cause the upgrade path to silently
+      // keep ringing on Day 2.
+      final scheduleableEvents = expectedTimes
+          .take(10)
+          .where((e) => !e.isSecondDayYomTov)
+          .toList();
+
       debugPrint(
         'HomeTab: Found ${realAlarms.length} real alarms scheduled (excluding tests)',
       );
       debugPrint(
-        'HomeTab: Expected ${expectedTimes.take(10).length * 2} alarms (pre + issur for each event)',
+        'HomeTab: Expected ${scheduleableEvents.length * 2} alarms '
+        '(pre + issur per non-Day-2 event; ${expectedTimes.take(10).length - scheduleableEvents.length} Day-2 events skipped)',
       );
 
       // Calculate expected number of alarms (pre-notification + issur melacha for each event)
-      final expectedCount =
-          expectedTimes.take(10).length * 2; // 2 per event (pre + issur)
+      final expectedCount = scheduleableEvents.length * 2;
 
       // If count doesn't match, reschedule
       if (realAlarms.length != expectedCount) {
@@ -1306,11 +1336,14 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
       final now = DateTime.now();
       final preMinutes = await _notificationService.getPreNotificationMinutes();
 
-      for (int i = 0; i < expectedTimes.take(3).length; i++) {
-        final expectedPreTime = expectedTimes[i].candleLightingTime.subtract(
+      // Match against the first few non-Day-2 events; matching against Day-2
+      // would expect alarms that we deliberately don't schedule.
+      final eventsToVerify = scheduleableEvents.take(3).toList();
+      for (int i = 0; i < eventsToVerify.length; i++) {
+        final expectedPreTime = eventsToVerify[i].candleLightingTime.subtract(
           Duration(minutes: preMinutes),
         );
-        final expectedCandleTime = expectedTimes[i].candleLightingTime;
+        final expectedCandleTime = eventsToVerify[i].candleLightingTime;
 
         // Skip if times are in the past
         if (expectedPreTime.isBefore(now)) continue;

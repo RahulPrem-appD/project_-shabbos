@@ -76,6 +76,7 @@ class HebcalService {
     required DateTime startDate,
     required DateTime endDate,
     String? timezone,
+    String? country,
     String locale = 'en', // 'he' for Hebrew, 'en' for English
   }) async {
     try {
@@ -85,8 +86,35 @@ class HebcalService {
       // Set language parameter based on locale
       // From Hebcal API: use 'h' for Hebrew, 's' for Sephardic transliteration (English)
       final language = locale == 'he' ? 'h' : 's';
-      final useIsraelHolidaySchedule =
-          tz != null && tz.toLowerCase() == 'asia/jerusalem';
+      // Israel detection drives 1-day vs 2-day Yom Tov. Three independent
+      // signals — any one suffices, since each can fail in real-world cases:
+      //   - country: may be localized ("ישראל") or null when geocoding fails
+      //   - timezone: may be set to a non-Jerusalem zone if GPS lookup fails
+      //   - lat/long bounding box: foolproof when the device is physically
+      //     in Israel/Judea/Samaria, regardless of geocoder/timezone state
+      final countryLc = country?.toLowerCase();
+      final isIsraelByCountry = countryLc != null &&
+          (countryLc == 'israel' ||
+              countryLc == 'state of israel' ||
+              country == 'ישראל' ||
+              country == 'إسرائيل');
+      final isIsraelByTimezone = tz != null &&
+          (tz.toLowerCase() == 'asia/jerusalem' ||
+              tz.toLowerCase() == 'asia/tel_aviv' ||
+              tz == 'Israel');
+      // Bounding box covering Israel + Judea/Samaria. Approximate but tight
+      // enough that no diaspora city falls inside it.
+      final isIsraelByCoordinates = latitude >= 29.0 &&
+          latitude <= 33.5 &&
+          longitude >= 34.0 &&
+          longitude <= 36.0;
+      final isInIsrael =
+          isIsraelByCountry || isIsraelByTimezone || isIsraelByCoordinates;
+      debugPrint(
+        'HebcalService: isInIsrael=$isInIsrael '
+        '(country=$country/$isIsraelByCountry, tz=$tz/$isIsraelByTimezone, '
+        'coords=($latitude,$longitude)/$isIsraelByCoordinates)',
+      );
 
       final queryParams = {
         'cfg': 'json',
@@ -109,7 +137,7 @@ class HebcalService {
         'd': 'on', // Include Gregorian dates with Hebrew dates
       };
 
-      if (useIsraelHolidaySchedule) {
+      if (isInIsrael) {
         queryParams['i'] = 'on'; // Israel holiday schedule
       }
 
@@ -133,7 +161,7 @@ class HebcalService {
       }
 
       final data = json.decode(response.body);
-      return _parseExtendedResponse(data, locale: locale);
+      return _parseExtendedResponse(data, locale: locale, isInIsrael: isInIsrael);
     } catch (e) {
       debugPrint('HebcalService: Extended error: $e');
       throw Exception('Error fetching extended times: $e');
@@ -340,7 +368,23 @@ class HebcalService {
     return results;
   }
 
-  List<CandleLighting> _parseExtendedResponse(Map<String, dynamic> data, {required String locale}) {
+  /// Test-only wrapper around the private parser. Lets unit tests feed in
+  /// captured Hebcal JSON fixtures and assert against the parser's output
+  /// without making any network calls. Do not call from production code.
+  @visibleForTesting
+  List<CandleLighting> parseExtendedResponseForTest(
+    Map<String, dynamic> data, {
+    required String locale,
+    required bool isInIsrael,
+  }) {
+    return _parseExtendedResponse(data, locale: locale, isInIsrael: isInIsrael);
+  }
+
+  List<CandleLighting> _parseExtendedResponse(
+    Map<String, dynamic> data, {
+    required String locale,
+    required bool isInIsrael,
+  }) {
     final List<CandleLighting> results = [];
     final items = data['items'] as List<dynamic>? ?? [];
 
@@ -418,40 +462,41 @@ class HebcalService {
         }
       }
 
-      // Get holiday/parasha info associated with this candle lighting
+      // Get holiday/parasha info associated with this candle lighting.
+      //
+      // RULE: a candle lighting is a Yom Tov candle lighting iff the NEXT
+      // calendar day is a Yom Tov holiday (i.e. lighting these candles takes
+      // you INTO a Yom Tov day). A same-day-only match would incorrectly
+      // flag the Friday candle as Yom Tov in cases where Yom Tov ends Friday
+      // and immediately rolls into Shabbat (e.g. Shavuot 5786 in Israel) —
+      // that candle is for the SHABBAT that follows, not the ending Yom Tov.
       String? holidayName;
       String? hebrewHolidayName;
-      bool isYomTov = candleItem['yomtov'] == true;
+      bool isYomTov = false;
 
       final candleDateKey = _formatDate(candleDate);
-
-      // Check for holiday on same day or next day
       final candleDateTime = DateTime(candleDate.year, candleDate.month, candleDate.day);
       for (final holidayItem in holidayEvents) {
+        if (holidayItem['yomtov'] != true) continue;
         final holidayDateStr = holidayItem['date'] as String?;
         if (holidayDateStr == null) continue;
 
         final holidayDate = _parseHebcalDate(holidayDateStr);
-        final holidayDateKey = _formatDate(holidayDate);
         final holidayDateTime = DateTime(holidayDate.year, holidayDate.month, holidayDate.day);
         final daysDiff = holidayDateTime.difference(candleDateTime).inDays;
 
-        // Holiday can be on same day or next day (since candle lighting is in the evening before)
-        if (holidayDateKey == candleDateKey || daysDiff == 1) {
-          if (holidayItem['yomtov'] == true) {
-            // For Yom Tov:
-            // Hebrew: title has Hebrew with nikud
-            // English: title_orig has English name
-            if (locale == 'he') {
-              holidayName = holidayItem['title'] as String?;
-              hebrewHolidayName = holidayItem['title'] as String?;
-            } else {
-              holidayName = holidayItem['title_orig'] as String? ?? holidayItem['title'] as String?;
-              hebrewHolidayName = holidayItem['hebrew'] as String?;
-            }
-            isYomTov = true;
-            break;
+        if (daysDiff == 1) {
+          // Hebrew: title has Hebrew with nikud
+          // English: title_orig has English name
+          if (locale == 'he') {
+            holidayName = holidayItem['title'] as String?;
+            hebrewHolidayName = holidayItem['title'] as String?;
+          } else {
+            holidayName = holidayItem['title_orig'] as String? ?? holidayItem['title'] as String?;
+            hebrewHolidayName = holidayItem['hebrew'] as String?;
           }
+          isYomTov = true;
+          break;
         }
       }
 
@@ -530,11 +575,55 @@ class HebcalService {
       (a, b) => a.candleLightingTime.compareTo(b.candleLightingTime),
     );
 
+    // Mark Day 2 of multi-day Yom Tov.
+    // A Yom Tov entry is Day 2 when the immediately preceding entry is also
+    // a Yom Tov candle lighting on the calendar day right before this one.
+    //
+    // We do NOT gate this on `!isInIsrael`: Rosh Hashanah is 2-day even in
+    // Israel, and the user requirement is that Day 2 alarms must be blocked
+    // wherever a Day 2 exists. In Israel, the new isYomTov rule (next-day
+    // holiday) prevents a Yom-Tov-into-Shabbat candle from being flagged
+    // Yom Tov, so this loop won't accidentally mark the Shabbat candle as
+    // Day 2 of a 1-day Israeli Yom Tov.
+    for (int i = 1; i < results.length; i++) {
+      final current = results[i];
+      if (!current.isYomTov) continue;
+      final previous = results[i - 1];
+      if (!previous.isYomTov) continue;
+
+      final currentDay = DateTime(
+        current.candleLightingTime.year,
+        current.candleLightingTime.month,
+        current.candleLightingTime.day,
+      );
+      final previousDay = DateTime(
+        previous.candleLightingTime.year,
+        previous.candleLightingTime.month,
+        previous.candleLightingTime.day,
+      );
+
+      if (currentDay.difference(previousDay).inDays == 1) {
+        results[i] = CandleLighting(
+          date: current.date,
+          candleLightingTime: current.candleLightingTime,
+          havdalahTime: current.havdalahTime,
+          holidayName: current.holidayName,
+          hebrewHolidayName: current.hebrewHolidayName,
+          isShabbat: current.isShabbat,
+          isYomTov: current.isYomTov,
+          isSecondDayYomTov: true,
+          hebrewDate: current.hebrewDate,
+          parasha: current.parasha,
+          hebrewParasha: current.hebrewParasha,
+        );
+      }
+    }
+
     debugPrint(
-      'HebcalService: Parsed ${results.length} extended candle lighting events',
+      'HebcalService: Parsed ${results.length} extended candle lighting events (isInIsrael=$isInIsrael)',
     );
     for (final r in results) {
-      debugPrint('  - ${r.displayName}: ${r.candleLightingTime} (parasha: ${r.parasha}, hebrewParasha: ${r.hebrewParasha})');
+      debugPrint('  - ${r.displayName}: ${r.candleLightingTime} (parasha: ${r.parasha}, hebrewParasha: ${r.hebrewParasha}, day2=${r.isSecondDayYomTov})');
     }
 
     return results;

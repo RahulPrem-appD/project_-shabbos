@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
@@ -11,7 +12,16 @@ class LocationService {
   static const String _locationKey = 'saved_location';
   static const String _useGpsKey = 'use_gps';
 
-  /// Get current GPS location with timezone detection
+  /// Get current GPS location with timezone detection.
+  ///
+  /// Resilient acquisition strategy: many devices return null on the first
+  /// `getCurrentPosition` call after the GPS chip has been idle ("cold fix"),
+  /// which used to force the user to tap "Detect" 2-3 times before a fix
+  /// arrived. We now:
+  ///   1. Read `getLastKnownPosition` first — instant if any recent fix exists.
+  ///   2. Request a fresh fix at medium accuracy with a generous timeout.
+  ///   3. On timeout, retry the fresh fix once.
+  ///   4. If both fresh attempts fail but we have a last-known fix, return it.
   Future<LocationInfo?> getCurrentLocation() async {
     try {
       // Check if location services are enabled
@@ -23,19 +33,45 @@ class LocationService {
 
       // Only check permissions, don't request (caller should handle permission requests)
       LocationPermission permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied || 
+      if (permission == LocationPermission.denied ||
           permission == LocationPermission.deniedForever) {
         debugPrint('LocationService: Permission not granted: $permission');
         return null;
       }
 
-      // Get position
-      final position = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.low,
-          timeLimit: Duration(seconds: 10),
-        ),
-      );
+      // 1. Try last-known fix as a cheap warm-start fallback.
+      Position? lastKnown;
+      try {
+        lastKnown = await Geolocator.getLastKnownPosition();
+        if (lastKnown != null) {
+          debugPrint(
+            'LocationService: Last-known position available: '
+            '${lastKnown.latitude}, ${lastKnown.longitude}',
+          );
+        }
+      } catch (e) {
+        debugPrint('LocationService: getLastKnownPosition failed: $e');
+      }
+
+      // 2. Request a fresh fix; retry once if the first attempt times out.
+      Position? position = await _getFreshPosition();
+      if (position == null) {
+        debugPrint('LocationService: Fresh fix #1 failed, retrying...');
+        position = await _getFreshPosition();
+      }
+
+      // 3. Fall back to last-known if both fresh attempts failed.
+      if (position == null && lastKnown != null) {
+        debugPrint(
+          'LocationService: Both fresh attempts failed, using last-known fix',
+        );
+        position = lastKnown;
+      }
+
+      if (position == null) {
+        debugPrint('LocationService: No position available after retries');
+        return null;
+      }
 
       debugPrint('LocationService: Got position: ${position.latitude}, ${position.longitude}');
 
@@ -73,6 +109,28 @@ class LocationService {
       );
     } catch (e) {
       debugPrint('LocationService: Error getting location: $e');
+      return null;
+    }
+  }
+
+  /// Single attempt to get a fresh GPS fix. Returns null on timeout or error
+  /// rather than throwing so the caller can decide how to retry/fall back.
+  /// Uses medium accuracy (network + GPS) and a 20s timeout — low accuracy
+  /// is too unreliable on cold-start, and 10s often isn't enough for the
+  /// first fix after the chip has been idle.
+  Future<Position?> _getFreshPosition() async {
+    try {
+      return await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.medium,
+          timeLimit: Duration(seconds: 20),
+        ),
+      );
+    } on TimeoutException catch (e) {
+      debugPrint('LocationService: getCurrentPosition timed out: $e');
+      return null;
+    } catch (e) {
+      debugPrint('LocationService: getCurrentPosition failed: $e');
       return null;
     }
   }
