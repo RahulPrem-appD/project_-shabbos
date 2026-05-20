@@ -1,3 +1,5 @@
+import 'dart:ui' show PlatformDispatcher;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -52,10 +54,28 @@ class _ShabbosAppState extends State<ShabbosApp> {
 
   Future<void> _loadPreferences() async {
     final prefs = await SharedPreferences.getInstance();
+    final saved = prefs.getString('app_language');
+    // First-launch fallback: honour the device's system locale so a Hebrew
+    // user gets a Hebrew onboarding wizard without having to dig into Settings.
+    // Existing installs keep their saved choice — we never override that here.
+    final initial = saved ?? (_deviceLocaleIsHebrew() ? 'he' : 'en');
     setState(() {
-      _locale = prefs.getString('app_language') ?? 'en';
+      _locale = initial;
       _ready = true;
     });
+  }
+
+  /// Returns true if the device's current locale is Hebrew. Checks the full
+  /// locale list (some platforms expose Hebrew as a fallback rather than the
+  /// primary entry) and matches the language code only — both `he` and the
+  /// legacy `iw` code are accepted.
+  bool _deviceLocaleIsHebrew() {
+    final locales = PlatformDispatcher.instance.locales;
+    for (final locale in locales) {
+      final code = locale.languageCode.toLowerCase();
+      if (code == 'he' || code == 'iw') return true;
+    }
+    return false;
   }
 
   void setLocale(String locale) async {

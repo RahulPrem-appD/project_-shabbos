@@ -701,15 +701,78 @@ class _PermissionWizardScreenState extends State<PermissionWizardScreen>
 
   Widget _buildBSDHeader() {
     return Padding(
-      padding: const EdgeInsets.only(top: 14, bottom: 6),
-      child: Center(
-        child: const Text(
-          'בס״ד',
+      padding: const EdgeInsetsDirectional.only(
+        top: 14,
+        bottom: 6,
+        start: 16,
+        end: 16,
+      ),
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          const Text(
+            'בס״ד',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w900,
+              color: _gold,
+              letterSpacing: 2,
+            ),
+          ),
+          // Locale toggle on the trailing edge — leading in LTR, right in RTL
+          // it ends up on the left because Directionality flips alignment.
+          Align(
+            alignment: AlignmentDirectional.centerEnd,
+            child: _buildLocaleToggle(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Compact two-segment toggle that lets the user switch between English
+  /// and Hebrew at any point during onboarding. Stays visible across every
+  /// wizard step, so users whose device locale was auto-detected wrong have
+  /// a clear escape hatch without having to finish the wizard first.
+  Widget _buildLocaleToggle() {
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFFF0F0F0),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      padding: const EdgeInsets.all(2),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _localeSegment(code: 'en', label: 'EN'),
+          _localeSegment(code: 'he', label: 'עב'),
+        ],
+      ),
+    );
+  }
+
+  Widget _localeSegment({required String code, required String label}) {
+    final isActive = widget.locale == code;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () {
+        if (!isActive) widget.onLocaleChanged(code);
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        curve: Curves.easeOut,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+        decoration: BoxDecoration(
+          color: isActive ? _gold : Colors.transparent,
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Text(
+          label,
           style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w900,
-            color: _gold,
-            letterSpacing: 2,
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+            color: isActive ? _dark : const Color(0xFF666666),
+            letterSpacing: 0.5,
           ),
         ),
       ),
@@ -1058,16 +1121,24 @@ class _PermissionWizardScreenState extends State<PermissionWizardScreen>
     final caption = _isHebrew ? 'מה תראה' : 'What you\'ll see';
     final imageBorder = Border.all(color: const Color(0xFFE6E6E6));
 
+    // The wizard mixes square and portrait instructional images. To avoid
+    // cropping the annotated overlay_toggle.png (which is square), each card
+    // gets a width matching its image's natural aspect ratio and uses
+    // BoxFit.contain so nothing inside the frame is clipped.
     Widget buildCard(String asset) {
+      // Heuristic: the annotated toggle screenshot is square; everything else
+      // is treated as portrait phone screenshots (~9:16).
+      final isSquare = asset.contains('overlay_toggle');
+      final width = isSquare ? 260.0 : 150.0;
       return Container(
-        width: 150,
+        width: width,
         decoration: BoxDecoration(
           color: Colors.black,
           borderRadius: BorderRadius.circular(12),
           border: imageBorder,
         ),
         clipBehavior: Clip.antiAlias,
-        child: Image.asset(asset, fit: BoxFit.cover),
+        child: Image.asset(asset, fit: BoxFit.contain),
       );
     }
 
@@ -1100,12 +1171,7 @@ class _PermissionWizardScreenState extends State<PermissionWizardScreen>
         if (single)
           SizedBox(
             height: 260,
-            child: Center(
-              child: AspectRatio(
-                aspectRatio: 9 / 16,
-                child: buildCard(assets.first),
-              ),
-            ),
+            child: Center(child: buildCard(assets.first)),
           )
         else
           SizedBox(
