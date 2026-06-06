@@ -492,7 +492,9 @@ class _PermissionWizardScreenState extends State<PermissionWizardScreen>
                     child: SizedBox(
                       height: 220,
                       child: Image.asset(
-                        'assets/images/onboarding/overlay_toggle.png',
+                        _isHebrew
+                            ? 'assets/images/onboarding/overlay_toggle_he.png'
+                            : 'assets/images/onboarding/overlay_toggle.png',
                         fit: BoxFit.contain,
                       ),
                     ),
@@ -1125,10 +1127,16 @@ class _PermissionWizardScreenState extends State<PermissionWizardScreen>
     // cropping the annotated overlay_toggle.png (which is square), each card
     // gets a width matching its image's natural aspect ratio and uses
     // BoxFit.contain so nothing inside the frame is clipped.
+    //
+    // For Hebrew, the annotated toggle image swaps to the RTL-mirrored
+    // version so the "מצא והפעל" callout reads right-to-left correctly.
     Widget buildCard(String asset) {
       // Heuristic: the annotated toggle screenshot is square; everything else
       // is treated as portrait phone screenshots (~9:16).
       final isSquare = asset.contains('overlay_toggle');
+      final effectiveAsset = (isSquare && _isHebrew)
+          ? 'assets/images/onboarding/overlay_toggle_he.png'
+          : asset;
       final width = isSquare ? 260.0 : 150.0;
       return Container(
         width: width,
@@ -1138,7 +1146,7 @@ class _PermissionWizardScreenState extends State<PermissionWizardScreen>
           border: imageBorder,
         ),
         clipBehavior: Clip.antiAlias,
-        child: Image.asset(asset, fit: BoxFit.contain),
+        child: Image.asset(effectiveAsset, fit: BoxFit.contain),
       );
     }
 
