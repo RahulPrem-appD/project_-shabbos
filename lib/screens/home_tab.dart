@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:intl/intl.dart' hide TextDirection;
+import 'package:permission_handler/permission_handler.dart';
 import '../models/candle_lighting.dart';
 import '../services/hebcal_service.dart';
 import '../services/location_service.dart';
@@ -39,6 +40,9 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
   bool? _overlayPermissionGranted;
   bool _overlaySettingsAvailable = true;
   bool? _fullScreenIntentGranted;
+  // iOS-only: tracks the OS-level notification permission so we can warn the
+  // user when alerts won't fire. Defaults true so no banner flashes on launch.
+  bool _iosNotificationsEnabled = true;
   DateTime? _lastPermissionCheck;
 
   bool get isHebrew => widget.locale == 'he';
@@ -123,14 +127,21 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
       debugPrint('HomeTab: Overlay permission: $overlayPermission');
       debugPrint('HomeTab: Full screen intent: $fullScreenIntent');
     } else {
+      // iOS: the Android-specific permissions don't apply, but we DO check the
+      // OS-level notification permission so we can warn the user if alerts are
+      // turned off (e.g. they skipped or declined the onboarding prompt).
+      final notificationsOn =
+          await _notificationService.areOsNotificationsEnabled();
       if (mounted) {
         setState(() {
           _exactAlarmGranted = true;
           _batteryOptimizationDisabled = true;
           _overlayPermissionGranted = true;
           _fullScreenIntentGranted = true;
+          _iosNotificationsEnabled = notificationsOn;
         });
       }
+      debugPrint('HomeTab: iOS notifications enabled: $notificationsOn');
     }
   }
 
@@ -536,6 +547,8 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
               (_exactAlarmGranted != true ||
                   _batteryOptimizationDisabled != true))
             _buildPermissionBanner(),
+          if (Platform.isIOS && !_iosNotificationsEnabled)
+            _buildNotificationWarningBanner(),
           Expanded(child: _buildBody()),
         ],
       ),
@@ -793,6 +806,81 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
     );
   }
 
+
+  /// iOS-only warning shown when the OS notification permission is off, so the
+  /// user knows alerts and sounds won't fire — and can turn them on in one tap.
+  /// Tapping "Enable" is a user-initiated action, so routing to Settings here
+  /// is permitted by App Store guidelines (unlike auto-redirecting in onboarding).
+  Widget _buildNotificationWarningBanner() {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF3CD),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: const Color(0xFFE8B923).withValues(alpha: 0.3),
+        ),
+      ),
+      child: Row(
+        children: [
+          const Icon(
+            Icons.notifications_off_outlined,
+            color: Color(0xFFE8B923),
+            size: 24,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  isHebrew ? 'ההתראות כבויות' : 'Notifications are off',
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF1A1A1A),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  isHebrew
+                      ? 'לא תקבל תזכורות וצלילים להדלקת נרות. הקש "הפעל" כדי להפעיל אותן.'
+                      : 'You won\'t get candle lighting reminders or sounds. Tap "Enable" to turn them on.',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey[700],
+                    height: 1.3,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          TextButton(
+            onPressed: () async {
+              // Try an in-app request first — works if iOS hasn't shown the
+              // dialog yet. If already declined, iOS won't re-prompt, so send
+              // the user to Settings (allowed because they tapped Enable).
+              final granted = await _notificationService.requestPermissions();
+              if (!granted) {
+                await openAppSettings();
+              }
+              // Re-check when the user returns from Settings.
+              _lastPermissionCheck = null;
+            },
+            child: Text(
+              isHebrew ? 'הפעל' : 'Enable',
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF1A1A1A),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
   Widget _buildTravelLocationBanner() {
     final textDirection = isHebrew ? TextDirection.rtl : TextDirection.ltr;
@@ -1065,19 +1153,23 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
 
           Row(
             children: [
-              _buildTimeDisplay(
-                icon: Icons.local_fire_department,
-                iconColor: const Color(0xFFE8B923),
-                label: isHebrew ? 'הדלקת נרות' : 'Candle Lighting',
-                time: timeFormat.format(lighting.candleLightingTime),
+              Expanded(
+                child: _buildTimeDisplay(
+                  icon: Icons.local_fire_department,
+                  iconColor: const Color(0xFFE8B923),
+                  label: isHebrew ? 'הדלקת נרות' : 'Candle Lighting',
+                  time: timeFormat.format(lighting.candleLightingTime),
+                ),
               ),
               if (lighting.havdalahTime != null) ...[
-                const SizedBox(width: 32),
-                _buildTimeDisplay(
-                  icon: Icons.nightlight_round,
-                  iconColor: Colors.white.withValues(alpha: 0.5),
-                  label: isHebrew ? 'הבדלה' : 'Havdalah',
-                  time: timeFormat.format(lighting.havdalahTime!),
+                const SizedBox(width: 24),
+                Expanded(
+                  child: _buildTimeDisplay(
+                    icon: Icons.nightlight_round,
+                    iconColor: Colors.white.withValues(alpha: 0.5),
+                    label: isHebrew ? 'הבדלה' : 'Havdalah',
+                    time: timeFormat.format(lighting.havdalahTime!),
+                  ),
                 ),
               ],
             ],
@@ -1100,23 +1192,31 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
           children: [
             Icon(icon, size: 16, color: iconColor),
             const SizedBox(width: 6),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 12,
-                color: Colors.white.withValues(alpha: 0.5),
+            Flexible(
+              child: Text(
+                label,
+                overflow: TextOverflow.ellipsis,
+                maxLines: 1,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.white.withValues(alpha: 0.5),
+                ),
               ),
             ),
           ],
         ),
         const SizedBox(height: 6),
-        Text(
-          time,
-          style: const TextStyle(
-            fontSize: 32,
-            fontWeight: FontWeight.w700,
-            color: Colors.white,
-            height: 1,
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerLeft,
+          child: Text(
+            time,
+            style: const TextStyle(
+              fontSize: 32,
+              fontWeight: FontWeight.w700,
+              color: Colors.white,
+              height: 1,
+            ),
           ),
         ),
       ],

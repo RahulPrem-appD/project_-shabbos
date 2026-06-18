@@ -10,7 +10,7 @@ import SwiftUI
 import WidgetKit
 
 struct ShabbosWidgetControl: ControlWidget {
-    static let kind: String = "com.shabbos.shabbosApp.ShabbosWidget"
+    static let kind: String = "app.shabbos.ios.ShabbosWidget"
 
     var body: some ControlWidgetConfiguration {
         AppIntentControlConfiguration(

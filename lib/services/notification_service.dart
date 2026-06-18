@@ -345,6 +345,35 @@ class NotificationService {
     }
   }
 
+  /// Checks the OS-level notification permission WITHOUT prompting the user.
+  /// Distinct from [getNotificationsEnabled], which reads the in-app toggle.
+  /// Used by the home screen to warn when alerts won't fire because the user
+  /// declined the system permission. Returns true on any error (fail-safe:
+  /// don't nag the user with a false warning).
+  Future<bool> areOsNotificationsEnabled() async {
+    try {
+      if (Platform.isIOS) {
+        final ios = _notifications
+            .resolvePlatformSpecificImplementation<
+              IOSFlutterLocalNotificationsPlugin
+            >();
+        if (ios == null) return true;
+        final status = await ios.checkPermissions();
+        return status?.isEnabled ?? false;
+      } else if (Platform.isAndroid) {
+        final android = _notifications
+            .resolvePlatformSpecificImplementation<
+              AndroidFlutterLocalNotificationsPlugin
+            >();
+        if (android == null) return true;
+        return await android.areNotificationsEnabled() ?? true;
+      }
+    } catch (e) {
+      debugPrint('NotificationService: areOsNotificationsEnabled error: $e');
+    }
+    return true;
+  }
+
   Future<bool> requestPermissions() async {
     debugPrint('NotificationService: Checking permissions...');
 

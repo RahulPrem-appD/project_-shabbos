@@ -39,5 +39,25 @@ end
 post_install do |installer|
   installer.pods_project.targets.each do |target|
     flutter_additional_ios_build_settings(target)
+
+    # Force every pod to use the project-level deployment target. Some plugins
+    # still ship with stale targets (9.0 / 11.0) which both produce Xcode
+    # warnings and, on older CocoaPods, break the privacy-manifest "no rule
+    # to process file" errors for *.xcprivacy resources.
+    target.build_configurations.each do |config|
+      config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '14.0'
+    end
+  end
+
+  # CocoaPods < 1.14 doesn't know how to treat .xcprivacy as a resource and
+  # mis-classifies it as source ("no rule to process file ... of type
+  # text.xml"). Walk every NATIVE pod target (aggregate targets have no
+  # source phase) and rewrite any *.xcprivacy entry from source → resources.
+  installer.pods_project.native_targets.each do |target|
+    target.source_build_phase.files.dup.each do |file|
+      next unless file.file_ref && file.file_ref.path && file.file_ref.path.end_with?('.xcprivacy')
+      target.source_build_phase.remove_file_reference(file.file_ref)
+      target.resources_build_phase.add_file_reference(file.file_ref)
+    end
   end
 end

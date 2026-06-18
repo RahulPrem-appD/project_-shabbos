@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/notification_service.dart';
@@ -320,8 +321,12 @@ class _PermissionWizardScreenState extends State<PermissionWizardScreen>
         final status = await Permission.notification.status;
         return status.isGranted;
       case PermissionStepType.location:
-        final status = await Permission.locationWhenInUse.status;
-        return status.isGranted || status.isLimited;
+        // Use Geolocator (same package the rest of the app uses) — its
+        // LocationPermission enum has clearer semantics on iOS than
+        // permission_handler's PermissionStatus.
+        final permission = await Geolocator.checkPermission();
+        return permission == LocationPermission.whileInUse ||
+            permission == LocationPermission.always;
       case PermissionStepType.exactAlarms:
         return NativeAlarmService.canScheduleExactAlarms();
       case PermissionStepType.batteryOptimization:
@@ -395,9 +400,32 @@ class _PermissionWizardScreenState extends State<PermissionWizardScreen>
         }
         break;
       case PermissionStepType.location:
-        final status = await Permission.locationWhenInUse.request();
-        granted = status.isGranted || status.isLimited;
-        permanentlyDenied = status.isPermanentlyDenied;
+        if (Platform.isIOS) {
+          // iOS: request the system dialog directly and NEVER redirect to
+          // Settings on denial — App Store guideline 5.1.1(iv) forbids it.
+          // A declined permission simply leaves this step skippable; the user
+          // can still enable location later from the home screen.
+          final result = await Geolocator.requestPermission();
+          granted = result == LocationPermission.whileInUse ||
+              result == LocationPermission.always;
+        } else {
+          // Android: unchanged from the approved Play Store build.
+          final servicesEnabled =
+              await Geolocator.isLocationServiceEnabled();
+          if (!servicesEnabled) {
+            granted = false;
+            permanentlyDenied = true;
+            break;
+          }
+
+          final result = await Geolocator.requestPermission();
+          granted = result == LocationPermission.whileInUse ||
+              result == LocationPermission.always;
+
+          if (!granted) {
+            permanentlyDenied = result == LocationPermission.deniedForever;
+          }
+        }
         break;
       case PermissionStepType.batteryOptimization:
         await NativeAlarmService.requestDisableBatteryOptimization();
@@ -591,6 +619,21 @@ class _PermissionWizardScreenState extends State<PermissionWizardScreen>
 
   bool _isOptionalStep(PermissionStep step) => step.isOptional;
 
+  /// Whether the current step can be skipped with a "Do this later" button.
+  /// On iOS, notifications and location MUST be skippable so the app never
+  /// *requires* them (App Store guidelines 4.5.4 and 5.1.1). Android keeps its
+  /// original required-step flow — it's already approved on the Play Store, so
+  /// we deliberately don't change its behavior.
+  bool _isSkippable(PermissionStep step) {
+    if (step.isOptional) return true;
+    if (Platform.isIOS &&
+        (step.type == PermissionStepType.notifications ||
+            step.type == PermissionStepType.location)) {
+      return true;
+    }
+    return false;
+  }
+
   List<int> _requiredStepIndexes() {
     final indexes = <int>[];
     for (int i = 0; i < _steps.length; i++) {
@@ -625,7 +668,7 @@ class _PermissionWizardScreenState extends State<PermissionWizardScreen>
   void _skipOptionalStep() {
     if (_currentIndex >= _steps.length) return;
     final step = _steps[_currentIndex];
-    if (!step.isOptional) return;
+    if (!_isSkippable(step)) return;
     _advanceToNext();
   }
 
@@ -1312,9 +1355,13 @@ class _PermissionWizardScreenState extends State<PermissionWizardScreen>
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
-                  _isHebrew
-                      ? 'ההרשאה נדחתה. ניתן לנסות שוב או לאפשר בהגדרות.'
-                      : 'Permission denied. You can try again or enable it in Settings.',
+                  Platform.isIOS
+                      ? (_isHebrew
+                          ? 'אין בעיה — ניתן להמשיך. תוכל להפעיל זאת מאוחר יותר מתוך האפליקציה.'
+                          : 'No problem — you can continue. You can turn this on later from inside the app.')
+                      : (_isHebrew
+                          ? 'ההרשאה נדחתה. ניתן לנסות שוב או לאפשר בהגדרות.'
+                          : 'Permission denied. You can try again or enable it in Settings.'),
                   style: const TextStyle(fontSize: 13, height: 1.4),
                 ),
               ),
@@ -1394,18 +1441,30 @@ class _PermissionWizardScreenState extends State<PermissionWizardScreen>
 
     final step =
         _currentIndex < _steps.length ? _steps[_currentIndex] : null;
+    // On iOS the system permission dialog only ever appears once. After a
+    // denial, re-requesting does nothing visible, so a "Try Again" button
+    // looks frozen (this caused an App Store 2.1 rejection). Instead, on iOS
+    // we turn the denied state into a working "Continue" that moves forward.
+    final iosDenied = _isDenied && Platform.isIOS;
+
     final showSkipOptional =
         step != null &&
-        step.isOptional &&
+        _isSkippable(step) &&
         !_isCurrentGranted &&
-        !_isGranting;
+        !_isGranting &&
+        !iosDenied; // iOS shows "Continue" as the primary action instead
     final String label;
     final VoidCallback? onPressed;
 
     if (_isCurrentGranted) {
       label = _isHebrew ? 'הבא ←' : 'Next →';
       onPressed = _advanceToNext;
+    } else if (iosDenied) {
+      // iOS: can't re-prompt, so let the user continue (permission is optional).
+      label = _isHebrew ? 'המשך' : 'Continue';
+      onPressed = _advanceToNext;
     } else if (_isDenied) {
+      // Android: re-requesting can still show the dialog, so keep "Try Again".
       label = _isHebrew ? 'נסה שוב' : 'Try Again';
       onPressed = _onGrantPressed;
     } else if (_isGranting) {
