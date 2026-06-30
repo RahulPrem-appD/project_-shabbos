@@ -235,10 +235,13 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
           _showLocationSettingsDialog();
         }
       } else {
+        // Location is optional — make clear the user can still pick a city
+        // manually in Settings (App Store guideline 4.5.4: don't imply the
+        // permission is mandatory).
         setState(() {
           _error = isHebrew
-              ? 'נדרשת הרשאת מיקום'
-              : 'Location permission is required';
+              ? 'לא ניתן לזהות מיקום אוטומטית. ניתן לבחור עיר ידנית בהגדרות.'
+              : 'Couldn\'t detect location automatically. You can pick a city manually in Settings.';
         });
       }
     } catch (e) {
@@ -433,13 +436,13 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
       builder: (context) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Text(
-          isHebrew ? 'נדרשת הרשאת מיקום' : 'Location Permission Required',
+          isHebrew ? 'להפעיל זיהוי מיקום?' : 'Turn on location?',
           style: const TextStyle(fontWeight: FontWeight.bold),
         ),
         content: Text(
           isHebrew
-              ? 'הרשאת המיקום נדחתה. אנא אפשר גישה למיקום בהגדרות המכשיר.'
-              : 'Location permission was denied. Please enable location access in device settings.',
+              ? 'כדי לזהות את זמני הדלקת הנרות אוטומטית, ניתן לאפשר גישה למיקום בהגדרות. לחלופין, ניתן לבחור עיר ידנית בלשונית ההגדרות של האפליקציה.'
+              : 'To detect candle lighting times automatically, you can allow location access in Settings. Or simply pick your city manually in the app\'s Settings tab.',
         ),
         actions: [
           TextButton(

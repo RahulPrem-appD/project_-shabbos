@@ -436,16 +436,29 @@ class _PermissionWizardScreenState extends State<PermissionWizardScreen>
     }
 
     if (!mounted) return;
+    // iOS: for notifications/location the system dialog has now run. Whatever
+    // the user chose, we move forward — there is no "denied" dead-end and no
+    // re-prompt (App Store 5.1.1(iv) + 4.5.4). So we never enter the denied
+    // state on iOS for these steps (avoids a flash of denied UI before the
+    // auto-advance below).
+    final iosAutoAdvance = Platform.isIOS &&
+        (step.type == PermissionStepType.notifications ||
+            step.type == PermissionStepType.location);
     setState(() {
       _isGranting = false;
       _isCurrentGranted = granted;
-      _isDenied = !granted;
+      _isDenied = !granted && !iosAutoAdvance;
       _isPermanentlyDenied = permanentlyDenied;
     });
 
     if (granted) {
       _successController.forward(from: 0);
       await Future.delayed(const Duration(milliseconds: 700));
+      if (mounted) _advanceToNext();
+    } else if (iosAutoAdvance) {
+      // Declined on iOS — the permission is optional, so continue to the next
+      // step (or finish). A short pause lets the system dialog finish dismissing.
+      await Future.delayed(const Duration(milliseconds: 400));
       if (mounted) _advanceToNext();
     }
   }
@@ -620,17 +633,19 @@ class _PermissionWizardScreenState extends State<PermissionWizardScreen>
   bool _isOptionalStep(PermissionStep step) => step.isOptional;
 
   /// Whether the current step can be skipped with a "Do this later" button.
-  /// On iOS, notifications and location MUST be skippable so the app never
-  /// *requires* them (App Store guidelines 4.5.4 and 5.1.1). Android keeps its
-  /// original required-step flow — it's already approved on the Play Store, so
-  /// we deliberately don't change its behavior.
+  /// On iOS, notifications and location must NOT be skippable: App Store
+  /// guideline 5.1.1(iv) requires the user to always proceed to the system
+  /// permission dialog after the explanatory screen — no exit before it.
+  /// Optionality is delivered instead by the system-level decline plus the app
+  /// working without the permission (the wizard always advances afterward —
+  /// see _onGrantPressed). Android keeps its original Play-Store-approved flow.
   bool _isSkippable(PermissionStep step) {
-    if (step.isOptional) return true;
     if (Platform.isIOS &&
         (step.type == PermissionStepType.notifications ||
             step.type == PermissionStepType.location)) {
-      return true;
+      return false;
     }
+    if (step.isOptional) return true;
     return false;
   }
 
@@ -1357,8 +1372,8 @@ class _PermissionWizardScreenState extends State<PermissionWizardScreen>
                 child: Text(
                   Platform.isIOS
                       ? (_isHebrew
-                          ? 'אין בעיה — ניתן להמשיך. תוכל להפעיל זאת מאוחר יותר מתוך האפליקציה.'
-                          : 'No problem — you can continue. You can turn this on later from inside the app.')
+                          ? 'אין בעיה — ניתן להמשיך. תוכל להפעיל זאת מאוחר יותר מהמסך הראשי.'
+                          : 'No problem — you can continue. You can enable this later from the home screen.')
                       : (_isHebrew
                           ? 'ההרשאה נדחתה. ניתן לנסות שוב או לאפשר בהגדרות.'
                           : 'Permission denied. You can try again or enable it in Settings.'),
@@ -1368,7 +1383,10 @@ class _PermissionWizardScreenState extends State<PermissionWizardScreen>
             ],
           ),
         ),
-        if (_isPermanentlyDenied) ...[
+        // Never redirect to Settings from the iOS onboarding flow (App Store
+        // 5.1.1(iv)). _isPermanentlyDenied is only set on Android in any case,
+        // but gate explicitly to prevent regressions.
+        if (_isPermanentlyDenied && !Platform.isIOS) ...[
           const SizedBox(height: 8),
           TextButton.icon(
             onPressed: _openAppSettingsForDenied,
@@ -1471,7 +1489,12 @@ class _PermissionWizardScreenState extends State<PermissionWizardScreen>
       label = '';
       onPressed = null;
     } else {
-      label = _isHebrew ? '← הענק' : 'Grant →';
+      // iOS pre-prompt buttons must not say "Grant" (App Store 5.1.1(iv)) —
+      // use neutral "Continue". The button still triggers the real system
+      // permission dialog. Android keeps its approved "Grant" wording.
+      label = Platform.isIOS
+          ? (_isHebrew ? '← המשך' : 'Continue →')
+          : (_isHebrew ? '← הענק' : 'Grant →');
       onPressed = _onGrantPressed;
     }
 

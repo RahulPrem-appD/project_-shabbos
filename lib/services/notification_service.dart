@@ -80,10 +80,20 @@ class NotificationService {
     const androidSettings = AndroidInitializationSettings(
       '@drawable/ic_notification',
     );
+    // iOS (App Store guideline 4.5.4 / 5.1.1): do NOT request notification
+    // permission here. initialize() runs from main() at cold launch, before any
+    // UI — requesting authorization at that point shows the system prompt with
+    // no context AND consumes the one-and-only iOS permission dialog before the
+    // user reaches the onboarding wizard. Consent is requested explicitly in the
+    // wizard (PermissionWizardScreen → NotificationService.requestPermissions()).
+    // These flags only control whether init auto-requests; notification display
+    // once authorized is governed by defaultPresent*/per-notification options.
+    // Android is unaffected (it uses AndroidInitializationSettings above and
+    // requests its runtime permission separately).
     const iosSettings = DarwinInitializationSettings(
-      requestAlertPermission: true,
-      requestBadgePermission: true,
-      requestSoundPermission: true,
+      requestAlertPermission: false,
+      requestBadgePermission: false,
+      requestSoundPermission: false,
       defaultPresentAlert: true,
       defaultPresentBadge: true,
       defaultPresentSound: true,
@@ -797,6 +807,26 @@ class NotificationService {
     );
 
     await initialize();
+
+    // iOS (App Store guideline 4.5.4): never schedule or deliver notifications
+    // unless the user has explicitly granted notification permission. Consent is
+    // requested in the onboarding wizard; if it was declined the app stays fully
+    // functional but schedules nothing. This guarantees the app obtains consent
+    // BEFORE sending any notification. Android keeps its existing approved
+    // behavior (its own permission/validation path runs below).
+    if (Platform.isIOS) {
+      final iosAuthorized = await areOsNotificationsEnabled();
+      if (!iosAuthorized) {
+        debugPrint(
+          'NotificationService: iOS notification permission not granted — '
+          'skipping scheduling (no consent, App Store 4.5.4)',
+        );
+        _addDiagnosticLog(
+          '✗ iOS notifications not authorized — scheduling skipped (awaiting consent)',
+        );
+        return;
+      }
+    }
 
     // CRITICAL: Proactive validation before scheduling
     // Check all permissions and system settings to ensure alarms will work
