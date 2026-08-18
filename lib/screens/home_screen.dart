@@ -126,6 +126,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         await _notificationService.scheduleNotifications(
           futureTimes.take(10).toList(),
           locale: widget.locale,
+          locationTzid: location.timezone,
         );
       } else {
         setState(() {

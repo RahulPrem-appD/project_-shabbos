@@ -65,6 +65,12 @@ class LocationInfo {
   final String? cityName;
   final String? country;
   final String? timezone;
+  // True when [timezone] came from a trusted source (the city list or the
+  // Hebcal tzid lookup). False when it was estimated from longitude — an
+  // estimate can be a DST-observing zone the location doesn't follow, so
+  // unvalidated timezones are re-checked against Hebcal on load and healed.
+  // Absent in previously-saved locations → false → they heal on next load.
+  final bool tzValidated;
 
   LocationInfo({
     required this.latitude,
@@ -72,7 +78,17 @@ class LocationInfo {
     this.cityName,
     this.country,
     this.timezone,
+    this.tzValidated = false,
   });
+
+  LocationInfo copyWith({String? timezone, bool? tzValidated}) => LocationInfo(
+    latitude: latitude,
+    longitude: longitude,
+    cityName: cityName,
+    country: country,
+    timezone: timezone ?? this.timezone,
+    tzValidated: tzValidated ?? this.tzValidated,
+  );
 
   Map<String, dynamic> toJson() => {
     'latitude': latitude,
@@ -80,6 +96,7 @@ class LocationInfo {
     'cityName': cityName,
     'country': country,
     'timezone': timezone,
+    'tzValidated': tzValidated,
   };
 
   factory LocationInfo.fromJson(Map<String, dynamic> json) => LocationInfo(
@@ -88,6 +105,7 @@ class LocationInfo {
     cityName: json['cityName'] as String?,
     country: json['country'] as String?,
     timezone: json['timezone'] as String?,
+    tzValidated: json['tzValidated'] as bool? ?? false,
   );
 
   String get displayName {

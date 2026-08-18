@@ -7,6 +7,7 @@ import 'package:timezone/timezone.dart' as tz;
 import 'package:timezone/data/latest_all.dart' as tzdata;
 import '../models/candle_lighting.dart';
 import 'audio_service.dart';
+import 'location_service.dart';
 import 'native_alarm_service.dart';
 import 'live_activity_service.dart';
 
@@ -452,11 +453,15 @@ class NotificationService {
         }
 
         // Only request if not already granted
+        // critical: false — the app has no critical-alerts entitlement (Apple
+        // approval required, and a religious alarm app doesn't fit their
+        // health/safety criteria), so requesting it is a no-op at best. We use
+        // time-sensitive notifications instead (entitlement wired in Xcode).
         final granted = await ios.requestPermissions(
           alert: true,
           badge: true,
           sound: true,
-          critical: true,
+          critical: false,
         );
         debugPrint('NotificationService: iOS permission granted: $granted');
         return granted ?? false;
@@ -604,6 +609,12 @@ class NotificationService {
   NotificationDetails _getNotificationDetails({
     String? iosSoundFile,
     bool useDefaultSound = false,
+    // iOS only: true when the user picked the "Silent" sound. Without this,
+    // presentSound stays true and iOS plays its DEFAULT alert tone even though
+    // no custom sound is attached — i.e. "Silent" was audibly not silent.
+    // Android keeps its existing (approved) behaviour: it plays sounds itself
+    // via MediaPlayer in AlarmAudioService, not through the notification.
+    bool silent = false,
   }) {
     // For default sound notifications, use a simpler Android notification
     final androidDetails = useDefaultSound
@@ -656,9 +667,9 @@ class NotificationService {
       final iosDetails = DarwinNotificationDetails(
         presentAlert: true,
         presentBadge: true,
-        presentSound: true,
+        presentSound: !silent,
         badgeNumber: 1,
-        interruptionLevel: InterruptionLevel.critical, // Use critical to match critical permissions requested
+        interruptionLevel: InterruptionLevel.timeSensitive, // Breaks through Focus/DND (entitlement wired); critical would be silently demoted without Apple approval
         sound: null, // Use default sound as fallback
       );
       return NotificationDetails(android: androidDetails, iOS: iosDetails);
@@ -667,9 +678,9 @@ class NotificationService {
     final iosDetails = DarwinNotificationDetails(
       presentAlert: true,
       presentBadge: true,
-      presentSound: true,
+      presentSound: !silent,
       badgeNumber: 1,
-      interruptionLevel: InterruptionLevel.critical, // Use critical to match critical permissions requested, ensures alarms work in DND mode
+      interruptionLevel: InterruptionLevel.timeSensitive, // Breaks through Focus/DND via the time-sensitive entitlement; critical requires Apple approval we don't have and would be silently demoted
       sound: useDefaultSound ? null : iosSoundFile, // Include extension (.caf, .wav, or .aiff)
     );
 
@@ -800,7 +811,7 @@ class NotificationService {
   /// [skipCancellation] - If true, skip cancelling existing alarms (used when rescheduling with protection)
   Future<void> scheduleNotifications(
     List<CandleLighting> candleLightings,
-    {String locale = 'en', bool skipCancellation = false}
+    {String locale = 'en', bool skipCancellation = false, String? locationTzid}
   ) async {
     debugPrint(
       'NotificationService: Scheduling ${candleLightings.length} events for locale: $locale',
@@ -825,6 +836,21 @@ class NotificationService {
           '✗ iOS notifications not authorized — scheduling skipped (awaiting consent)',
         );
         return;
+      }
+    }
+
+    // Resolve the location's IANA zone for iOS fire-instant construction.
+    // Screens pass it when they have the location in hand; internal
+    // reschedule paths fall back to the saved location. Android ignores it
+    // (its native scheduler is unchanged from the approved Play build).
+    if (Platform.isIOS && (locationTzid == null || locationTzid.isEmpty)) {
+      try {
+        locationTzid = (await LocationService().getSavedLocation())?.timezone;
+        debugPrint(
+          'NotificationService: Resolved location tzid from saved location: $locationTzid',
+        );
+      } catch (e) {
+        debugPrint('NotificationService: Could not resolve location tzid: $e');
       }
     }
 
@@ -969,6 +995,7 @@ class NotificationService {
             isSilent: false,
             useDefaultSound: false,
             candleLightingTime: candleTime,
+            locationTzid: locationTzid,
           );
           debugPrint('NotificationService: Pre-notification scheduling result: $preSuccess');
           if (preSuccess) {
@@ -1042,6 +1069,7 @@ class NotificationService {
           isYomTov: lighting.isYomTov,
           isSilent: false,
           useDefaultSound: false, // Use shofar sound (rav_shalom_shofar), not default
+          locationTzid: locationTzid,
         );
         debugPrint('NotificationService: Issur Melacha notification scheduling result: $issurSuccess');
         if (issurSuccess) {
@@ -1400,6 +1428,12 @@ class NotificationService {
         false, // If true, no alarm sound (for candle lighting notifications)
     bool useDefaultSound =
         false, // If true, use system default notification sound
+    // IANA zone of the LOCATION the times belong to (e.g.
+    // 'Africa/Johannesburg'). scheduledTime is the location's wall clock
+    // (the Hebcal parser strips the offset), so the fire instant must be
+    // anchored in this zone. Null → device zone (tz.local), which is only
+    // correct when the device is in the location's zone.
+    String? locationTzid,
   }) async {
     try {
       debugPrint('NotificationService: ---- SCHEDULING NOTIFICATION ----');
@@ -1474,8 +1508,23 @@ class NotificationService {
       } else {
         // iOS: Use zonedSchedule with custom sound
         // All sounds are now trimmed to 30 seconds for iOS compatibility
+        //
+        // Anchor the fire instant in the LOCATION's zone, not the device
+        // guess. tz.local comes from _setLocalTimezone's offset table, which
+        // is wrong for most of the world during DST (a +2 offset used to be
+        // read as Asia/Jerusalem, firing South African alarms an hour late).
+        tz.Location scheduleZone = tz.local;
+        if (locationTzid != null && locationTzid.isNotEmpty) {
+          try {
+            scheduleZone = tz.getLocation(locationTzid);
+          } catch (e) {
+            debugPrint(
+              'NotificationService: Unknown tzid "$locationTzid" — falling back to device zone: $e',
+            );
+          }
+        }
         final tzTime = tz.TZDateTime(
-          tz.local,
+          scheduleZone,
           scheduledTime.year,
           scheduledTime.month,
           scheduledTime.day,
@@ -1530,6 +1579,9 @@ class NotificationService {
             _getNotificationDetails(
               iosSoundFile: iosSoundFile,
               useDefaultSound: useDefaultSound,
+              // "Silent" must be genuinely silent: with no custom sound
+              // attached, iOS would otherwise fall back to its default tone.
+              silent: isSilent || soundId == 'silent',
             ),
             androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
           );
@@ -2824,7 +2876,11 @@ class NotificationService {
               } else if (notificationType == 'candle') {
                 soundId = _audioService.getCandleLightingSound();
               } else if (notificationType == 'issur') {
-                soundId = 'default';
+                // Issur Melacha is scheduled with the fixed candle-lighting
+                // (shofar) sound — mirror that here so diagnostics report the
+                // sound that actually plays (was hardcoded 'default', which
+                // misled debugging).
+                soundId = _audioService.getCandleLightingSound();
               }
               
               notifications.add(UpcomingNotification(

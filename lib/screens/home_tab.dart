@@ -324,6 +324,7 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
               await _notificationService.scheduleNotifications(
                 _candleLightings.take(10).toList(),
                 locale: widget.locale,
+                locationTzid: newLocation.timezone,
               );
             }
 
@@ -514,6 +515,7 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
           await _notificationService.scheduleNotifications(
             futureTimes.take(10).toList(),
             locale: widget.locale,
+            locationTzid: location.timezone,
           );
         } else {
           debugPrint(

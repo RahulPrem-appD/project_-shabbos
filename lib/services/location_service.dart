@@ -7,6 +7,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/candle_lighting.dart';
 import '../models/city.dart';
+import '../utils/timezone_fallback.dart';
 
 class LocationService {
   static const String _locationKey = 'saved_location';
@@ -92,13 +93,14 @@ class LocationService {
         debugPrint('LocationService: Geocoding failed: $e');
       }
 
-      // Detect timezone for the location
-      String? timezone = await _detectTimezoneForLocation(
-        position.latitude, 
+      // Detect timezone for the location. A longitude-estimated zone is
+      // provisional (tzValidated=false) and gets re-checked on later loads.
+      final (timezone, tzValidated) = await _detectTimezoneForLocation(
+        position.latitude,
         position.longitude,
       );
-      
-      debugPrint('LocationService: Detected timezone: $timezone');
+
+      debugPrint('LocationService: Detected timezone: $timezone (validated: $tzValidated)');
 
       return LocationInfo(
         latitude: position.latitude,
@@ -106,6 +108,7 @@ class LocationService {
         cityName: cityName,
         country: country,
         timezone: timezone,
+        tzValidated: tzValidated,
       );
     } catch (e) {
       debugPrint('LocationService: Error getting location: $e');
@@ -135,15 +138,18 @@ class LocationService {
     }
   }
 
-  /// Detect timezone for given coordinates
-  /// Uses HebCal API to get the timezone for the location
-  Future<String?> _detectTimezoneForLocation(double latitude, double longitude) async {
+  /// Detect timezone for given coordinates, with provenance.
+  /// Returns (zone, validated): validated is true only when the zone came
+  /// from a trusted source (city list or Hebcal). A longitude estimate is
+  /// NOT trusted — it is a fixed-offset approximation that later loads
+  /// re-validate and heal (see [getSavedLocation]).
+  Future<(String?, bool)> _detectTimezoneForLocation(double latitude, double longitude) async {
     try {
       // First, try to match with a known city
       final matchedCity = _findNearestCity(latitude, longitude);
       if (matchedCity != null) {
         debugPrint('LocationService: Matched to city ${matchedCity.name} with timezone ${matchedCity.timezone}');
-        return matchedCity.timezone;
+        return (matchedCity.timezone, true);
       }
 
       // If no city match, use HebCal to detect timezone
@@ -154,21 +160,24 @@ class LocationService {
         'longitude': longitude.toStringAsFixed(4),
       });
 
-      final response = await http.get(uri);
+      final response =
+          await http.get(uri).timeout(const Duration(seconds: 6));
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         final tzid = data['location']?['tzid'] as String?;
         if (tzid != null && tzid.isNotEmpty) {
           debugPrint('LocationService: Got timezone from HebCal: $tzid');
-          return tzid;
+          return (tzid, true);
         }
       }
     } catch (e) {
       debugPrint('LocationService: Timezone detection failed: $e');
     }
 
-    // Fallback: estimate from longitude
-    return _estimateTimezoneFromLongitude(longitude);
+    // Last resort: fixed-offset estimate from longitude. Never a real region
+    // zone — a DST-observing guess here (Asia/Jerusalem for all of UTC+2) is
+    // what made South African times an hour late every Israeli summer.
+    return (fixedOffsetZoneForLongitude(longitude), false);
   }
 
   /// Find the nearest city from the predefined list
@@ -276,41 +285,8 @@ class LocationService {
   }
 
   /// Estimate timezone from longitude (rough approximation)
-  String _estimateTimezoneFromLongitude(double longitude) {
-    final offset = (longitude / 15).round();
-    
-    final timezoneMap = {
-      -12: 'Etc/GMT+12',
-      -11: 'Pacific/Midway',
-      -10: 'Pacific/Honolulu',
-      -9: 'America/Anchorage',
-      -8: 'America/Los_Angeles',
-      -7: 'America/Denver',
-      -6: 'America/Chicago',
-      -5: 'America/New_York',
-      -4: 'America/Halifax',
-      -3: 'America/Sao_Paulo',
-      -2: 'Atlantic/South_Georgia',
-      -1: 'Atlantic/Azores',
-      0: 'Europe/London',
-      1: 'Europe/Paris',
-      2: 'Asia/Jerusalem',
-      3: 'Europe/Moscow',
-      4: 'Asia/Dubai',
-      5: 'Asia/Kolkata',
-      6: 'Asia/Dhaka',
-      7: 'Asia/Bangkok',
-      8: 'Asia/Shanghai',
-      9: 'Asia/Tokyo',
-      10: 'Australia/Sydney',
-      11: 'Pacific/Noumea',
-      12: 'Pacific/Auckland',
-    };
-    
-    return timezoneMap[offset] ?? 'UTC';
-  }
-
-  /// Create LocationInfo from a City
+  /// Create LocationInfo from a City. The city list carries authoritative
+  /// IANA timezones, so these never need re-validation.
   LocationInfo locationFromCity(City city) {
     return LocationInfo(
       latitude: city.latitude,
@@ -318,6 +294,7 @@ class LocationService {
       cityName: city.name,
       country: city.country,
       timezone: city.timezone,
+      tzValidated: true,
     );
   }
 
@@ -328,14 +305,32 @@ class LocationService {
     debugPrint('LocationService: Saved location: ${location.displayName} (${location.timezone})');
   }
 
-  /// Get saved location
+  /// Get saved location.
+  ///
+  /// Heals stale timezones: locations saved by older builds can carry a
+  /// DST-observing longitude guess (e.g. Asia/Jerusalem for a South African
+  /// GPS fix) that shifted every displayed time and alarm by an hour in
+  /// summer. If the stored zone was never validated against a trusted
+  /// source, re-detect once, persist the correction, and stop re-checking.
+  /// Offline → keep the stored value and retry on a future load.
   Future<LocationInfo?> getSavedLocation() async {
     final prefs = await SharedPreferences.getInstance();
     final locationStr = prefs.getString(_locationKey);
     if (locationStr != null) {
       try {
-        final location = LocationInfo.fromJson(json.decode(locationStr));
-        debugPrint('LocationService: Loaded saved location: ${location.displayName} (${location.timezone})');
+        var location = LocationInfo.fromJson(json.decode(locationStr));
+        debugPrint('LocationService: Loaded saved location: ${location.displayName} (${location.timezone}, tzValidated: ${location.tzValidated})');
+        if (!location.tzValidated) {
+          final (tz, validated) = await _detectTimezoneForLocation(
+            location.latitude,
+            location.longitude,
+          );
+          if (validated && tz != null) {
+            location = location.copyWith(timezone: tz, tzValidated: true);
+            await saveLocation(location);
+            debugPrint('LocationService: Healed saved timezone -> $tz');
+          }
+        }
         return location;
       } catch (e) {
         debugPrint('LocationService: Failed to parse saved location: $e');

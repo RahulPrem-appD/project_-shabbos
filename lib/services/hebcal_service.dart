@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import '../models/candle_lighting.dart';
 import '../hebrew_numerals.dart';
+import '../utils/timezone_fallback.dart';
 
 class HebcalService {
   static const String _baseUrl = 'https://www.hebcal.com/shabbat';
@@ -185,7 +186,8 @@ class HebcalService {
         },
       );
 
-      final response = await http.get(uri);
+      final response =
+          await http.get(uri).timeout(const Duration(seconds: 6));
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         final tzid = data['location']?['tzid'] as String?;
@@ -198,40 +200,11 @@ class HebcalService {
       debugPrint('HebcalService: Timezone detection failed: $e');
     }
 
-    // Fallback: rough estimate based on longitude
-    // Each timezone is approximately 15 degrees of longitude
-    final offset = (longitude / 15).round();
-
-    // Map common offsets to IANA timezone names
-    final timezoneMap = {
-      -12: 'Etc/GMT+12',
-      -11: 'Pacific/Midway',
-      -10: 'Pacific/Honolulu',
-      -9: 'America/Anchorage',
-      -8: 'America/Los_Angeles',
-      -7: 'America/Denver',
-      -6: 'America/Chicago',
-      -5: 'America/New_York',
-      -4: 'America/Halifax',
-      -3: 'Atlantic/South_Georgia',
-      -2: 'Atlantic/Azores',
-      -1: 'Atlantic/Azores',
-      0: 'Europe/London',
-      1: 'Europe/Paris',
-      2: 'Asia/Jerusalem',
-      3: 'Europe/Moscow',
-      4: 'Asia/Dubai',
-      5: 'Asia/Kolkata',
-      6: 'Asia/Dhaka',
-      7: 'Asia/Bangkok',
-      8: 'Asia/Shanghai',
-      9: 'Asia/Tokyo',
-      10: 'Australia/Sydney',
-      11: 'Pacific/Noumea',
-      12: 'Pacific/Auckland',
-    };
-
-    return timezoneMap[offset];
+    // Last resort: fixed-offset estimate from longitude. Must never be a
+    // DST-observing region zone — the old map returned Asia/Jerusalem for
+    // every UTC+2 longitude, which made South African requests come back an
+    // hour late (tzid drives the wall-clock Hebcal responds with).
+    return fixedOffsetZoneForLongitude(longitude);
   }
 
   String _formatDate(DateTime date) {
