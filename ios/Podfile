@@ -1,5 +1,8 @@
 # Uncomment this line to define a global platform for your project
-platform :ios, '14.0'
+# iOS 15 minimum: matches Apple's Spring-2027 upload requirement, the
+# time-sensitive notification APIs the app uses, and drops no hardware
+# (iOS 15 supports the same devices as iOS 13/14).
+platform :ios, '15.0'
 
 # CocoaPods analytics sends network stats synchronously affecting flutter build latency.
 ENV['COCOAPODS_DISABLE_STATS'] = 'true'
@@ -45,7 +48,7 @@ post_install do |installer|
     # warnings and, on older CocoaPods, break the privacy-manifest "no rule
     # to process file" errors for *.xcprivacy resources.
     target.build_configurations.each do |config|
-      config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '14.0'
+      config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '15.0'
     end
   end
 
